@@ -22,9 +22,10 @@ BAR_SLOTS = 6
 class RunSave:
     version: int = SAVE_VERSION
     tokens: int = DEFAULT_RUN_TOKENS
-    bar: list[str] = field(default_factory=list)
+    bar: list[str | None] = field(default_factory=lambda: [None] * BAR_SLOTS)
     onsite: list[str | None] = field(default_factory=lambda: [None] * ONSITE_SLOTS)
     offsite: list[str | None] = field(default_factory=lambda: [None] * OFFSITE_SLOTS)
+    stacks: dict[str, int] = field(default_factory=dict)
 
 
 class SaveManager:
@@ -54,9 +55,10 @@ class SaveManager:
         save = RunSave(
             version=_as_int(data.get("version", SAVE_VERSION), default=SAVE_VERSION),
             tokens=_as_int(data.get("tokens", DEFAULT_RUN_TOKENS), default=DEFAULT_RUN_TOKENS),
-            bar=_as_str_list(data.get("bar", [])),
+            bar=_as_optional_str_list(data.get("bar", [])),
             onsite=_as_optional_str_list(data.get("onsite", [])),
             offsite=_as_optional_str_list(data.get("offsite", [])),
+            stacks=_as_int_dict(data.get("stacks", {})),
         )
         return _normalized_save(save)
 
@@ -68,6 +70,7 @@ class SaveManager:
             "bar": save.bar,
             "onsite": save.onsite,
             "offsite": save.offsite,
+            "stacks": save.stacks,
         }
 
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -100,7 +103,8 @@ def _normalized_save(save: RunSave) -> RunSave:
     offsite = list(save.offsite[:OFFSITE_SLOTS])
     offsite.extend([None] * (OFFSITE_SLOTS - len(offsite)))
 
-    bar = [item for item in save.bar if item]
+    bar = list(save.bar[:BAR_SLOTS])
+    bar.extend([None] * (BAR_SLOTS - len(bar)))
 
     seen: set[str] = set()
     deduped_onsite: list[str | None] = []
@@ -125,14 +129,18 @@ def _normalized_save(save: RunSave) -> RunSave:
         seen.add(item)
         deduped_offsite.append(item)
 
-    deduped_bar: list[str] = []
+    deduped_bar: list[str | None] = []
     for item in bar:
-        if item in seen:
-            continue
-        seen.add(item)
-        deduped_bar.append(item)
-        if len(deduped_bar) >= BAR_SLOTS:
-            break
+        deduped_bar.append(item if item else None)
+
+    party_chars = {item for item in (deduped_onsite + deduped_offsite) if item}
+    stacks: dict[str, int] = {}
+    for key, value in save.stacks.items():
+        if key in party_chars and isinstance(value, int) and value > 0:
+            stacks[key] = value
+
+    for char_id in party_chars:
+        stacks[char_id] = max(1, int(stacks.get(char_id, 1)))
 
     return RunSave(
         version=SAVE_VERSION,
@@ -140,6 +148,7 @@ def _normalized_save(save: RunSave) -> RunSave:
         bar=deduped_bar,
         onsite=deduped_onsite,
         offsite=deduped_offsite,
+        stacks=stacks,
     )
 
 
@@ -172,4 +181,24 @@ def _as_optional_str_list(value: object) -> list[str | None]:
         elif isinstance(item, str):
             stripped = item.strip()
             result.append(stripped if stripped else None)
+    return result
+
+
+def _as_int_dict(value: object) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, int] = {}
+    for key, raw in value.items():
+        if not isinstance(key, str):
+            continue
+        stripped = key.strip()
+        if not stripped:
+            continue
+        try:
+            number = int(raw)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+        if number <= 0:
+            continue
+        result[stripped] = number
     return result

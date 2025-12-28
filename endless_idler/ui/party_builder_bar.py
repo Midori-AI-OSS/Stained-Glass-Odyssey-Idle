@@ -4,7 +4,7 @@ import json
 import random
 
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from PySide6.QtCore import QByteArray
 from PySide6.QtCore import Qt
@@ -14,6 +14,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QLayout
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QHBoxLayout
+from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QSizePolicy
@@ -31,16 +32,18 @@ class CharacterBar(QFrame):
     def __init__(
         self,
         *,
-        char_ids: list[str],
+        char_ids: list[str | None],
         plugins_by_id: dict[str, CharacterPlugin],
         rng: random.Random,
         on_reroll: Callable[[], None],
+        get_stack_count: Callable[[str], int],
     ) -> None:
         super().__init__()
         self.setObjectName("characterBar")
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self._plugins_by_id = plugins_by_id
         self._rng = rng
+        self._get_stack_count = get_stack_count
 
         layout = QVBoxLayout()
         layout.setContentsMargins(12, 12, 12, 12)
@@ -77,7 +80,7 @@ class CharacterBar(QFrame):
     def has_tiles(self) -> bool:
         return any(slot.char_id is not None for slot in self._slots)
 
-    def set_char_ids(self, char_ids: list[str]) -> None:
+    def set_char_ids(self, char_ids: list[str | None]) -> None:
         for index, slot in enumerate(self._slots):
             char_id = char_ids[index] if index < len(char_ids) else None
             if not char_id:
@@ -88,13 +91,27 @@ class CharacterBar(QFrame):
             display_name = plugin.display_name if plugin else derive_display_name(char_id)
             image_path = plugin.random_image_path(self._rng) if plugin else None
             stars = sanitize_stars(plugin.stars if plugin else 1)
-            slot.set_character(char_id=char_id, display_name=display_name, image_path=image_path, stars=stars)
+            stacks = self._get_stack_count(char_id)
+            slot.set_character(
+                char_id=char_id,
+                display_name=display_name,
+                image_path=image_path,
+                stars=stars,
+                stack_count=stacks,
+            )
 
     def clear_char_id(self, char_id: str) -> None:
         for slot in self._slots:
             if slot.char_id == char_id:
                 slot.clear()
                 return
+
+    def refresh_stack_badges(self) -> None:
+        for slot in self._slots:
+            item = slot._item  # noqa: SLF001
+            if item is None:
+                continue
+            item.set_stack_count(self._get_stack_count(item.char_id))
 
 
 class ShopSlot(QFrame):
@@ -126,36 +143,64 @@ class ShopSlot(QFrame):
 
         item = self._item
         self._item = None
+        if self.layout() is not None:
+            self.layout().removeWidget(item)  # type: ignore[union-attr]
         item.setParent(None)
         item.deleteLater()
         self._placeholder.show()
 
-    def set_character(self, *, char_id: str, display_name: str, image_path: Path | None, stars: int) -> None:
+    def set_character(
+        self,
+        *,
+        char_id: str,
+        display_name: str,
+        image_path: Path | None,
+        stars: int,
+        stack_count: int,
+    ) -> None:
         self.clear()
 
         self._placeholder.hide()
-        item = ShopItem(char_id=char_id, display_name=display_name, image_path=image_path, stars=stars)
+        item = ShopItem(
+            char_id=char_id,
+            display_name=display_name,
+            image_path=image_path,
+            stars=stars,
+            stack_count=stack_count,
+        )
         item.destroyed.connect(self._on_item_destroyed)
         self._item = item
         self.layout().addWidget(item)  # type: ignore[union-attr]
 
-    def _on_item_destroyed(self) -> None:
+    def _on_item_destroyed(self, _obj: object | None = None) -> None:
+        sender = self.sender()
+        if self._item is not None and sender is not None and sender is not self._item:
+            return
         self._item = None
         self._placeholder.show()
 
 
 class ShopItem(QFrame):
-    def __init__(self, *, char_id: str, display_name: str, image_path: Path | None, stars: int) -> None:
+    def __init__(
+        self,
+        *,
+        char_id: str,
+        display_name: str,
+        image_path: Path | None,
+        stars: int,
+        stack_count: int,
+    ) -> None:
         super().__init__()
         self.setObjectName("characterTileInner")
         self._char_id = char_id
         self._display_name = display_name
         self._image_path = image_path
         self._stars = sanitize_stars(stars)
+        self._stack_count = max(1, int(stack_count))
 
         apply_star_rank_visuals(self, self._stars)
 
-        layout = QVBoxLayout()
+        layout = QGridLayout()
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
         self.setLayout(layout)
@@ -165,18 +210,36 @@ class ShopItem(QFrame):
         self._image.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self._image.setFixedSize(72, 72)
         set_pixmap(self._image, self._image_path, size=72, placeholder=self._display_name)
-        layout.addWidget(self._image, 0, Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._image, 0, 0, 1, 1, Qt.AlignmentFlag.AlignCenter)
+
+        self._stack_badge = QLabel()
+        self._stack_badge.setObjectName("stackBadge")
+        self._stack_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._stack_badge.setMinimumSize(20, 18)
+        layout.addWidget(self._stack_badge, 0, 0, 1, 1, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         name = QLabel(display_name)
         name.setObjectName("characterTileName")
         name.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(name)
+        layout.addWidget(name, 1, 0, 1, 1)
 
         self.setCursor(Qt.CursorShape.OpenHandCursor)
+        self._refresh_stack_badge()
 
     @property
     def char_id(self) -> str:
         return self._char_id
+
+    def set_stack_count(self, stack_count: int) -> None:
+        self._stack_count = max(1, int(stack_count))
+        self._refresh_stack_badge()
+
+    def _refresh_stack_badge(self) -> None:
+        if self._stack_count <= 1:
+            self._stack_badge.hide()
+            return
+        self._stack_badge.setText(str(self._stack_count))
+        self._stack_badge.show()
 
     def mousePressEvent(self, event: object) -> None:
         try:

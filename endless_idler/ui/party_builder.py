@@ -21,6 +21,7 @@ from endless_idler.save import RunSave
 from endless_idler.save import SaveManager
 from endless_idler.ui.party_builder_bar import CharacterBar
 from endless_idler.ui.party_builder_slot import DropSlot
+from endless_idler.ui.party_builder_sell import SellZone
 
 
 class PartyBuilderWindow(QMainWindow):
@@ -48,6 +49,7 @@ class PartyBuilderWidget(QWidget):
         self._save_manager.save(self._save)
         self._slots_by_id: dict[str, DropSlot] = {}
         self._shop_open = True
+        self._sell_zones: list[SellZone] = []
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 16, 16, 16)
@@ -93,7 +95,7 @@ class PartyBuilderWidget(QWidget):
         grid.setSpacing(12)
         root.addLayout(grid)
 
-        grid.addLayout(self._make_row("OnSite", count=ONSITE_SLOTS, center=True))
+        grid.addLayout(self._make_onsite_row())
         grid.addLayout(self._make_row("Offsite", count=OFFSITE_SLOTS))
 
         self._load_slots_from_save()
@@ -107,6 +109,7 @@ class PartyBuilderWidget(QWidget):
             plugins_by_id=self._plugin_by_id,
             rng=self._rng,
             on_reroll=self._reroll_shop,
+            get_stack_count=self._get_stack_count,
         )
 
         bar.destroyed.connect(self._on_char_bar_destroyed)
@@ -134,12 +137,49 @@ class PartyBuilderWidget(QWidget):
             self._maybe_build_char_bar()
 
     def _new_run_save(self) -> RunSave:
-        bar: list[str] = []
+        bar: list[str | None] = [None] * BAR_SLOTS
         if self._plugins:
             count = min(BAR_SLOTS, len(self._plugins))
-            bar = [plugin.char_id for plugin in self._rng.sample(self._plugins, k=count)]
+            chosen = [plugin.char_id for plugin in self._rng.sample(self._plugins, k=count)]
+            bar[: len(chosen)] = chosen
 
         return RunSave(tokens=DEFAULT_RUN_TOKENS, bar=bar)
+
+    def _make_onsite_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(10)
+
+        left_sell = SellZone(on_sell=self._sell_character)
+        right_sell = SellZone(on_sell=self._sell_character)
+        self._sell_zones = [left_sell, right_sell]
+        for zone in self._sell_zones:
+            zone.set_active(False)
+
+        row.addWidget(left_sell)
+        row.addStretch(1)
+
+        for index in range(ONSITE_SLOTS):
+            slot_id = f"onsite_{index + 1}"
+            slot = DropSlot(
+                empty_label="OnSite",
+                slot_id=slot_id,
+                plugins_by_id=self._plugin_by_id,
+                rng=self._rng,
+                character_cost=DEFAULT_CHARACTER_COST,
+                can_afford=self._can_afford,
+                purchase_character=self._purchase_character,
+                on_slot_changed=self._on_slot_changed,
+                on_drag_active_changed=self._set_sell_zones_active,
+                get_stack_count=self._get_stack_count,
+            )
+            self._slots_by_id[slot_id] = slot
+            row.addWidget(slot)
+
+        row.addStretch(1)
+        row.addWidget(right_sell)
+
+        return row
 
     def _make_row(self, label: str, *, count: int, center: bool = False) -> QHBoxLayout:
         row = QHBoxLayout()
@@ -160,6 +200,8 @@ class PartyBuilderWidget(QWidget):
                 can_afford=self._can_afford,
                 purchase_character=self._purchase_character,
                 on_slot_changed=self._on_slot_changed,
+                on_drag_active_changed=self._set_sell_zones_active,
+                get_stack_count=self._get_stack_count,
             )
             self._slots_by_id[slot_id] = slot
             row.addWidget(slot)
@@ -171,30 +213,117 @@ class PartyBuilderWidget(QWidget):
     def _can_afford(self, cost: int) -> bool:
         return self._save.tokens >= cost
 
-    def _purchase_character(self, char_id: str) -> bool:
+    def _purchase_character(self, char_id: str, target_char_id: str | None) -> bool:
         if self._save.tokens < DEFAULT_CHARACTER_COST:
             return False
         if char_id not in self._save.bar:
             return False
 
+        in_party = char_id in {item for item in (self._save.onsite + self._save.offsite) if item}
+
+        if target_char_id is None:
+            if in_party:
+                return False
+            self._save.stacks[char_id] = max(1, int(self._save.stacks.get(char_id, 1)))
+        else:
+            if target_char_id != char_id:
+                return False
+            if not in_party:
+                return False
+            self._save.stacks[char_id] = max(1, int(self._save.stacks.get(char_id, 1))) + 1
+
         self._save.tokens -= DEFAULT_CHARACTER_COST
-        self._save.bar = [item for item in self._save.bar if item != char_id]
+
+        removed = False
+        updated_bar: list[str | None] = []
+        for item in self._save.bar:
+            if not removed and item == char_id:
+                updated_bar.append(None)
+                removed = True
+            else:
+                updated_bar.append(item)
+        self._save.bar = updated_bar
+
         self._refresh_tokens()
         self._save_manager.save(self._save)
+        if self._char_bar is not None:
+            self._char_bar.refresh_stack_badges()
         return True
 
+    def _sell_character(self, char_id: str) -> None:
+        stacks = self._save.stacks.get(char_id, 1)
+        self._save.tokens += DEFAULT_CHARACTER_COST * max(1, int(stacks))
+        self._save.stacks.pop(char_id, None)
+        self._refresh_tokens()
+        self._save_manager.save(self._save)
+
+    def _set_sell_zones_active(self, active: bool) -> None:
+        for zone in self._sell_zones:
+            zone.set_active(active)
+
     def _reroll_shop(self) -> None:
-        occupied = {item for item in (self._save.onsite + self._save.offsite) if item}
-        candidates = [plugin.char_id for plugin in self._plugins if plugin.char_id not in occupied]
-        if not candidates:
-            self._save.bar = []
-        else:
-            count = min(BAR_SLOTS, len(candidates))
-            self._save.bar = [plugin_id for plugin_id in self._rng.sample(candidates, k=count)]
+        party = [item for item in (self._save.onsite + self._save.offsite) if item]
+        party_unique = sorted(set(party))
+        filled = len(party_unique)
+        fill_ratio = filled / float(ONSITE_SLOTS + OFFSITE_SLOTS)
+
+        all_ids = [plugin.char_id for plugin in self._plugins]
+        party_set = set(party_unique)
+        non_party = [char_id for char_id in all_ids if char_id not in party_set]
+
+        offers: list[str | None] = []
+        for index in range(1, BAR_SLOTS + 1):
+            offers.append(self._roll_shop_offer(index, fill_ratio, party_unique, non_party))
+
+        self._save.bar = offers
 
         self._save_manager.save(self._save)
         if self._char_bar is not None:
             self._char_bar.set_char_ids(self._save.bar)
+
+    def _roll_shop_offer(
+        self,
+        slot_index: int,
+        fill_ratio: float,
+        party: list[str],
+        non_party: list[str],
+    ) -> str | None:
+        if not party and not non_party:
+            return None
+
+        debuff_by_slot: dict[int, float] = {4: 1.0, 5: 2.5, 6: 5.0}
+        base_boost = 1.35 if slot_index <= 3 else 1.0 / debuff_by_slot.get(slot_index, 1.0)
+        p_party = max(0.0, min(1.0, fill_ratio * base_boost))
+
+        prefer_party = bool(party) and (self._rng.random() < p_party)
+        pool = party if prefer_party else non_party
+        if not pool:
+            pool = party if party else non_party
+
+        weights = [self._shop_weight(char_id) for char_id in pool]
+        return self._weighted_choice(pool, weights)
+
+    def _shop_weight(self, char_id: str) -> float:
+        stacks = self._save.stacks.get(char_id, 1)
+        extra = max(0, int(stacks) - 1)
+        return 1.0 / (1.0 + extra * 0.15)
+
+    def _weighted_choice(self, items: list[str], weights: list[float]) -> str | None:
+        if not items:
+            return None
+        total = sum(max(0.0, float(w)) for w in weights)
+        if total <= 0:
+            return self._rng.choice(items)
+        threshold = self._rng.random() * total
+        running = 0.0
+        for item, weight in zip(items, weights, strict=False):
+            running += max(0.0, float(weight))
+            if running >= threshold:
+                return item
+        return items[-1]
+
+    def _get_stack_count(self, char_id: str) -> int:
+        return max(1, int(self._save.stacks.get(char_id, 1)))
 
     def _on_slot_changed(self, slot_id: str, char_id: str | None) -> None:
         prefix, index_raw = slot_id.split("_", 1)

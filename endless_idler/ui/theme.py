@@ -110,6 +110,14 @@ QLabel#shopSlotPlaceholder {
     font-size: 12px;
 }
 
+QLabel#stackBadge {
+    background-color: rgba(10, 14, 26, 210);
+    border: 1px solid rgba(255, 255, 255, 42);
+    color: rgba(255, 255, 255, 235);
+    font-size: 11px;
+    padding: 0px 4px;
+}
+
 QLabel#characterTileName {
     color: rgba(255, 255, 255, 235);
     font-size: 12px;
@@ -135,6 +143,21 @@ QFrame#dropSlotInner[starRank="6"] { border: 2px solid #FFD700; }
 QLabel#dropSlotLabel {
     color: rgba(255, 255, 255, 220);
     font-size: 12px;
+}
+
+QFrame#sellZone {
+    background-color: transparent;
+    border: 2px solid transparent;
+}
+
+QFrame#sellZone[active="true"] {
+    background-color: rgba(255, 59, 48, 38);
+    border: 2px solid #FF3B30;
+}
+
+QLabel#sellZoneLabel {
+    color: rgba(255, 255, 255, 235);
+    font-size: 14px;
 }
 
 QLabel#tokenLabel {
