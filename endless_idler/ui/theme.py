@@ -48,6 +48,41 @@ QPushButton#partyBackButton:pressed {
     background-color: rgba(80, 140, 220, 72);
 }
 
+QPushButton#partyShopButton {
+    background-color: rgba(255, 255, 255, 20);
+    border: 1px solid rgba(255, 255, 255, 28);
+    border-radius: 0px;
+    padding: 8px 16px;
+    color: rgba(255, 255, 255, 235);
+    font-size: 13px;
+}
+
+QPushButton#partyShopButton:hover {
+    background-color: rgba(120, 180, 255, 56);
+}
+
+QPushButton#partyShopButton:checked {
+    background-color: rgba(120, 180, 255, 56);
+    border: 1px solid rgba(170, 220, 255, 140);
+}
+
+QPushButton#partyRerollButton {
+    background-color: rgba(255, 255, 255, 16);
+    border: 1px solid rgba(255, 255, 255, 22);
+    border-radius: 0px;
+    padding: 6px 14px;
+    color: rgba(255, 255, 255, 235);
+    font-size: 12px;
+}
+
+QPushButton#partyRerollButton:hover {
+    background-color: rgba(120, 180, 255, 44);
+}
+
+QWidget#partyBuilderScreen {
+    background-color: rgba(0, 0, 0, 170);
+}
+
 QFrame#characterBar {
     background-color: rgba(20, 30, 60, 120);
     border: 1px solid rgba(255, 255, 255, 24);
@@ -56,6 +91,23 @@ QFrame#characterBar {
 QFrame#characterTile {
     background-color: rgba(255, 255, 255, 18);
     border: 1px solid rgba(255, 255, 255, 24);
+}
+
+QFrame#characterTileInner {
+    background-color: rgba(0, 0, 0, 25);
+    border: 2px solid rgba(255, 255, 255, 18);
+}
+
+QFrame#characterTileInner[starRank="1"] { border: 2px solid #808080; }
+QFrame#characterTileInner[starRank="2"] { border: 2px solid #1E90FF; }
+QFrame#characterTileInner[starRank="3"] { border: 2px solid #228B22; }
+QFrame#characterTileInner[starRank="4"] { border: 2px solid #800080; }
+QFrame#characterTileInner[starRank="5"] { border: 2px solid #FF3B30; }
+QFrame#characterTileInner[starRank="6"] { border: 2px solid #FFD700; }
+
+QLabel#shopSlotPlaceholder {
+    color: rgba(255, 255, 255, 120);
+    font-size: 12px;
 }
 
 QLabel#characterTileName {
@@ -68,9 +120,26 @@ QFrame#dropSlot {
     border: 1px solid rgba(255, 255, 255, 20);
 }
 
+QFrame#dropSlotInner {
+    background-color: rgba(0, 0, 0, 22);
+    border: 2px solid rgba(255, 255, 255, 18);
+}
+
+QFrame#dropSlotInner[starRank="1"] { border: 2px solid #808080; }
+QFrame#dropSlotInner[starRank="2"] { border: 2px solid #1E90FF; }
+QFrame#dropSlotInner[starRank="3"] { border: 2px solid #228B22; }
+QFrame#dropSlotInner[starRank="4"] { border: 2px solid #800080; }
+QFrame#dropSlotInner[starRank="5"] { border: 2px solid #FF3B30; }
+QFrame#dropSlotInner[starRank="6"] { border: 2px solid #FFD700; }
+
 QLabel#dropSlotLabel {
     color: rgba(255, 255, 255, 220);
     font-size: 12px;
+}
+
+QLabel#tokenLabel {
+    color: rgba(255, 255, 255, 235);
+    font-size: 13px;
 }
 """.strip()
 

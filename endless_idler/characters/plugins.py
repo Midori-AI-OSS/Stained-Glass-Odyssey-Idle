@@ -32,6 +32,7 @@ _CHARACTER_ASSETS_DIR = _CHARACTERS_DIR.parent / "assets" / "characters"
 class CharacterPlugin:
     char_id: str
     display_name: str
+    stars: int = 1
 
     @property
     def image_dir(self) -> Path:
@@ -67,48 +68,52 @@ def discover_character_plugins() -> list[CharacterPlugin]:
         if path.name in {"__init__.py", "plugins.py", "foe_base.py"}:
             continue
 
-        char_id, display_name = _extract_metadata(path)
+        char_id, display_name, stars = _extract_metadata(path)
         if not char_id:
             continue
-        plugins.append(CharacterPlugin(char_id=char_id, display_name=display_name))
+        plugins.append(CharacterPlugin(char_id=char_id, display_name=display_name, stars=stars))
 
     return plugins
 
 
-def _extract_metadata(path: Path) -> tuple[str, str]:
+def _extract_metadata(path: Path) -> tuple[str, str, int]:
     char_id = path.stem
     display_name = _derive_display_name(char_id)
+    stars = 1
 
     try:
         source = path.read_text(encoding="utf-8")
     except OSError:
-        return char_id, display_name
+        return char_id, display_name, stars
 
     try:
         tree = ast.parse(source, filename=str(path))
     except SyntaxError:
-        return char_id, display_name
+        return char_id, display_name, stars
 
     for node in tree.body:
         if not isinstance(node, ast.ClassDef):
             continue
-        found_id, found_name = _extract_from_classdef(node)
+        found_id, found_name, found_stars = _extract_from_classdef(node)
         if found_id:
             char_id = found_id
         if found_name:
             display_name = found_name
+        if found_stars is not None:
+            stars = found_stars
         if found_id or found_name:
             break
 
     if not display_name:
         display_name = _derive_display_name(char_id)
 
-    return char_id, display_name
+    return char_id, display_name, _sanitize_stars(stars)
 
 
-def _extract_from_classdef(node: ast.ClassDef) -> tuple[str | None, str | None]:
+def _extract_from_classdef(node: ast.ClassDef) -> tuple[str | None, str | None, int | None]:
     char_id: str | None = None
     display_name: str | None = None
+    stars: int | None = None
 
     for stmt in node.body:
         if isinstance(stmt, ast.Assign):
@@ -118,17 +123,21 @@ def _extract_from_classdef(node: ast.ClassDef) -> tuple[str | None, str | None]:
                         char_id = _const_str(stmt.value)
                     elif target.id == "name":
                         display_name = _const_str(stmt.value)
+                    elif target.id in {"gacha_rarity", "rarity", "stars"}:
+                        stars = _const_int(stmt.value)
         elif isinstance(stmt, ast.AnnAssign):
             if isinstance(stmt.target, ast.Name):
                 if stmt.target.id == "id":
                     char_id = _const_str(stmt.value)
                 elif stmt.target.id == "name":
                     display_name = _const_str(stmt.value)
+                elif stmt.target.id in {"gacha_rarity", "rarity", "stars"}:
+                    stars = _const_int(stmt.value)
 
-        if char_id and display_name:
+        if char_id and display_name and stars is not None:
             break
 
-    return char_id, display_name
+    return char_id, display_name, stars
 
 
 def _const_str(node: ast.AST | None) -> str | None:
@@ -137,6 +146,19 @@ def _const_str(node: ast.AST | None) -> str | None:
     return None
 
 
+def _const_int(node: ast.AST | None) -> int | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, int):
+        return node.value
+    return None
+
+
 def _derive_display_name(char_id: str) -> str:
     return " ".join(part.capitalize() for part in char_id.split("_"))
 
+
+def _sanitize_stars(stars: int) -> int:
+    if stars <= 0:
+        return 1
+    if stars > 6:
+        return 6
+    return stars
