@@ -1,0 +1,7 @@
+[project]
+name = "Stained-Glass-Odyssey-Idle"
+version = "0.1.0"
+description = "A game based on our Stained Glass games using chars from the shared world"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
