@@ -16,46 +16,15 @@ Stained Glass Odyssey Idle is an idle/incremental game featuring characters from
 - `.github/` - GitHub workflows and agent configurations
 - `.feedback/` - Planning notes and priorities (read-only)
 
-## Required Tools Installation
+## Required Tools
 
 **CRITICAL**: Always use `uv` for Python and `bun` for Node.js. Never use `pip` or `npm` directly as they are slower and not compatible with the repository's tooling.
 
-### Installing Required Tools
-
-```bash
-# Install uv (Python package manager)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install bun (JavaScript runtime and package manager)
-curl -fsSL https://bun.sh/install | bash
-```
-
-## Development Workflow
-
-### 1. Bootstrap and Test the Repository
-
-**MANDATORY**: Always run the full test suite first to understand the current state:
-
-```bash
-# Run all tests (if test suite exists)
-# TODO: Add test commands once test infrastructure is set up
-```
-
-### 2. Building the Application
-
-```bash
-# TODO: Add build commands once build infrastructure is set up
-```
-
-### 3. Running the Application
-
-```bash
-# TODO: Add run commands once application is developed
-```
-
 ## Contributor Modes
 
-This repository uses a structured contributor mode system. **MANDATORY: All contributors must read their mode's documentation in `.codex/modes/` before starting any work.**
+This repository uses a structured contributor mode system with sub-agents available in `.github/agents/`. **MANDATORY: All contributors must read their mode's documentation in `.codex/modes/` before starting any work.**
+
+GitHub Copilot can delegate to specialized sub-agents in `.github/agents/` for focused tasks.
 
 Available modes:
 - **Task Master Mode** (`.codex/modes/TASKMASTER.md`) - Task planning and coordination
@@ -112,11 +81,6 @@ from rich.console import Console
 - Balance resource generation and consumption
 - Test progression pacing carefully
 - Document all game mechanics in `.codex/implementation/`
-
-### Character System
-- Keep character implementations consistent with the shared Stained Glass universe
-- Document character abilities and progression in `.codex/implementation/`
-- Maintain visual consistency with the stained glass aesthetic
 
 ### Asset Management
 - Follow project art guidelines for all visual assets
