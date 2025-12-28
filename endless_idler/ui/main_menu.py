@@ -10,16 +10,16 @@ from PySide6.QtWidgets import QGraphicsDropShadowEffect
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QMainWindow
 from PySide6.QtWidgets import QPushButton
+from PySide6.QtWidgets import QStackedWidget
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
 from endless_idler.ui.assets import asset_path
-from endless_idler.ui.party_builder import PartyBuilderWindow
+from endless_idler.ui.party_builder import PartyBuilderWidget
 
 
 class MainMenuWidget(QWidget):
     play_requested = Signal()
-    party_requested = Signal()
     settings_requested = Signal()
     warp_requested = Signal()
     inventory_requested = Signal()
@@ -54,7 +54,6 @@ class MainMenuWidget(QWidget):
         menu_panel.setLayout(menu_layout)
 
         menu_layout.addWidget(self._make_button("Run", self.play_requested.emit))
-        menu_layout.addWidget(self._make_button("Party", self.party_requested.emit))
         menu_layout.addWidget(self._make_button("Warp", self.warp_requested.emit))
         menu_layout.addWidget(self._make_button("Inventory", self.inventory_requested.emit))
         menu_layout.addWidget(self._make_button("Guidebook", self.guidebook_requested.emit))
@@ -98,14 +97,14 @@ class MainMenuBackground(QWidget):
 class MainMenuWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self._party_window: PartyBuilderWindow | None = None
+        self._party_builder: PartyBuilderWidget | None = None
+        self._menu_screen: QWidget | None = None
 
         self.setWindowTitle("Stained Glass Odyssey Idle")
         self.resize(960, 540)
 
         menu = MainMenuWidget()
-        menu.play_requested.connect(lambda: print("Play clicked"))
-        menu.party_requested.connect(self._open_party_builder)
+        menu.play_requested.connect(self._open_party_builder)
         menu.settings_requested.connect(lambda: print("Settings clicked"))
         menu.warp_requested.connect(lambda: print("Warp clicked"))
         menu.inventory_requested.connect(lambda: print("Inventory clicked"))
@@ -117,11 +116,19 @@ class MainMenuWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         background.setLayout(layout)
         layout.addWidget(menu)
-        self.setCentralWidget(background)
+
+        self._stack = QStackedWidget()
+        self._menu_screen = background
+        self._stack.addWidget(self._menu_screen)
+        self.setCentralWidget(self._stack)
 
     def _open_party_builder(self) -> None:
-        if self._party_window is None:
-            self._party_window = PartyBuilderWindow()
-        self._party_window.show()
-        self._party_window.raise_()
-        self._party_window.activateWindow()
+        if self._party_builder is None:
+            self._party_builder = PartyBuilderWidget()
+            self._party_builder.back_requested.connect(self._open_main_menu)
+            self._stack.addWidget(self._party_builder)
+        self._stack.setCurrentWidget(self._party_builder)
+
+    def _open_main_menu(self) -> None:
+        if self._menu_screen is not None:
+            self._stack.setCurrentWidget(self._menu_screen)

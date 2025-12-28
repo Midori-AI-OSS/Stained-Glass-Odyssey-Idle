@@ -30,6 +30,24 @@ QPushButton[stainedMenu="true"]:disabled {
     color: rgba(255, 255, 255, 120);
 }
 
+QPushButton#partyBackButton {
+    background-color: rgba(255, 255, 255, 20);
+    border: 1px solid rgba(255, 255, 255, 28);
+    border-radius: 0px;
+    padding: 8px 12px;
+    color: rgba(255, 255, 255, 235);
+    font-size: 13px;
+    text-align: left;
+}
+
+QPushButton#partyBackButton:hover {
+    background-color: rgba(120, 180, 255, 56);
+}
+
+QPushButton#partyBackButton:pressed {
+    background-color: rgba(80, 140, 220, 72);
+}
+
 QFrame#characterBar {
     background-color: rgba(20, 30, 60, 120);
     border: 1px solid rgba(255, 255, 255, 24);
