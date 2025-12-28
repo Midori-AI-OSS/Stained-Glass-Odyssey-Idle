@@ -14,8 +14,6 @@ Tasks are organized into three status-based folders:
 - **`.codex/tasks/review/`** - Tasks complete and awaiting auditor review
 - **`.codex/tasks/taskmaster/`** - Tasks audited and awaiting final Task Master sign-off
 
-Within each status folder, tasks are organized by category: cards, chars, docs, items, passives (with tier subfolders), relics, and tests.
-
 ## Guidelines
 - Write clear, concise, and actionable tasks that can be easily understood and executed by Coders.
 - Place all new tasks in the appropriate category subfolder within `.codex/tasks/wip/` using a random hash prefix, for example `1234abcd-task-title.md`. Generate the hash with `openssl rand -hex 4`.
