@@ -1,7 +1,6 @@
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtCore import QSize
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor
 from PySide6.QtGui import QPainter
@@ -9,31 +8,29 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QGraphicsDropShadowEffect
 from PySide6.QtWidgets import QHBoxLayout
-from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QMainWindow
 from PySide6.QtWidgets import QPushButton
-from PySide6.QtWidgets import QSizePolicy
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
 from endless_idler.ui.assets import asset_path
-from endless_idler.ui.icons import lucide_icon
-from endless_idler.ui.icons import lucide_service
+from endless_idler.ui.party_builder import PartyBuilderWindow
 
 
 class MainMenuWidget(QWidget):
     play_requested = Signal()
+    party_requested = Signal()
     settings_requested = Signal()
     warp_requested = Signal()
+    inventory_requested = Signal()
     guidebook_requested = Signal()
     feedback_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._buttons_by_icon: dict[str, list[QPushButton]] = {}
 
         root = QHBoxLayout()
-        root.setContentsMargins(56, 56, 56, 56)
+        root.setContentsMargins(24, 24, 24, 24)
         root.setSpacing(24)
         self.setLayout(root)
 
@@ -42,8 +39,8 @@ class MainMenuWidget(QWidget):
         menu_panel = QFrame()
         menu_panel.setObjectName("mainMenuPanel")
         menu_panel.setFrameShape(QFrame.Shape.NoFrame)
-        menu_panel.setFixedWidth(320)
-        root.addWidget(menu_panel, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        menu_panel.setFixedWidth(220)
+        root.addWidget(menu_panel, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
 
         glow = QGraphicsDropShadowEffect(menu_panel)
         glow.setBlurRadius(44)
@@ -52,50 +49,27 @@ class MainMenuWidget(QWidget):
         menu_panel.setGraphicsEffect(glow)
 
         menu_layout = QVBoxLayout()
-        menu_layout.setContentsMargins(18, 18, 18, 18)
+        menu_layout.setContentsMargins(10, 10, 10, 10)
         menu_layout.setSpacing(10)
         menu_panel.setLayout(menu_layout)
 
-        title = QLabel("Stained Glass Odyssey Idle")
-        title.setObjectName("mainMenuTitle")
-        title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        title.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        menu_layout.addWidget(title)
-
-        menu_layout.addSpacing(8)
-        menu_layout.addWidget(self._make_button("Run", "play", self.play_requested.emit))
-        menu_layout.addWidget(self._make_button("Warp", "package-open", self.warp_requested.emit))
-        menu_layout.addWidget(self._make_button("Guidebook", "book", self.guidebook_requested.emit))
-        menu_layout.addWidget(self._make_button("Settings", "settings", self.settings_requested.emit))
-        menu_layout.addWidget(self._make_button("Feedback", "message-square", self.feedback_requested.emit))
+        menu_layout.addWidget(self._make_button("Run", self.play_requested.emit))
+        menu_layout.addWidget(self._make_button("Party", self.party_requested.emit))
+        menu_layout.addWidget(self._make_button("Warp", self.warp_requested.emit))
+        menu_layout.addWidget(self._make_button("Inventory", self.inventory_requested.emit))
+        menu_layout.addWidget(self._make_button("Guidebook", self.guidebook_requested.emit))
+        menu_layout.addWidget(self._make_button("Settings", self.settings_requested.emit))
+        menu_layout.addWidget(self._make_button("Feedback", self.feedback_requested.emit))
         menu_layout.addStretch(1)
 
-        service = lucide_service()
-        service.svg_ready.connect(self._on_svg_ready)
-        for icon_name in self._buttons_by_icon:
-            service.ensure_svg(icon_name)
-
-    def _make_button(self, label: str, icon_name: str, on_click: Callable[[], None]) -> QPushButton:
+    def _make_button(self, label: str, on_click: Callable[[], None]) -> QPushButton:
         button = QPushButton(label)
         button.setObjectName(f"mainMenuButton_{label.lower().replace(' ', '_')}")
         button.setProperty("stainedMenu", "true")
         button.setCursor(Qt.CursorShape.PointingHandCursor)
-        button.setIcon(lucide_icon(icon_name, 20))
-        button.setIconSize(QSize(20, 20))
         button.setMinimumHeight(52)
         button.clicked.connect(on_click)
-        self._buttons_by_icon.setdefault(icon_name, []).append(button)
         return button
-
-    def _on_svg_ready(self, name: str) -> None:
-        buttons = self._buttons_by_icon.get(name)
-        if not buttons:
-            return
-        icon = lucide_icon(name, 20)
-        if icon.isNull():
-            return
-        for button in buttons:
-            button.setIcon(icon)
 
 
 class MainMenuBackground(QWidget):
@@ -124,14 +98,17 @@ class MainMenuBackground(QWidget):
 class MainMenuWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
+        self._party_window: PartyBuilderWindow | None = None
 
         self.setWindowTitle("Stained Glass Odyssey Idle")
         self.resize(960, 540)
 
         menu = MainMenuWidget()
         menu.play_requested.connect(lambda: print("Play clicked"))
+        menu.party_requested.connect(self._open_party_builder)
         menu.settings_requested.connect(lambda: print("Settings clicked"))
         menu.warp_requested.connect(lambda: print("Warp clicked"))
+        menu.inventory_requested.connect(lambda: print("Inventory clicked"))
         menu.guidebook_requested.connect(lambda: print("Guidebook clicked"))
         menu.feedback_requested.connect(lambda: print("Feedback clicked"))
 
@@ -141,3 +118,10 @@ class MainMenuWindow(QMainWindow):
         background.setLayout(layout)
         layout.addWidget(menu)
         self.setCentralWidget(background)
+
+    def _open_party_builder(self) -> None:
+        if self._party_window is None:
+            self._party_window = PartyBuilderWindow()
+        self._party_window.show()
+        self._party_window.raise_()
+        self._party_window.activateWindow()
