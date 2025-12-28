@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import random
 
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 
 from PySide6.QtCore import QByteArray
 from PySide6.QtCore import Qt
@@ -19,6 +19,8 @@ from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QSizePolicy
 from PySide6.QtWidgets import QVBoxLayout
+
+from shiboken6 import isValid
 
 from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.ui.party_builder_common import apply_star_rank_visuals
@@ -37,6 +39,9 @@ class CharacterBar(QFrame):
         rng: random.Random,
         on_reroll: Callable[[], None],
         get_stack_count: Callable[[str], int],
+        character_cost: int,
+        can_afford: Callable[[int], bool],
+        on_insufficient_funds: Callable[[], None],
     ) -> None:
         super().__init__()
         self.setObjectName("characterBar")
@@ -44,6 +49,9 @@ class CharacterBar(QFrame):
         self._plugins_by_id = plugins_by_id
         self._rng = rng
         self._get_stack_count = get_stack_count
+        self._character_cost = max(0, int(character_cost))
+        self._can_afford = can_afford
+        self._on_insufficient_funds = on_insufficient_funds
 
         layout = QVBoxLayout()
         layout.setContentsMargins(12, 12, 12, 12)
@@ -98,6 +106,9 @@ class CharacterBar(QFrame):
                 image_path=image_path,
                 stars=stars,
                 stack_count=stacks,
+                character_cost=self._character_cost,
+                can_afford=self._can_afford,
+                on_insufficient_funds=self._on_insufficient_funds,
             )
 
     def clear_char_id(self, char_id: str) -> None:
@@ -109,7 +120,7 @@ class CharacterBar(QFrame):
     def refresh_stack_badges(self) -> None:
         for slot in self._slots:
             item = slot._item  # noqa: SLF001
-            if item is None:
+            if item is None or not isValid(item):
                 continue
             item.set_stack_count(self._get_stack_count(item.char_id))
 
@@ -143,10 +154,23 @@ class ShopSlot(QFrame):
 
         item = self._item
         self._item = None
-        if self.layout() is not None:
-            self.layout().removeWidget(item)  # type: ignore[union-attr]
-        item.setParent(None)
-        item.deleteLater()
+        if not isValid(item):
+            self._placeholder.show()
+            return
+        layout = self.layout()
+        if layout is not None:
+            try:
+                layout.removeWidget(item)  # type: ignore[union-attr]
+            except RuntimeError:
+                pass
+        try:
+            item.setParent(None)
+        except RuntimeError:
+            pass
+        try:
+            item.deleteLater()
+        except RuntimeError:
+            pass
         self._placeholder.show()
 
     def set_character(
@@ -157,6 +181,9 @@ class ShopSlot(QFrame):
         image_path: Path | None,
         stars: int,
         stack_count: int,
+        character_cost: int,
+        can_afford: Callable[[int], bool],
+        on_insufficient_funds: Callable[[], None],
     ) -> None:
         self.clear()
 
@@ -167,6 +194,9 @@ class ShopSlot(QFrame):
             image_path=image_path,
             stars=stars,
             stack_count=stack_count,
+            character_cost=character_cost,
+            can_afford=can_afford,
+            on_insufficient_funds=on_insufficient_funds,
         )
         item.destroyed.connect(self._on_item_destroyed)
         self._item = item
@@ -189,6 +219,9 @@ class ShopItem(QFrame):
         image_path: Path | None,
         stars: int,
         stack_count: int,
+        character_cost: int,
+        can_afford: Callable[[int], bool],
+        on_insufficient_funds: Callable[[], None],
     ) -> None:
         super().__init__()
         self.setObjectName("characterTileInner")
@@ -196,7 +229,10 @@ class ShopItem(QFrame):
         self._display_name = display_name
         self._image_path = image_path
         self._stars = sanitize_stars(stars)
-        self._stack_count = max(1, int(stack_count))
+        self._stack_count = max(0, int(stack_count))
+        self._character_cost = max(0, int(character_cost))
+        self._can_afford = can_afford
+        self._on_insufficient_funds = on_insufficient_funds
 
         apply_star_rank_visuals(self, self._stars)
 
@@ -213,7 +249,7 @@ class ShopItem(QFrame):
         layout.addWidget(self._image, 0, 0, 1, 1, Qt.AlignmentFlag.AlignCenter)
 
         self._stack_badge = QLabel()
-        self._stack_badge.setObjectName("stackBadge")
+        self._stack_badge.setObjectName("shopStackableBadge")
         self._stack_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._stack_badge.setMinimumSize(20, 18)
         layout.addWidget(self._stack_badge, 0, 0, 1, 1, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
@@ -231,14 +267,14 @@ class ShopItem(QFrame):
         return self._char_id
 
     def set_stack_count(self, stack_count: int) -> None:
-        self._stack_count = max(1, int(stack_count))
+        self._stack_count = max(0, int(stack_count))
         self._refresh_stack_badge()
 
     def _refresh_stack_badge(self) -> None:
-        if self._stack_count <= 1:
+        if self._stack_count <= 0:
             self._stack_badge.hide()
             return
-        self._stack_badge.setText(str(self._stack_count))
+        self._stack_badge.setText("★")
         self._stack_badge.show()
 
     def mousePressEvent(self, event: object) -> None:
@@ -247,6 +283,9 @@ class ShopItem(QFrame):
         except AttributeError:
             return
         if button != Qt.MouseButton.LeftButton:
+            return
+        if not self._can_afford(self._character_cost):
+            self._on_insufficient_funds()
             return
 
         mime = QMimeData()

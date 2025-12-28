@@ -4,9 +4,12 @@ import random
 
 from PySide6.QtCore import Signal
 from PySide6.QtCore import Qt
+from PySide6.QtCore import QPropertyAnimation
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QMainWindow
+from PySide6.QtWidgets import QGraphicsOpacityEffect
+from PySide6.QtWidgets import QMessageBox
 from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
@@ -78,6 +81,12 @@ class PartyBuilderWidget(QWidget):
         self._shop_button.toggled.connect(self._set_shop_open)
         header.addWidget(self._shop_button, 0, Qt.AlignmentFlag.AlignHCenter)
 
+        reset = QPushButton("Reset")
+        reset.setObjectName("partyResetButton")
+        reset.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset.clicked.connect(self._reset_run)
+        header.addWidget(reset, 0, Qt.AlignmentFlag.AlignHCenter)
+
         header.addStretch(1)
 
         self._token_label = QLabel()
@@ -86,6 +95,8 @@ class PartyBuilderWidget(QWidget):
         self._refresh_tokens()
 
         self._char_bar: CharacterBar | None = None
+        self._token_opacity: QGraphicsOpacityEffect | None = None
+        self._token_pulse_anim: QPropertyAnimation | None = None
         self._maybe_build_char_bar()
 
         root.addStretch(1)
@@ -110,6 +121,9 @@ class PartyBuilderWidget(QWidget):
             rng=self._rng,
             on_reroll=self._reroll_shop,
             get_stack_count=self._get_stack_count,
+            character_cost=DEFAULT_CHARACTER_COST,
+            can_afford=self._can_afford,
+            on_insufficient_funds=self._pulse_tokens,
         )
 
         bar.destroyed.connect(self._on_char_bar_destroyed)
@@ -261,6 +275,45 @@ class PartyBuilderWidget(QWidget):
         for zone in self._sell_zones:
             zone.set_active(active)
 
+    def _pulse_tokens(self) -> None:
+        if self._token_opacity is None:
+            effect = QGraphicsOpacityEffect(self._token_label)
+            effect.setOpacity(1.0)
+            self._token_label.setGraphicsEffect(effect)
+            self._token_opacity = effect
+
+        if self._token_pulse_anim is None:
+            anim = QPropertyAnimation(self._token_opacity, b"opacity", self)
+            anim.setDuration(1400)
+            anim.setLoopCount(2)
+            anim.setKeyValueAt(0.0, 1.0)
+            anim.setKeyValueAt(0.5, 0.25)
+            anim.setKeyValueAt(1.0, 1.0)
+            self._token_pulse_anim = anim
+
+        self._token_pulse_anim.stop()
+        self._token_pulse_anim.start()
+
+    def _reset_run(self) -> None:
+        result = QMessageBox.question(
+            self,
+            "Reset Run",
+            "Reset tokens, party, stacks, and shop?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if result != QMessageBox.StandardButton.Yes:
+            return
+
+        self._save = self._new_run_save()
+        self._save_manager.save(self._save)
+
+        self._set_sell_zones_active(False)
+        self._refresh_tokens()
+        self._load_slots_from_save()
+        if self._char_bar is not None:
+            self._char_bar.set_char_ids(self._save.bar)
+
     def _reroll_shop(self) -> None:
         party = [item for item in (self._save.onsite + self._save.offsite) if item]
         party_unique = sorted(set(party))
@@ -323,7 +376,7 @@ class PartyBuilderWidget(QWidget):
         return items[-1]
 
     def _get_stack_count(self, char_id: str) -> int:
-        return max(1, int(self._save.stacks.get(char_id, 1)))
+        return max(0, int(self._save.stacks.get(char_id, 0)))
 
     def _on_slot_changed(self, slot_id: str, char_id: str | None) -> None:
         prefix, index_raw = slot_id.split("_", 1)

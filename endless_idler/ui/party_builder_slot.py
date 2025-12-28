@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import random
 
-from collections.abc import Callable
 from pathlib import Path
+from collections.abc import Callable
 
 from PySide6.QtCore import QByteArray
 from PySide6.QtCore import Qt

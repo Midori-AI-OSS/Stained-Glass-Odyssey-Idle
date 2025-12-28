@@ -66,6 +66,19 @@ QPushButton#partyShopButton:checked {
     border: 1px solid rgba(170, 220, 255, 140);
 }
 
+QPushButton#partyResetButton {
+    background-color: rgba(255, 255, 255, 16);
+    border: 1px solid rgba(255, 255, 255, 22);
+    border-radius: 0px;
+    padding: 8px 16px;
+    color: rgba(255, 255, 255, 235);
+    font-size: 13px;
+}
+
+QPushButton#partyResetButton:hover {
+    background-color: rgba(255, 80, 80, 44);
+}
+
 QPushButton#partyRerollButton {
     background-color: rgba(255, 255, 255, 16);
     border: 1px solid rgba(255, 255, 255, 22);
@@ -115,6 +128,14 @@ QLabel#stackBadge {
     border: 1px solid rgba(255, 255, 255, 42);
     color: rgba(255, 255, 255, 235);
     font-size: 11px;
+    padding: 0px 4px;
+}
+
+QLabel#shopStackableBadge {
+    background-color: rgba(10, 14, 26, 210);
+    border: 1px solid rgba(255, 255, 255, 42);
+    color: #FFD700;
+    font-size: 12px;
     padding: 0px 4px;
 }
 
