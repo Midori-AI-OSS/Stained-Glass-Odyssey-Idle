@@ -23,16 +23,15 @@ For contributors performing rigorous, comprehensive reviews of code, documentati
 - After reviewing a task in `.codex/tasks/review/`, either move it to `.codex/tasks/taskmaster/` if fully approved, or move it back to `.codex/tasks/wip/` with detailed feedback if changes are needed.
 - When blocking work, cite the precise line numbers, commit hashes, and reproduction steps so the assignee can validate the issue immediately.
 - Review the applicable `AGENTS.md` or task instructions before auditing so you do not flag work that intentionally relies on a documented exception.
-- Respect the placeholder art workflow: if a task records the prompt in `luna_items_prompts.txt`, treat the asset requirement as satisfied even when the `.png` file has not been delivered yet. Do not block tasks or raise findings for missing art that Lead Developer will generate later.
 - Focus audits on tasks in `.codex/tasks/review/`—only pick up items that coders have marked as complete. Leave tasks in `.codex/tasks/wip/` for the assignee to continue before you return.
-- Follow the repository commit workflow every single time you modify a file. Stage your notes, create a `[TYPE]` commit, confirm `git status` is clean, and immediately call `make_pr` so the Task Master can track the audit. Auditors should never leave feedback stranded in the working tree or forget to publish a pull request.
+- Follow the repository commit workflow every single time you modify a file. Stage your notes, create a `[TYPE]` commit, confirm `git status` is clean, and create a pull request so the Task Master can track the audit. Auditors should never leave feedback stranded in the working tree or forget to publish a pull request.
 
 ### Audit Workflow Checklist
 
 1. Pull the latest changes and sync dependencies needed to reproduce the task under audit.
 2. Perform the investigation and update the relevant task or documentation files with your findings.
 3. Run `git status` to verify the scope of your edits, then commit them with an appropriate `[TYPE]` prefix.
-4. Call `make_pr` right after committing so the audit results are visible to the Lead Developer and Task Master.
+4. Create a pull request right after committing so the audit results are visible to the Lead Developer and Task Master.
 5. Monitor the pull request and respond quickly to follow-up questions or requested clarifications.
 
 ## Typical Actions
