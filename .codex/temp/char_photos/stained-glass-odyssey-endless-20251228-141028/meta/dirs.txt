@@ -1,0 +1,10 @@
+.codex/temp/char_photos/stained-glass-odyssey-endless-20251228-141028
+.codex/temp/char_photos/stained-glass-odyssey-endless-20251228-141028/Experimentation
+.codex/temp/char_photos/stained-glass-odyssey-endless-20251228-141028/Experimentation/Python-idle-game
+.codex/temp/char_photos/stained-glass-odyssey-endless-20251228-141028/Experimentation/Python-idle-game/idle_game
+.codex/temp/char_photos/stained-glass-odyssey-endless-20251228-141028/Experimentation/Python-idle-game/idle_game/assets
+.codex/temp/char_photos/stained-glass-odyssey-endless-20251228-141028/frontend
+.codex/temp/char_photos/stained-glass-odyssey-endless-20251228-141028/frontend/src
+.codex/temp/char_photos/stained-glass-odyssey-endless-20251228-141028/frontend/src/lib
+.codex/temp/char_photos/stained-glass-odyssey-endless-20251228-141028/frontend/src/lib/assets
+.codex/temp/char_photos/stained-glass-odyssey-endless-20251228-141028/meta

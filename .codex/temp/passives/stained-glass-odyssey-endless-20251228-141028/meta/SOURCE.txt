@@ -1,0 +1,4 @@
+source_url=https://github.com/Midori-AI-OSS/Stained-Glass-Odyssey-Endless
+source_path=/tmp/stained-glass-odyssey-endless-20251228-141028
+cloned_at=2025-12-28T14:20:56+00:00
+git_head=a93ac2d44806cc94b49f265ba76809705a8a91af
