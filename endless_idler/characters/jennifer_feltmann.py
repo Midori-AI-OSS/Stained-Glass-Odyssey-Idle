@@ -7,6 +7,8 @@ from plugins.damage_types._base import DamageTypeBase
 from plugins.damage_types.dark import Dark
 
 
+placement = "both"
+
 @dataclass
 class JenniferFeltmann(PlayerBase):
     # Pronouns: She/Her

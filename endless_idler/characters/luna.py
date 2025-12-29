@@ -180,6 +180,8 @@ class _LunaSwordCoordinator:
 
 
 
+placement = "both"
+
 @dataclass
 class Luna(PlayerBase):
     id = "luna"

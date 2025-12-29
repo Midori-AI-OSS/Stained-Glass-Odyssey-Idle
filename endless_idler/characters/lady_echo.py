@@ -8,6 +8,8 @@ from plugins.damage_types._base import DamageTypeBase
 from plugins.damage_types.lightning import Lightning
 
 
+placement = "both"
+
 @dataclass
 class LadyEcho(PlayerBase):
     id = "lady_echo"
@@ -36,4 +38,3 @@ class LadyEcho(PlayerBase):
     damage_type: DamageTypeBase = field(default_factory=Lightning)
     passives: list[str] = field(default_factory=lambda: ["lady_echo_resonant_static"])
     ui_portrait_pool: ClassVar[str] = "player_gallery"
-

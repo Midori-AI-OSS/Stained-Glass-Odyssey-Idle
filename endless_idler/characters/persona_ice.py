@@ -7,6 +7,8 @@ from plugins.damage_types._base import DamageTypeBase
 from plugins.damage_types.ice import Ice
 
 
+placement = "both"
+
 @dataclass
 class PersonaIce(PlayerBase):
     id = "persona_ice"

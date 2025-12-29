@@ -9,6 +9,8 @@ from plugins.damage_types.fire import Fire
 
 log = logging.getLogger(__name__)
 
+placement = "both"
+
 
 @dataclass
 class Player(PlayerBase):

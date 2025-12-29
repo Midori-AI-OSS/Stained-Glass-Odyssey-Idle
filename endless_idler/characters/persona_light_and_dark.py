@@ -8,6 +8,8 @@ from plugins.damage_types import load_damage_type
 from plugins.damage_types._base import DamageTypeBase
 
 
+placement = "both"
+
 @dataclass
 class PersonaLightAndDark(PlayerBase):
     id = "persona_light_and_dark"

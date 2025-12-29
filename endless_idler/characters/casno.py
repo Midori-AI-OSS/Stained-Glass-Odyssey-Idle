@@ -7,6 +7,8 @@ from plugins.damage_types import load_damage_type
 from plugins.damage_types._base import DamageTypeBase
 
 
+placement = "both"
+
 @dataclass
 class Casno(PlayerBase):
     """Fire-aligned gacha recruit who thrives on planned downtime."""

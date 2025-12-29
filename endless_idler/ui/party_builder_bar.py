@@ -10,6 +10,7 @@ from PySide6.QtCore import QByteArray
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QMimeData
 from PySide6.QtGui import QDrag
+from PySide6.QtGui import QCursor
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QLayout
 from PySide6.QtWidgets import QFrame
@@ -24,10 +25,13 @@ from shiboken6 import isValid
 
 from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.ui.party_builder_common import apply_star_rank_visuals
+from endless_idler.ui.party_builder_common import build_character_stats_tooltip
 from endless_idler.ui.party_builder_common import derive_display_name
 from endless_idler.ui.party_builder_common import MIME_TYPE
 from endless_idler.ui.party_builder_common import sanitize_stars
 from endless_idler.ui.party_builder_common import set_pixmap
+from endless_idler.ui.tooltip import hide_stained_tooltip
+from endless_idler.ui.tooltip import show_stained_tooltip
 
 
 class CharacterBar(QFrame):
@@ -99,12 +103,14 @@ class CharacterBar(QFrame):
             display_name = plugin.display_name if plugin else derive_display_name(char_id)
             image_path = plugin.random_image_path(self._rng) if plugin else None
             stars = sanitize_stars(plugin.stars if plugin else 1)
+            placement = (plugin.placement if plugin else "both").strip().lower()
             stacks = self._get_stack_count(char_id)
             slot.set_character(
                 char_id=char_id,
                 display_name=display_name,
                 image_path=image_path,
                 stars=stars,
+                placement=placement,
                 stack_count=stacks,
                 character_cost=self._character_cost,
                 can_afford=self._can_afford,
@@ -180,6 +186,7 @@ class ShopSlot(QFrame):
         display_name: str,
         image_path: Path | None,
         stars: int,
+        placement: str,
         stack_count: int,
         character_cost: int,
         can_afford: Callable[[int], bool],
@@ -193,6 +200,7 @@ class ShopSlot(QFrame):
             display_name=display_name,
             image_path=image_path,
             stars=stars,
+            placement=placement,
             stack_count=stack_count,
             character_cost=character_cost,
             can_afford=can_afford,
@@ -218,6 +226,7 @@ class ShopItem(QFrame):
         display_name: str,
         image_path: Path | None,
         stars: int,
+        placement: str,
         stack_count: int,
         character_cost: int,
         can_afford: Callable[[int], bool],
@@ -229,10 +238,12 @@ class ShopItem(QFrame):
         self._display_name = display_name
         self._image_path = image_path
         self._stars = sanitize_stars(stars)
+        self._placement = placement.strip().lower()
         self._stack_count = max(0, int(stack_count))
         self._character_cost = max(0, int(character_cost))
         self._can_afford = can_afford
         self._on_insufficient_funds = on_insufficient_funds
+        self._tooltip_html = ""
 
         apply_star_rank_visuals(self, self._stars)
 
@@ -252,7 +263,29 @@ class ShopItem(QFrame):
         self._stack_badge.setObjectName("shopStackableBadge")
         self._stack_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._stack_badge.setMinimumSize(20, 18)
-        layout.addWidget(self._stack_badge, 0, 0, 1, 1, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(self._stack_badge, 0, 0, 1, 1, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+
+        placement_badge = QFrame()
+        placement_badge.setObjectName("placementBadge")
+        placement_badge.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        placement_layout = QVBoxLayout()
+        placement_layout.setContentsMargins(3, 3, 3, 3)
+        placement_layout.setSpacing(2)
+        placement_badge.setLayout(placement_layout)
+
+        self._placement_top = QFrame()
+        self._placement_top.setObjectName("placementSquare")
+        self._placement_top.setFixedSize(10, 10)
+        self._placement_top.setProperty("filled", False)
+        placement_layout.addWidget(self._placement_top, 0, Qt.AlignmentFlag.AlignRight)
+
+        self._placement_bottom = QFrame()
+        self._placement_bottom.setObjectName("placementSquare")
+        self._placement_bottom.setFixedSize(10, 10)
+        self._placement_bottom.setProperty("filled", False)
+        placement_layout.addWidget(self._placement_bottom, 0, Qt.AlignmentFlag.AlignRight)
+
+        layout.addWidget(placement_badge, 0, 0, 1, 1, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         name = QLabel(display_name)
         name.setObjectName("characterTileName")
@@ -260,7 +293,9 @@ class ShopItem(QFrame):
         layout.addWidget(name, 1, 0, 1, 1)
 
         self.setCursor(Qt.CursorShape.OpenHandCursor)
+        self._refresh_placement_badge()
         self._refresh_stack_badge()
+        self._refresh_tooltip()
 
     @property
     def char_id(self) -> str:
@@ -269,6 +304,16 @@ class ShopItem(QFrame):
     def set_stack_count(self, stack_count: int) -> None:
         self._stack_count = max(0, int(stack_count))
         self._refresh_stack_badge()
+        self._refresh_tooltip()
+
+    def _refresh_placement_badge(self) -> None:
+        placement = self._placement
+        self._placement_top.setProperty("filled", placement in {"onsite", "both"})
+        self._placement_bottom.setProperty("filled", placement in {"offsite", "both"})
+        self._placement_top.style().unpolish(self._placement_top)
+        self._placement_top.style().polish(self._placement_top)
+        self._placement_bottom.style().unpolish(self._placement_bottom)
+        self._placement_bottom.style().polish(self._placement_bottom)
 
     def _refresh_stack_badge(self) -> None:
         if self._stack_count <= 0:
@@ -277,6 +322,31 @@ class ShopItem(QFrame):
         self._stack_badge.setText("★")
         self._stack_badge.show()
 
+    def _refresh_tooltip(self) -> None:
+        self._tooltip_html = (
+            build_character_stats_tooltip(
+                name=self._display_name,
+                stars=self._stars,
+                stackable=self._stack_count > 0,
+            )
+        )
+        self.setToolTip("")
+
+    def enterEvent(self, event: object) -> None:
+        if self._tooltip_html:
+            show_stained_tooltip(self, self._tooltip_html)
+        try:
+            super().enterEvent(event)  # type: ignore[misc]
+        except Exception:
+            return
+
+    def leaveEvent(self, event: object) -> None:
+        hide_stained_tooltip()
+        try:
+            super().leaveEvent(event)  # type: ignore[misc]
+        except Exception:
+            return
+
     def mousePressEvent(self, event: object) -> None:
         try:
             button = event.button()
@@ -284,6 +354,7 @@ class ShopItem(QFrame):
             return
         if button != Qt.MouseButton.LeftButton:
             return
+        hide_stained_tooltip()
         if not self._can_afford(self._character_cost):
             self._on_insufficient_funds()
             return

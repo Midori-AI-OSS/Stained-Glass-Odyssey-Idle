@@ -27,12 +27,15 @@ _IMAGE_EXTENSIONS = (
 _CHARACTERS_DIR = Path(__file__).resolve().parent
 _CHARACTER_ASSETS_DIR = _CHARACTERS_DIR.parent / "assets" / "characters"
 
+_PLACEMENTS = ("onsite", "offsite", "both")
+
 
 @dataclass(frozen=True, slots=True)
 class CharacterPlugin:
     char_id: str
     display_name: str
     stars: int = 1
+    placement: str = "both"
 
     @property
     def image_dir(self) -> Path:
@@ -68,52 +71,79 @@ def discover_character_plugins() -> list[CharacterPlugin]:
         if path.name in {"__init__.py", "plugins.py", "foe_base.py"}:
             continue
 
-        char_id, display_name, stars = _extract_metadata(path)
+        char_id, display_name, stars, placement = _extract_metadata(path)
         if not char_id:
             continue
-        plugins.append(CharacterPlugin(char_id=char_id, display_name=display_name, stars=stars))
+        plugins.append(
+            CharacterPlugin(
+                char_id=char_id,
+                display_name=display_name,
+                stars=stars,
+                placement=placement,
+            )
+        )
 
     return plugins
 
 
-def _extract_metadata(path: Path) -> tuple[str, str, int]:
+def _extract_metadata(path: Path) -> tuple[str, str, int, str]:
     char_id = path.stem
     display_name = _derive_display_name(char_id)
     stars = 1
+    placement = "both"
 
     try:
         source = path.read_text(encoding="utf-8")
     except OSError:
-        return char_id, display_name, stars
+        return char_id, display_name, stars, placement
 
     try:
         tree = ast.parse(source, filename=str(path))
     except SyntaxError:
-        return char_id, display_name, stars
+        return char_id, display_name, stars, placement
+
+    module_placement = _extract_from_module(tree)
+    if module_placement:
+        placement = module_placement
 
     for node in tree.body:
         if not isinstance(node, ast.ClassDef):
             continue
-        found_id, found_name, found_stars = _extract_from_classdef(node)
+        found_id, found_name, found_stars, found_placement = _extract_from_classdef(node)
         if found_id:
             char_id = found_id
         if found_name:
             display_name = found_name
         if found_stars is not None:
             stars = found_stars
+        if found_placement:
+            placement = found_placement
         if found_id or found_name:
             break
 
     if not display_name:
         display_name = _derive_display_name(char_id)
 
-    return char_id, display_name, _sanitize_stars(stars)
+    return char_id, display_name, _sanitize_stars(stars), _sanitize_placement(placement)
 
 
-def _extract_from_classdef(node: ast.ClassDef) -> tuple[str | None, str | None, int | None]:
+def _extract_from_module(tree: ast.Module) -> str | None:
+    for stmt in tree.body:
+        if isinstance(stmt, ast.Assign):
+            for target in stmt.targets:
+                if isinstance(target, ast.Name) and target.id == "placement":
+                    return _const_str(stmt.value)
+        elif isinstance(stmt, ast.AnnAssign):
+            if isinstance(stmt.target, ast.Name) and stmt.target.id == "placement":
+                return _const_str(stmt.value)
+    return None
+
+
+def _extract_from_classdef(node: ast.ClassDef) -> tuple[str | None, str | None, int | None, str | None]:
     char_id: str | None = None
     display_name: str | None = None
     stars: int | None = None
+    placement: str | None = None
 
     for stmt in node.body:
         if isinstance(stmt, ast.Assign):
@@ -125,6 +155,8 @@ def _extract_from_classdef(node: ast.ClassDef) -> tuple[str | None, str | None, 
                         display_name = _const_str(stmt.value)
                     elif target.id in {"gacha_rarity", "rarity", "stars"}:
                         stars = _const_int(stmt.value)
+                    elif target.id == "placement":
+                        placement = _const_str(stmt.value)
         elif isinstance(stmt, ast.AnnAssign):
             if isinstance(stmt.target, ast.Name):
                 if stmt.target.id == "id":
@@ -133,11 +165,10 @@ def _extract_from_classdef(node: ast.ClassDef) -> tuple[str | None, str | None, 
                     display_name = _const_str(stmt.value)
                 elif stmt.target.id in {"gacha_rarity", "rarity", "stars"}:
                     stars = _const_int(stmt.value)
+                elif stmt.target.id == "placement":
+                    placement = _const_str(stmt.value)
 
-        if char_id and display_name and stars is not None:
-            break
-
-    return char_id, display_name, stars
+    return char_id, display_name, stars, placement
 
 
 def _const_str(node: ast.AST | None) -> str | None:
@@ -162,3 +193,8 @@ def _sanitize_stars(stars: int) -> int:
     if stars > 6:
         return 6
     return stars
+
+
+def _sanitize_placement(placement: str) -> str:
+    value = placement.strip().lower()
+    return value if value in _PLACEMENTS else "both"

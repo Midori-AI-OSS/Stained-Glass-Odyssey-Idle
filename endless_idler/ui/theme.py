@@ -139,6 +139,25 @@ QLabel#shopStackableBadge {
     padding: 0px 4px;
 }
 
+QFrame#placementBadge {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 1,
+        stop: 0 rgba(70, 110, 185, 55),
+        stop: 1 rgba(10, 14, 26, 225)
+    );
+    border: 1px solid rgba(255, 255, 255, 60);
+}
+
+QFrame#placementSquare {
+    background-color: rgba(0, 0, 0, 0);
+    border: 1px solid rgba(255, 255, 255, 120);
+}
+
+QFrame#placementSquare[filled="true"] {
+    background-color: rgba(255, 255, 255, 190);
+    border: 1px solid rgba(255, 255, 255, 200);
+}
+
 QLabel#characterTileName {
     color: rgba(255, 255, 255, 235);
     font-size: 12px;
@@ -184,6 +203,24 @@ QLabel#sellZoneLabel {
 QLabel#tokenLabel {
     color: rgba(255, 255, 255, 235);
     font-size: 13px;
+}
+
+QFrame#stainedTooltipPanel {
+    background-color: rgba(10, 14, 26, 210);
+    border: 1px solid rgba(255, 255, 255, 60);
+}
+
+QLabel#stainedTooltipContent {
+    color: rgba(255, 255, 255, 235);
+    font-size: 12px;
+}
+
+QToolTip {
+    background-color: rgba(10, 14, 26, 238);
+    color: rgba(255, 255, 255, 235);
+    border: 1px solid rgba(255, 255, 255, 52);
+    padding: 8px 10px;
+    font-size: 12px;
 }
 """.strip()
 

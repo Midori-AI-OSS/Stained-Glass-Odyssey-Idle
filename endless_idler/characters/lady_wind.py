@@ -7,6 +7,8 @@ from plugins.damage_types._base import DamageTypeBase
 from plugins.damage_types.wind import Wind
 
 
+placement = "both"
+
 @dataclass
 class LadyWind(PlayerBase):
     id = "lady_wind"

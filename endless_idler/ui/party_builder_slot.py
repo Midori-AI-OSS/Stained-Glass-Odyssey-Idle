@@ -10,6 +10,7 @@ from PySide6.QtCore import QByteArray
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QMimeData
 from PySide6.QtGui import QDrag
+from PySide6.QtGui import QCursor
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QGridLayout
@@ -19,10 +20,13 @@ from PySide6.QtWidgets import QLabel
 from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.ui.party_builder_bar import ShopItem
 from endless_idler.ui.party_builder_common import apply_star_rank_visuals
+from endless_idler.ui.party_builder_common import build_character_stats_tooltip
 from endless_idler.ui.party_builder_common import clear_star_rank_visuals
 from endless_idler.ui.party_builder_common import derive_display_name
 from endless_idler.ui.party_builder_common import MIME_TYPE
 from endless_idler.ui.party_builder_common import set_pixmap
+from endless_idler.ui.tooltip import hide_stained_tooltip
+from endless_idler.ui.tooltip import show_stained_tooltip
 
 
 class DropSlot(QFrame):
@@ -35,10 +39,12 @@ class DropSlot(QFrame):
         rng: random.Random,
         character_cost: int,
         can_afford: Callable[[int], bool],
-        purchase_character: Callable[[str, str | None], bool],
+        purchase_character: Callable[[str, str, str | None], bool],
         on_slot_changed: Callable[[str, str | None], None],
         on_drag_active_changed: Callable[[bool], None],
         get_stack_count: Callable[[str], int],
+        allow_stacking: bool = True,
+        show_stack_badge: bool = True,
     ) -> None:
         super().__init__()
         self.setObjectName("dropSlot")
@@ -54,11 +60,14 @@ class DropSlot(QFrame):
         self._on_slot_changed = on_slot_changed
         self._on_drag_active_changed = on_drag_active_changed
         self._get_stack_count = get_stack_count
+        self._allow_stacking = bool(allow_stacking)
+        self._show_stack_badge = bool(show_stack_badge)
 
         self._char_id: str | None = None
         self._display_name: str | None = None
         self._image_path: Path | None = None
         self._stars: int | None = None
+        self._tooltip_html = ""
         self._suspend_notify = False
 
         outer = QVBoxLayout()
@@ -89,12 +98,46 @@ class DropSlot(QFrame):
         self._stack_badge.setObjectName("stackBadge")
         self._stack_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._stack_badge.setMinimumSize(20, 18)
-        layout.addWidget(self._stack_badge, 0, 0, 1, 1, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(self._stack_badge, 0, 0, 1, 1, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         self._stack_badge.hide()
+
+        self._placement_badge = QFrame()
+        self._placement_badge.setObjectName("placementBadge")
+        self._placement_badge.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        placement_layout = QVBoxLayout()
+        placement_layout.setContentsMargins(3, 3, 3, 3)
+        placement_layout.setSpacing(2)
+        self._placement_badge.setLayout(placement_layout)
+
+        self._placement_top = QFrame()
+        self._placement_top.setObjectName("placementSquare")
+        self._placement_top.setFixedSize(10, 10)
+        self._placement_top.setProperty("filled", False)
+        placement_layout.addWidget(self._placement_top, 0, Qt.AlignmentFlag.AlignRight)
+
+        self._placement_bottom = QFrame()
+        self._placement_bottom.setObjectName("placementSquare")
+        self._placement_bottom.setFixedSize(10, 10)
+        self._placement_bottom.setProperty("filled", False)
+        placement_layout.addWidget(self._placement_bottom, 0, Qt.AlignmentFlag.AlignRight)
+
+        layout.addWidget(self._placement_badge, 0, 0, 1, 1, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
+        self._placement_badge.hide()
 
         self.setFixedSize(110, 130)
         self.setCursor(Qt.CursorShape.OpenHandCursor)
         self._refresh()
+
+    def _allows_char_id(self, char_id: str) -> bool:
+        slot_kind = self._slot_id.split("_", 1)[0].strip().lower()
+        plugin = self._plugins_by_id.get(char_id)
+        placement = (plugin.placement if plugin else "both").strip().lower()
+
+        if slot_kind == "onsite":
+            return placement in {"onsite", "both"}
+        if slot_kind == "offsite":
+            return placement in {"offsite", "both"}
+        return True
 
     def load_char_id(self, char_id: str | None) -> None:
         self._suspend_notify = True
@@ -118,23 +161,31 @@ class DropSlot(QFrame):
         if not mime.hasFormat(MIME_TYPE):
             return
 
+        raw = bytes(mime.data(MIME_TYPE))
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return
+        incoming = str(data.get("char_id", "")).strip()
+        if not incoming:
+            return
+        if not self._allows_char_id(incoming):
+            return
+
         source = event.source() if hasattr(event, "source") else None
         if isinstance(source, DropSlot):
+            if self._char_id is not None and not source._allows_char_id(self._char_id):  # noqa: SLF001
+                return
             event.acceptProposedAction()
             return
 
         if isinstance(source, ShopItem):
             if not self._can_afford(self._character_cost):
                 return
-            raw = bytes(mime.data(MIME_TYPE))
-            try:
-                data = json.loads(raw.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
+            if self._char_id is None:
+                event.acceptProposedAction()
                 return
-            incoming = str(data.get("char_id", "")).strip()
-            if not incoming:
-                return
-            if self._char_id is None or self._char_id == incoming:
+            if self._allow_stacking and self._char_id == incoming:
                 event.acceptProposedAction()
             return
 
@@ -151,6 +202,7 @@ class DropSlot(QFrame):
         if not self._char_id or not self._display_name:
             return
 
+        hide_stained_tooltip()
         self._on_drag_active_changed(True)
         mime = QMimeData()
         payload = json.dumps(
@@ -208,6 +260,8 @@ class DropSlot(QFrame):
         image_path = Path(image_raw).expanduser() if image_raw else None
         if not char_id:
             return
+        if not self._allows_char_id(char_id):
+            return
 
         plugin = self._plugins_by_id.get(char_id)
         if not display_name:
@@ -221,6 +275,8 @@ class DropSlot(QFrame):
 
         if isinstance(source, DropSlot) and source is not self:
             if self._char_id is not None:
+                if not source._allows_char_id(self._char_id):  # noqa: SLF001
+                    return
                 previous = (
                     self._char_id,
                     self._display_name or self._char_id,
@@ -244,8 +300,11 @@ class DropSlot(QFrame):
         if isinstance(source, ShopItem):
             if self._char_id is not None and self._char_id != char_id:
                 return
+            if not self._allow_stacking and self._char_id is not None:
+                return
             target_char_id = self._char_id
-            if not self._purchase_character(char_id, target_char_id):
+            slot_kind = self._slot_id.split("_", 1)[0].strip().lower()
+            if not self._purchase_character(char_id, slot_kind, target_char_id):
                 return
             if target_char_id is not None:
                 self._refresh()
@@ -282,6 +341,9 @@ class DropSlot(QFrame):
             set_pixmap(self._image, None, size=72)
             clear_star_rank_visuals(self._inner)
             self._stack_badge.hide()
+            self._placement_badge.hide()
+            self._tooltip_html = ""
+            self.setToolTip("")
             return
 
         self._label.setText(self._display_name)
@@ -289,8 +351,24 @@ class DropSlot(QFrame):
         apply_star_rank_visuals(self._inner, self._stars or 1)
 
         stacks = self._get_stack_count(self._char_id)
-        if stacks <= 1:
+        if not self._show_stack_badge or stacks <= 1:
             self._stack_badge.hide()
         else:
             self._stack_badge.setText(str(stacks))
             self._stack_badge.show()
+
+        plugin = self._plugins_by_id.get(self._char_id)
+        placement = (plugin.placement if plugin else "both").strip().lower()
+        self._placement_top.setProperty("filled", placement in {"onsite", "both"})
+        self._placement_bottom.setProperty("filled", placement in {"offsite", "both"})
+        self._placement_top.style().unpolish(self._placement_top)
+        self._placement_top.style().polish(self._placement_top)
+        self._placement_bottom.style().unpolish(self._placement_bottom)
+        self._placement_bottom.style().polish(self._placement_bottom)
+        self._placement_badge.show()
+
+        self._tooltip_html = (
+            build_character_stats_tooltip(
+                name=self._display_name,
+                stars=self._stars or 1,
+                stacks=stacks if self._

@@ -20,6 +20,7 @@ from endless_idler.save import DEFAULT_CHARACTER_COST
 from endless_idler.save import DEFAULT_RUN_TOKENS
 from endless_idler.save import OFFSITE_SLOTS
 from endless_idler.save import ONSITE_SLOTS
+from endless_idler.save import STANDBY_SLOTS
 from endless_idler.save import RunSave
 from endless_idler.save import SaveManager
 from endless_idler.ui.party_builder_bar import CharacterBar
@@ -107,7 +108,8 @@ class PartyBuilderWidget(QWidget):
         root.addLayout(grid)
 
         grid.addLayout(self._make_onsite_row())
-        grid.addLayout(self._make_row("Offsite", count=OFFSITE_SLOTS))
+        grid.addLayout(self._make_row("Offsite", count=OFFSITE_SLOTS, center=True))
+        grid.addLayout(self._make_standby_row())
 
         self._load_slots_from_save()
 
@@ -186,6 +188,8 @@ class PartyBuilderWidget(QWidget):
                 on_slot_changed=self._on_slot_changed,
                 on_drag_active_changed=self._set_sell_zones_active,
                 get_stack_count=self._get_stack_count,
+                allow_stacking=True,
+                show_stack_badge=True,
             )
             self._slots_by_id[slot_id] = slot
             row.addWidget(slot)
@@ -195,7 +199,15 @@ class PartyBuilderWidget(QWidget):
 
         return row
 
-    def _make_row(self, label: str, *, count: int, center: bool = False) -> QHBoxLayout:
+    def _make_row(
+        self,
+        label: str,
+        *,
+        count: int,
+        center: bool = False,
+        allow_stacking: bool = True,
+        show_stack_badge: bool = True,
+    ) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(10)
@@ -216,6 +228,8 @@ class PartyBuilderWidget(QWidget):
                 on_slot_changed=self._on_slot_changed,
                 on_drag_active_changed=self._set_sell_zones_active,
                 get_stack_count=self._get_stack_count,
+                allow_stacking=allow_stacking,
+                show_stack_badge=show_stack_badge,
             )
             self._slots_by_id[slot_id] = slot
             row.addWidget(slot)
@@ -223,6 +237,15 @@ class PartyBuilderWidget(QWidget):
         row.addStretch(1)
 
         return row
+
+    def _make_standby_row(self) -> QHBoxLayout:
+        return self._make_row(
+            "Standby",
+            count=STANDBY_SLOTS,
+            center=True,
+            allow_stacking=False,
+            show_stack_badge=False,
+        )
 
     def _can_afford(self, cost: int) -> bool:
         return self._save.tokens >= cost
@@ -325,8 +348,15 @@ class PartyBuilderWidget(QWidget):
         non_party = [char_id for char_id in all_ids if char_id not in party_set]
 
         offers: list[str | None] = []
+        offered_counts: dict[str, int] = {}
         for index in range(1, BAR_SLOTS + 1):
-            offers.append(self._roll_shop_offer(index, fill_ratio, party_unique, non_party))
+            offer = self._roll_shop_offer(index, fill_ratio, party_unique, non_party, offered_counts)
+            offers.append(offer)
+            if offer:
+                offered_counts[offer] = offered_counts.get(offer, 0) + 1
+
+        if len(offers) > 1:
+            self._rng.shuffle(offers)
 
         self._save.bar = offers
 
@@ -340,26 +370,38 @@ class PartyBuilderWidget(QWidget):
         fill_ratio: float,
         party: list[str],
         non_party: list[str],
+        offered_counts: dict[str, int],
     ) -> str | None:
         if not party and not non_party:
             return None
 
         debuff_by_slot: dict[int, float] = {4: 1.0, 5: 2.5, 6: 5.0}
-        base_boost = 1.35 if slot_index <= 3 else 1.0 / debuff_by_slot.get(slot_index, 1.0)
-        p_party = max(0.0, min(1.0, fill_ratio * base_boost))
+        base_boost = 1.15 if slot_index <= 3 else 1.0
+        base_boost = base_boost / debuff_by_slot.get(slot_index, 1.0)
+        p_party = max(0.0, min(0.6, fill_ratio * 0.65 * base_boost))
 
         prefer_party = bool(party) and (self._rng.random() < p_party)
-        pool = party if prefer_party else non_party
-        if not pool:
-            pool = party if party else non_party
+        primary = party if prefer_party else non_party
+        secondary = non_party if prefer_party else party
 
-        weights = [self._shop_weight(char_id) for char_id in pool]
+        pool = [char_id for char_id in primary if offered_counts.get(char_id, 0) <= 0]
+        if not pool:
+            pool = [char_id for char_id in secondary if offered_counts.get(char_id, 0) <= 0]
+        if not pool:
+            pool = primary if primary else secondary
+
+        weights = [self._shop_offer_weight(char_id, offered_counts) for char_id in pool]
         return self._weighted_choice(pool, weights)
 
-    def _shop_weight(self, char_id: str) -> float:
+    def _shop_offer_weight(self, char_id: str, offered_counts: dict[str, int]) -> float:
         stacks = self._save.stacks.get(char_id, 1)
         extra = max(0, int(stacks) - 1)
-        return 1.0 / (1.0 + extra * 0.15)
+        stack_weight = 1.0 / (1.0 + extra * 0.25)
+
+        duplicates = max(0, int(offered_counts.get(char_id, 0)))
+        duplicate_weight = 0.25**duplicates
+
+        return stack_weight * duplicate_weight
 
     def _weighted_choice(self, items: list[str], weights: list[float]) -> str | None:
         if not items:

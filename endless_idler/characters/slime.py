@@ -4,6 +4,9 @@ from typing import ClassVar
 from plugins.characters._base import PlayerBase
 
 
+placement = "both"
+
+
 @dataclass
 class Slime(PlayerBase):
     """Unobtainable training dummy that mirrors base player stats."""

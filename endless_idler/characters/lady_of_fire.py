@@ -7,6 +7,8 @@ from plugins.damage_types._base import DamageTypeBase
 from plugins.damage_types.fire import Fire
 
 
+placement = "both"
+
 @dataclass
 class LadyOfFire(PlayerBase):
     id = "lady_of_fire"

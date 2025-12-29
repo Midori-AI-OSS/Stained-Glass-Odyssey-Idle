@@ -7,6 +7,8 @@ from plugins.damage_types._base import DamageTypeBase
 from plugins.damage_types.lightning import Lightning
 
 
+placement = "both"
+
 @dataclass
 class LadyLightning(PlayerBase):
     id = "lady_lightning"

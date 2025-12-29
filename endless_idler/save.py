@@ -14,7 +14,8 @@ SAVE_VERSION = 1
 DEFAULT_RUN_TOKENS = 20
 DEFAULT_CHARACTER_COST = 1
 ONSITE_SLOTS = 4
-OFFSITE_SLOTS = 10
+OFFSITE_SLOTS = 6
+STANDBY_SLOTS = 8
 BAR_SLOTS = 6
 
 
@@ -25,6 +26,7 @@ class RunSave:
     bar: list[str | None] = field(default_factory=lambda: [None] * BAR_SLOTS)
     onsite: list[str | None] = field(default_factory=lambda: [None] * ONSITE_SLOTS)
     offsite: list[str | None] = field(default_factory=lambda: [None] * OFFSITE_SLOTS)
+    standby: list[str | None] = field(default_factory=lambda: [None] * STANDBY_SLOTS)
     stacks: dict[str, int] = field(default_factory=dict)
 
 
@@ -58,6 +60,7 @@ class SaveManager:
             bar=_as_optional_str_list(data.get("bar", [])),
             onsite=_as_optional_str_list(data.get("onsite", [])),
             offsite=_as_optional_str_list(data.get("offsite", [])),
+            standby=_as_optional_str_list(data.get("standby", [])),
             stacks=_as_int_dict(data.get("stacks", {})),
         )
         return _normalized_save(save)
@@ -70,6 +73,7 @@ class SaveManager:
             "bar": save.bar,
             "onsite": save.onsite,
             "offsite": save.offsite,
+            "standby": save.standby,
             "stacks": save.stacks,
         }
 
@@ -102,6 +106,9 @@ def _normalized_save(save: RunSave) -> RunSave:
 
     offsite = list(save.offsite[:OFFSITE_SLOTS])
     offsite.extend([None] * (OFFSITE_SLOTS - len(offsite)))
+
+    standby = list(save.standby[:STANDBY_SLOTS])
+    standby.extend([None] * (STANDBY_SLOTS - len(standby)))
 
     bar = list(save.bar[:BAR_SLOTS])
     bar.extend([None] * (BAR_SLOTS - len(bar)))
@@ -148,6 +155,7 @@ def _normalized_save(save: RunSave) -> RunSave:
         bar=deduped_bar,
         onsite=deduped_onsite,
         offsite=deduped_offsite,
+        standby=[item if item else None for item in standby],
         stacks=stacks,
     )
 
