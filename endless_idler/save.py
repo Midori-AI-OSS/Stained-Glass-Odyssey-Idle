@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import json
 import os
+import math
+import json
 
 from dataclasses import dataclass
 from dataclasses import field
@@ -10,12 +11,14 @@ from pathlib import Path
 from PySide6.QtCore import QStandardPaths
 
 
-SAVE_VERSION = 1
+SAVE_VERSION = 2
 DEFAULT_RUN_TOKENS = 20
 DEFAULT_CHARACTER_COST = 1
+DEFAULT_PARTY_LEVEL = 1
+DEFAULT_PARTY_LEVEL_UP_COST = 4
 ONSITE_SLOTS = 4
 OFFSITE_SLOTS = 6
-STANDBY_SLOTS = 8
+STANDBY_SLOTS = 10
 BAR_SLOTS = 6
 
 
@@ -23,6 +26,8 @@ BAR_SLOTS = 6
 class RunSave:
     version: int = SAVE_VERSION
     tokens: int = DEFAULT_RUN_TOKENS
+    party_level: int = DEFAULT_PARTY_LEVEL
+    party_level_up_cost: int = DEFAULT_PARTY_LEVEL_UP_COST
     bar: list[str | None] = field(default_factory=lambda: [None] * BAR_SLOTS)
     onsite: list[str | None] = field(default_factory=lambda: [None] * ONSITE_SLOTS)
     offsite: list[str | None] = field(default_factory=lambda: [None] * OFFSITE_SLOTS)
@@ -57,6 +62,11 @@ class SaveManager:
         save = RunSave(
             version=_as_int(data.get("version", SAVE_VERSION), default=SAVE_VERSION),
             tokens=_as_int(data.get("tokens", DEFAULT_RUN_TOKENS), default=DEFAULT_RUN_TOKENS),
+            party_level=_as_int(data.get("party_level", DEFAULT_PARTY_LEVEL), default=DEFAULT_PARTY_LEVEL),
+            party_level_up_cost=_as_int(
+                data.get("party_level_up_cost", DEFAULT_PARTY_LEVEL_UP_COST),
+                default=DEFAULT_PARTY_LEVEL_UP_COST,
+            ),
             bar=_as_optional_str_list(data.get("bar", [])),
             onsite=_as_optional_str_list(data.get("onsite", [])),
             offsite=_as_optional_str_list(data.get("offsite", [])),
@@ -70,6 +80,8 @@ class SaveManager:
         payload = {
             "version": save.version,
             "tokens": save.tokens,
+            "party_level": save.party_level,
+            "party_level_up_cost": save.party_level_up_cost,
             "bar": save.bar,
             "onsite": save.onsite,
             "offsite": save.offsite,
@@ -100,6 +112,8 @@ def _default_save_path() -> Path:
 
 def _normalized_save(save: RunSave) -> RunSave:
     tokens = max(0, int(save.tokens))
+    party_level = max(1, int(save.party_level))
+    party_level_up_cost = max(0, int(save.party_level_up_cost))
 
     onsite = list(save.onsite[:ONSITE_SLOTS])
     onsite.extend([None] * (ONSITE_SLOTS - len(onsite)))
@@ -107,8 +121,24 @@ def _normalized_save(save: RunSave) -> RunSave:
     offsite = list(save.offsite[:OFFSITE_SLOTS])
     offsite.extend([None] * (OFFSITE_SLOTS - len(offsite)))
 
-    standby = list(save.standby[:STANDBY_SLOTS])
-    standby.extend([None] * (STANDBY_SLOTS - len(standby)))
+    raw_standby = [item if item else None for item in list(save.standby[:STANDBY_SLOTS])]
+    raw_standby.extend([None] * (STANDBY_SLOTS - len(raw_standby)))
+    standby: list[str | None] = [None] * STANDBY_SLOTS
+    for item in raw_standby:
+        if not item:
+            continue
+        try:
+            target = next(
+                index
+                for index in range(1, max(1, STANDBY_SLOTS - 1))
+                if standby[index] is None
+            )
+        except StopIteration:
+            break
+        standby[target] = item
+    if standby:
+        standby[0] = None
+        standby[-1] = None
 
     bar = list(save.bar[:BAR_SLOTS])
     bar.extend([None] * (BAR_SLOTS - len(bar)))
@@ -140,7 +170,7 @@ def _normalized_save(save: RunSave) -> RunSave:
     for item in bar:
         deduped_bar.append(item if item else None)
 
-    party_chars = {item for item in (deduped_onsite + deduped_offsite) if item}
+    party_chars = {item for item in (deduped_onsite + deduped_offsite + standby) if item}
     stacks: dict[str, int] = {}
     for key, value in save.stacks.items():
         if key in party_chars and isinstance(value, int) and value > 0:
@@ -152,10 +182,12 @@ def _normalized_save(save: RunSave) -> RunSave:
     return RunSave(
         version=SAVE_VERSION,
         tokens=tokens,
+        party_level=party_level,
+        party_level_up_cost=party_level_up_cost,
         bar=deduped_bar,
         onsite=deduped_onsite,
         offsite=deduped_offsite,
-        standby=[item if item else None for item in standby],
+        standby=standby,
         stacks=stacks,
     )
 
@@ -210,3 +242,11 @@ def _as_int_dict(value: object) -> dict[str, int]:
             continue
         result[stripped] = number
     return result
+
+
+def next_party_level_up_cost(*, new_level: int, previous_cost: int) -> int:
+    previous_cost = max(0, int(previous_cost))
+    new_level = max(1, int(new_level))
+    if new_level >= 10:
+        return max(1, int(math.ceil(previous_cost * 1.05)))
+    return max(1, previous_cost * 4 + 2)

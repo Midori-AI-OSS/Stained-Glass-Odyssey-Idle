@@ -101,6 +101,60 @@ QFrame#characterBar {
     border: 1px solid rgba(255, 255, 255, 24);
 }
 
+QFrame#standbyBarContainer {
+    background-color: rgba(30, 55, 105, 140);
+    border: 1px solid rgba(255, 255, 255, 26);
+}
+
+QFrame#standbyPartyLevelTile {
+    background-color: rgba(35, 70, 135, 170);
+    border: 1px solid rgba(255, 255, 255, 30);
+}
+
+QFrame#standbyPartyLevelTile:hover {
+    background-color: rgba(45, 90, 170, 195);
+    border: 1px solid rgba(170, 220, 255, 90);
+}
+
+QFrame#fightBar {
+    background-color: rgba(255, 59, 120, 150);
+    border: 1px solid rgba(255, 120, 160, 120);
+}
+
+QFrame#groupFxPlane[tone="light"] {
+    background-color: rgba(120, 185, 255, 30);
+    border: 1px solid rgba(210, 235, 255, 45);
+}
+
+QFrame#rewardsPlane[tone="dark"] {
+    background-color: rgba(25, 45, 100, 45);
+    border: 1px solid rgba(170, 220, 255, 38);
+}
+
+QLabel#fightBarLabel {
+    color: rgba(255, 255, 255, 235);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+QLabel#standbyPartyLevelTitle {
+    color: rgba(255, 255, 255, 220);
+    font-size: 12px;
+}
+
+QLabel#standbyPartyLevelValue {
+    color: rgba(255, 255, 255, 240);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel#standbyPartyLevelCost {
+    color: rgba(255, 255, 255, 210);
+    font-size: 12px;
+}
+
 QFrame#characterTile {
     background-color: rgba(255, 255, 255, 18);
     border: 1px solid rgba(255, 255, 255, 24);
@@ -202,6 +256,32 @@ QLabel#sellZoneLabel {
 
 QLabel#tokenLabel {
     color: rgba(255, 255, 255, 235);
+    font-size: 13px;
+}
+
+QFrame#standbyShopTile {
+    background-color: rgba(10, 20, 60, 200);
+    border: 1px solid rgba(255, 255, 255, 34);
+}
+
+QFrame#standbyShopTile:hover {
+    background-color: rgba(20, 40, 90, 220);
+    border: 1px solid rgba(170, 220, 255, 120);
+}
+
+QFrame#standbyShopTile[open="true"] {
+    background-color: rgba(20, 40, 90, 235);
+    border: 1px solid rgba(170, 220, 255, 160);
+}
+
+QLabel#standbyShopTokens {
+    color: rgba(255, 255, 255, 235);
+    font-size: 16px;
+    font-weight: 700;
+}
+
+QLabel#standbyShopLabel {
+    color: rgba(255, 255, 255, 220);
     font-size: 13px;
 }
 

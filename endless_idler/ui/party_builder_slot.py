@@ -40,6 +40,8 @@ class DropSlot(QFrame):
         character_cost: int,
         can_afford: Callable[[int], bool],
         purchase_character: Callable[[str, str, str | None], bool],
+        is_in_party: Callable[[str], bool],
+        is_primary_stack_slot: Callable[[str, str], bool],
         on_slot_changed: Callable[[str, str | None], None],
         on_drag_active_changed: Callable[[bool], None],
         get_stack_count: Callable[[str], int],
@@ -52,11 +54,14 @@ class DropSlot(QFrame):
 
         self._empty_label = empty_label
         self._slot_id = slot_id
+        self._slot_kind = slot_id.split("_", 1)[0].strip().lower()
         self._plugins_by_id = plugins_by_id
         self._rng = rng
         self._character_cost = max(0, int(character_cost))
         self._can_afford = can_afford
         self._purchase_character = purchase_character
+        self._is_in_party = is_in_party
+        self._is_primary_stack_slot = is_primary_stack_slot
         self._on_slot_changed = on_slot_changed
         self._on_drag_active_changed = on_drag_active_changed
         self._get_stack_count = get_stack_count
@@ -129,13 +134,12 @@ class DropSlot(QFrame):
         self._refresh()
 
     def _allows_char_id(self, char_id: str) -> bool:
-        slot_kind = self._slot_id.split("_", 1)[0].strip().lower()
         plugin = self._plugins_by_id.get(char_id)
         placement = (plugin.placement if plugin else "both").strip().lower()
 
-        if slot_kind == "onsite":
+        if self._slot_kind == "onsite":
             return placement in {"onsite", "both"}
-        if slot_kind == "offsite":
+        if self._slot_kind == "offsite":
             return placement in {"offsite", "both"}
         return True
 
@@ -174,6 +178,9 @@ class DropSlot(QFrame):
 
         source = event.source() if hasattr(event, "source") else None
         if isinstance(source, DropSlot):
+            if self._slot_kind in {"onsite", "offsite"} and self._is_in_party(incoming):
+                if source._slot_kind not in {"onsite", "offsite"}:  # noqa: SLF001
+                    return
             if self._char_id is not None and not source._allows_char_id(self._char_id):  # noqa: SLF001
                 return
             event.acceptProposedAction()
@@ -303,8 +310,7 @@ class DropSlot(QFrame):
             if not self._allow_stacking and self._char_id is not None:
                 return
             target_char_id = self._char_id
-            slot_kind = self._slot_id.split("_", 1)[0].strip().lower()
-            if not self._purchase_character(char_id, slot_kind, target_char_id):
+            if not self._purchase_character(char_id, self._slot_kind, target_char_id):
                 return
             if target_char_id is not None:
                 self._refresh()
@@ -351,7 +357,8 @@ class DropSlot(QFrame):
         apply_star_rank_visuals(self._inner, self._stars or 1)
 
         stacks = self._get_stack_count(self._char_id)
-        if not self._show_stack_badge or stacks <= 1:
+        primary_stack = self._is_primary_stack_slot(self._slot_id, self._char_id)
+        if not self._show_stack_badge or stacks <= 1 or not primary_stack:
             self._stack_badge.hide()
         else:
             self._stack_badge.setText(str(stacks))
@@ -371,13 +378,17 @@ class DropSlot(QFrame):
             build_character_stats_tooltip(
                 name=self._display_name,
                 stars=self._stars or 1,
-                stacks=stacks if self._show_stack_badge else None,
+                stacks=stacks if (self._show_stack_badge and primary_stack) else None,
             )
         )
         self.setToolTip("")
 
     def refresh_view(self) -> None:
         self._refresh()
+
+    @property
+    def char_id(self) -> str | None:
+        return self._char_id
 
     def enterEvent(self, event: object) -> None:
         if self._tooltip_html:

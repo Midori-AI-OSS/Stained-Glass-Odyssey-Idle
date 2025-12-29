@@ -101,7 +101,7 @@ class MainMenuWindow(QMainWindow):
         self._menu_screen: QWidget | None = None
 
         self.setWindowTitle("Stained Glass Odyssey Idle")
-        self.resize(960, 540)
+        self.resize(1280, 820)
 
         menu = MainMenuWidget()
         menu.play_requested.connect(self._open_party_builder)
