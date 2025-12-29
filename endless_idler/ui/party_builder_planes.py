@@ -11,7 +11,7 @@ class PulsingPlane(QFrame):
         super().__init__()
         self.setObjectName(object_name)
         self.setProperty("tone", tone)
-        self.setFixedSize(360, 360)
+        self.setFixedSize(240, 240)
 
         effect = QGraphicsOpacityEffect(self)
         effect.setOpacity(1.0)

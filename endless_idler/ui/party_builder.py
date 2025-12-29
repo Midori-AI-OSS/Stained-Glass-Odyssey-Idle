@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QMainWindow
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QGraphicsOpacityEffect
+from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QMessageBox
 from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QSizePolicy
@@ -63,6 +64,8 @@ class PartyBuilderWidget(QWidget):
         self._sell_zones: list[SellZone] = []
         self._shop_tile: StandbyShopTile | None = None
         self._party_level_tile: StandbyPartyLevelTile | None = None
+        self._overlay_layout: QGridLayout | None = None
+        self._shop_clearance: QWidget | None = None
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 16, 16, 16)
@@ -93,26 +96,34 @@ class PartyBuilderWidget(QWidget):
         self._token_label: QLabel | None = None
         self._token_opacity: QGraphicsOpacityEffect | None = None
         self._token_pulse_anim: QPropertyAnimation | None = None
+
+        overlay_host = QWidget()
+        overlay = QGridLayout()
+        overlay.setContentsMargins(0, 0, 0, 0)
+        overlay.setSpacing(0)
+        overlay_host.setLayout(overlay)
+        self._overlay_layout = overlay
+
+        clearance = QWidget()
+        clearance.setFixedHeight(0)
+        clearance.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        clearance.setVisible(False)
+        self._shop_clearance = clearance
+
+        overlay.addWidget(self._make_main_area(), 0, 0)
+        root.addWidget(overlay_host, 1)
+
         self._maybe_build_char_bar()
-
-        root.addWidget(self._make_planes_row())
-
-        root.addStretch(1)
-
-        grid = QVBoxLayout()
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(12)
-        root.addLayout(grid)
-
-        grid.addLayout(self._make_onsite_row())
-        grid.addLayout(self._make_row("Offsite", count=OFFSITE_SLOTS, center=True))
-        grid.addWidget(self._make_fight_and_standby_area(), 0, Qt.AlignmentFlag.AlignHCenter)
 
         self._refresh_tokens()
         self._load_slots_from_save()
 
     def _maybe_build_char_bar(self) -> None:
         if not self._shop_open:
+            return
+        if self._char_bar is not None:
+            return
+        if self._overlay_layout is None:
             return
 
         bar = CharacterBar(
@@ -128,12 +139,13 @@ class PartyBuilderWidget(QWidget):
 
         bar.destroyed.connect(self._on_char_bar_destroyed)
         self._char_bar = bar
-        if self._root_layout is not None:
-            self._root_layout.insertWidget(1, bar, 0, Qt.AlignmentFlag.AlignHCenter)
+        self._overlay_layout.addWidget(bar, 0, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        self._set_shop_clearance_for_bar()
 
     def _on_char_bar_destroyed(self) -> None:
         self._char_bar = None
         self._shop_open = False
+        self._set_shop_clearance_height(0)
         if self._shop_tile is not None:
             self._shop_tile.set_open(False)
 
@@ -142,17 +154,32 @@ class PartyBuilderWidget(QWidget):
         if self._shop_tile is not None:
             self._shop_tile.set_open(open_)
 
-        if self._char_bar is not None and self._root_layout is not None:
+        if self._char_bar is not None and self._overlay_layout is not None:
             bar = self._char_bar
-            self._root_layout.removeWidget(self._char_bar)
+            self._overlay_layout.removeWidget(bar)
             self._char_bar.hide()
             self._char_bar.setParent(None)
             bar.deleteLater()
 
         self._char_bar = None
+        if not open_:
+            self._set_shop_clearance_height(0)
 
         if open_:
             self._maybe_build_char_bar()
+
+    def _set_shop_clearance_height(self, height: int) -> None:
+        if self._shop_clearance is None:
+            return
+        height = max(0, int(height))
+        self._shop_clearance.setFixedHeight(height)
+        self._shop_clearance.setVisible(height > 0)
+
+    def _set_shop_clearance_for_bar(self) -> None:
+        if self._char_bar is None:
+            self._set_shop_clearance_height(0)
+            return
+        self._set_shop_clearance_height(self._char_bar.sizeHint().height() + 12)
 
     def _new_run_save(self) -> RunSave:
         bar: list[str | None] = [None] * BAR_SLOTS
@@ -244,16 +271,46 @@ class PartyBuilderWidget(QWidget):
 
         return row
 
-    def _make_planes_row(self) -> QWidget:
+    def _make_main_area(self) -> QWidget:
         wrapper = QWidget()
-        row = QHBoxLayout()
-        row.setContentsMargins(14, 0, 14, 0)
-        row.setSpacing(26)
-        wrapper.setLayout(row)
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        wrapper.setLayout(layout)
 
-        row.addWidget(PulsingPlane(object_name="groupFxPlane", tone="light"))
-        row.addStretch(1)
-        row.addWidget(PulsingPlane(object_name="rewardsPlane", tone="dark"))
+        if self._shop_clearance is not None:
+            layout.addWidget(self._shop_clearance)
+
+        block = QWidget()
+        block_layout = QVBoxLayout()
+        block_layout.setContentsMargins(0, 0, 0, 0)
+        block_layout.setSpacing(12)
+        block.setLayout(block_layout)
+
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(18)
+        top_row.addStretch(1)
+
+        top_row.addWidget(PulsingPlane(object_name="groupFxPlane", tone="light"), 0, Qt.AlignmentFlag.AlignTop)
+
+        party = QWidget()
+        party.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+        party_layout = QVBoxLayout()
+        party_layout.setContentsMargins(0, 0, 0, 0)
+        party_layout.setSpacing(12)
+        party.setLayout(party_layout)
+        party_layout.addLayout(self._make_onsite_row())
+        party_layout.addLayout(self._make_row("Offsite", count=OFFSITE_SLOTS, center=True))
+        top_row.addWidget(party, 0, Qt.AlignmentFlag.AlignTop)
+
+        top_row.addWidget(PulsingPlane(object_name="rewardsPlane", tone="dark"), 0, Qt.AlignmentFlag.AlignTop)
+        top_row.addStretch(1)
+
+        block_layout.addLayout(top_row)
+        block_layout.addWidget(self._make_fight_and_standby_area(), 0, Qt.AlignmentFlag.AlignHCenter)
+
+        layout.addWidget(block)
         return wrapper
 
     def _make_fight_and_standby_area(self) -> QWidget:
