@@ -371,4 +371,25 @@ class DropSlot(QFrame):
             build_character_stats_tooltip(
                 name=self._display_name,
                 stars=self._stars or 1,
-                stacks=stacks if self._
+                stacks=stacks if self._show_stack_badge else None,
+            )
+        )
+        self.setToolTip("")
+
+    def refresh_view(self) -> None:
+        self._refresh()
+
+    def enterEvent(self, event: object) -> None:
+        if self._tooltip_html:
+            show_stained_tooltip(self, self._tooltip_html)
+        try:
+            super().enterEvent(event)  # type: ignore[misc]
+        except Exception:
+            return
+
+    def leaveEvent(self, event: object) -> None:
+        hide_stained_tooltip()
+        try:
+            super().leaveEvent(event)  # type: ignore[misc]
+        except Exception:
+            return
