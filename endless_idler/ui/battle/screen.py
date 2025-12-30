@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
 from endless_idler.characters.plugins import discover_character_plugins
+from endless_idler.ui.battle.colors import color_for_damage_type_id
 from endless_idler.ui.battle.sim import Combatant
 from endless_idler.ui.battle.sim import build_foes
 from endless_idler.ui.battle.sim import build_party
@@ -61,6 +62,7 @@ class BattleScreenWidget(QWidget):
             party_level=self._party_level,
             stacks=self._stacks,
             plugins_by_id=self._plugin_by_id,
+            rng=self._rng,
         )
         self._foes: list[Combatant] = build_foes(
             exclude_ids=set(onsite + offsite),
@@ -116,11 +118,29 @@ class BattleScreenWidget(QWidget):
         left_layout.setSpacing(10)
         left.setLayout(left_layout)
 
+        party_count = len(self._party)
+        if party_count <= 1:
+            party_portrait = 112
+            party_card_width = 360
+        elif party_count == 2:
+            party_portrait = 96
+            party_card_width = 320
+        elif party_count == 3:
+            party_portrait = 84
+            party_card_width = 290
+        else:
+            party_portrait = 72
+            party_card_width = 260
+
         for combatant in self._party:
             card = CombatantCard(
                 combatant=combatant,
                 plugin=self._plugin_by_id.get(combatant.char_id),
                 rng=self._rng,
+                team_side="left",
+                stack_count=int(self._stacks.get(combatant.char_id, 1)),
+                portrait_size=party_portrait,
+                card_width=party_card_width,
             )
             self._party_cards.append(card)
             left_layout.addWidget(card)
@@ -147,6 +167,8 @@ class BattleScreenWidget(QWidget):
                 plugin=self._plugin_by_id.get(combatant.char_id),
                 rng=self._rng,
                 compact=True,
+                team_side="right",
+                stack_count=1,
             )
             self._foe_cards.append(card)
             right_layout.addWidget(card)
@@ -186,27 +208,24 @@ class BattleScreenWidget(QWidget):
         if self._turn_side == "party":
             attacker, attacker_widget = choose_weighted_attacker(party_alive, self._rng)
             target, target_widget = self._rng.choice(foes_alive)
-            color = QColor(80, 170, 255)
             self._turn_side = "foes"
         else:
             attacker, attacker_widget = choose_weighted_attacker(foes_alive, self._rng)
             target, target_widget = self._rng.choice(party_alive)
-            color = QColor(255, 95, 95)
             self._turn_side = "party"
 
+        color = color_for_damage_type_id(attacker.stats.element_id)
         damage, crit, dodged = calculate_damage(attacker.stats, target.stats, self._rng)
         if dodged:
             self._status.setText(f"{target.name} dodged!")
-            self._arena.add_pulse(attacker_widget, target_widget, QColor(255, 255, 255))
+            self._arena.add_pulse(attacker_widget, target_widget, QColor(240, 240, 240))
             return
 
         if damage <= 0:
             return
 
         target.stats.hp = max(0, int(target.stats.hp) - int(damage))
-        if crit:
-            color = QColor(255, 215, 0)
-        self._arena.add_pulse(attacker_widget, target_widget, color)
+        self._arena.add_pulse(attacker_widget, target_widget, color, crit=crit)
         self._status.setText(f"{attacker.name} hits {target.name} for {damage}{' (CRIT)' if crit else ''}")
 
         target_widget.refresh()
@@ -227,4 +246,3 @@ class BattleScreenWidget(QWidget):
         except Exception:
             pass
         self.finished.emit()
-

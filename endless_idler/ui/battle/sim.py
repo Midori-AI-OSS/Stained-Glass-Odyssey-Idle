@@ -8,6 +8,20 @@ from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.combat.stats import Stats
 
 
+KNOWN_DAMAGE_TYPE_IDS = (
+    "fire",
+    "ice",
+    "lightning",
+    "water",
+    "nature",
+    "arcane",
+    "dark",
+    "light",
+    "physical",
+    "generic",
+)
+
+
 @dataclass(slots=True)
 class Combatant:
     char_id: str
@@ -22,6 +36,7 @@ def build_party(
     party_level: int,
     stacks: dict[str, int],
     plugins_by_id: dict[str, CharacterPlugin],
+    rng: random.Random,
 ) -> list[Combatant]:
     party: list[Combatant] = []
     for char_id in onsite[:4]:
@@ -33,6 +48,7 @@ def build_party(
         stats = Stats()
         scale = party_scaling(party_level=party_level, stars=stars, stacks=stack_count)
         apply_scaled_bases(stats, scale=scale, spd=2 + stars)
+        stats.damage_type = resolve_damage_type_id(plugin, rng)
         stats.level = party_level
         stats.hp = stats.max_hp
         party.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
@@ -64,10 +80,20 @@ def build_foes(
         base = party_scaling(party_level=party_level, stars=stars, stacks=1)
         scale = base * rng.uniform(0.85, 1.1)
         apply_scaled_bases(stats, scale=scale, spd=2 + max(0, stars - 1))
+        stats.damage_type = resolve_damage_type_id(plugin, rng)
         stats.level = party_level
         stats.hp = stats.max_hp
         foes.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
     return foes
+
+
+def resolve_damage_type_id(plugin: CharacterPlugin | None, rng: random.Random) -> str:
+    if plugin and plugin.damage_type_random:
+        return rng.choice(KNOWN_DAMAGE_TYPE_IDS)
+    if plugin and plugin.damage_type_id:
+        normalized = str(plugin.damage_type_id).strip().lower().replace(" ", "_").replace("-", "_")
+        return normalized or "generic"
+    return rng.choice(KNOWN_DAMAGE_TYPE_IDS)
 
 
 def party_scaling(*, party_level: int, stars: int, stacks: int) -> float:
@@ -129,4 +155,3 @@ def calculate_damage(
     base *= rng.uniform(0.9, 1.1)
     damage = max(1, int(base))
     return damage, crit, False
-

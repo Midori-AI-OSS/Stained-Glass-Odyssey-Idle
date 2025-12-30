@@ -18,6 +18,7 @@ class FightBar(QFrame):
         self.setObjectName("fightBar")
         self.setFixedSize(230, 44)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("")
 
         layout = QVBoxLayout()
         layout.setContentsMargins(10, 8, 10, 8)
@@ -32,6 +33,7 @@ class FightBar(QFrame):
         effect = QGraphicsOpacityEffect(self)
         effect.setOpacity(1.0)
         self.setGraphicsEffect(effect)
+        self._opacity_effect = effect
 
         anim = QPropertyAnimation(effect, b"opacity", self)
         anim.setDuration(1800)
@@ -42,6 +44,26 @@ class FightBar(QFrame):
         anim.setKeyValueAt(1.0, 0.55)
         anim.start()
         self._pulse_anim = anim
+        self.set_active(True)
+
+    def set_active(self, active: bool) -> None:
+        active = bool(active)
+        self.setEnabled(active)
+        self.setCursor(Qt.CursorShape.PointingHandCursor if active else Qt.CursorShape.ForbiddenCursor)
+
+        if active:
+            self.setToolTip("")
+            self._opacity_effect.setOpacity(1.0)
+            if self._pulse_anim.state() != QPropertyAnimation.State.Running:
+                self._pulse_anim.start()
+            return
+
+        self.setToolTip("Add at least 1 OnSite character to fight.")
+        try:
+            self._pulse_anim.stop()
+        except Exception:
+            pass
+        self._opacity_effect.setOpacity(0.35)
 
     def mousePressEvent(self, event: object) -> None:
         try:
@@ -49,5 +71,7 @@ class FightBar(QFrame):
         except AttributeError:
             return
         if button != Qt.MouseButton.LeftButton:
+            return
+        if not self.isEnabled():
             return
         self.clicked.emit()

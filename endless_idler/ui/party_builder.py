@@ -119,6 +119,7 @@ class PartyBuilderWidget(QWidget):
 
         self._refresh_tokens()
         self._load_slots_from_save()
+        self._refresh_fight_bar_state()
 
     def _maybe_build_char_bar(self) -> None:
         if not self._shop_open:
@@ -587,6 +588,7 @@ class PartyBuilderWidget(QWidget):
         self._refresh_tokens()
         self._refresh_party_level()
         self._load_slots_from_save()
+        self._refresh_fight_bar_state()
         if self._char_bar is not None:
             self._char_bar.set_char_ids(self._save.bar)
 
@@ -701,6 +703,7 @@ class PartyBuilderWidget(QWidget):
         self._apply_auto_merges()
         self._refresh_standby_slots()
         self._save_manager.save(self._save)
+        self._refresh_fight_bar_state()
         if self._char_bar is not None:
             self._char_bar.refresh_stack_badges()
 
@@ -723,6 +726,12 @@ class PartyBuilderWidget(QWidget):
     def _refresh_tokens(self) -> None:
         if self._shop_tile is not None:
             self._shop_tile.set_tokens(self._save.tokens)
+
+    def _refresh_fight_bar_state(self) -> None:
+        if self._fight_bar is None:
+            return
+        has_onsite = any(item for item in self._save.onsite if item)
+        self._fight_bar.set_active(has_onsite)
 
     def _refresh_party_level(self) -> None:
         if self._party_level_tile is None:

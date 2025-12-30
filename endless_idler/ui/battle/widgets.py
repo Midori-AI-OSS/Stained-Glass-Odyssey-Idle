@@ -4,8 +4,11 @@ import random
 
 from dataclasses import dataclass
 
+from PySide6.QtCore import QPointF
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPolygonF
+from PySide6.QtGui import QBrush
 from PySide6.QtGui import QColor
 from PySide6.QtGui import QPainter
 from PySide6.QtGui import QPen
@@ -19,6 +22,9 @@ from PySide6.QtWidgets import QWidget
 
 from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.ui.battle.sim import Combatant
+from endless_idler.ui.party_builder_common import build_character_stats_tooltip
+from endless_idler.ui.tooltip import hide_stained_tooltip
+from endless_idler.ui.tooltip import show_stained_tooltip
 
 
 @dataclass(slots=True)
@@ -28,6 +34,7 @@ class LinePulse:
     color: QColor
     remaining_ms: int = 220
     width: int = 3
+    crit: bool = False
 
 
 class PortraitLabel(QLabel):
@@ -58,35 +65,42 @@ class CombatantCard(QFrame):
         combatant: Combatant,
         plugin: CharacterPlugin | None,
         rng: random.Random,
+        team_side: str = "left",
+        stack_count: int = 1,
+        portrait_size: int | None = None,
+        card_width: int | None = None,
         compact: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._combatant = combatant
         self._compact = bool(compact)
+        self._team_side = (team_side or "left").strip().lower()
+        self._stack_count = max(1, int(stack_count))
+        self._details_label: QLabel | None = None
+        self._tooltip_html = ""
+        self._stars: int | None = plugin.stars if plugin else None
 
         self.setObjectName("battleCombatantCard")
         self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setFixedWidth(260 if not compact else 180)
+        default_width = 260 if not compact else 180
+        self.setFixedWidth(max(120, int(card_width or default_width)))
 
         root = QHBoxLayout()
         root.setContentsMargins(10, 10, 10, 10)
         root.setSpacing(10)
         self.setLayout(root)
 
-        portrait_size = 56 if compact else 72
-        self._portrait = PortraitLabel(size=portrait_size)
-        root.addWidget(self._portrait, 0, Qt.AlignmentFlag.AlignTop)
+        default_portrait = 56 if compact else 72
+        self._portrait = PortraitLabel(size=max(28, int(portrait_size or default_portrait)))
 
         portrait_path = plugin.random_image_path(rng) if plugin else None
-        self._portrait.set_portrait(
-            str(portrait_path) if portrait_path else None,
-            placeholder=combatant.name,
-        )
+        self._portrait.set_portrait(str(portrait_path) if portrait_path else None, placeholder=combatant.name)
 
         body = QVBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(6)
+        root.addWidget(self._portrait, 0, Qt.AlignmentFlag.AlignTop)
         root.addLayout(body, 1)
 
         self._name = QLabel(combatant.name)
@@ -102,10 +116,12 @@ class CombatantCard(QFrame):
         body.addWidget(self._hp)
 
         if not compact:
-            details = QLabel(self._details_text())
-            details.setObjectName("battleCombatantDetails")
-            details.setWordWrap(True)
-            body.addWidget(details)
+            self._details_label = QLabel(self._details_text())
+            self._details_label.setObjectName("battleCombatantDetails")
+            self._details_label.setWordWrap(True)
+            body.addWidget(self._details_label)
+
+        self._refresh_tooltip()
 
     @property
     def combatant(self) -> Combatant:
@@ -115,14 +131,59 @@ class CombatantCard(QFrame):
         self._hp.setValue(int(self._combatant.stats.hp))
         self._hp.setFormat(self._hp_format())
         self._hp.update()
+        if self._details_label is not None:
+            self._details_label.setText(self._details_text())
+        self._refresh_tooltip()
         self.update()
+
+    def pulse_anchor_global(self) -> QPointF:
+        rect = self.rect()
+        if self._team_side == "right":
+            point = rect.center()
+            point.setX(rect.left())
+            return QPointF(self.mapToGlobal(point))
+        point = rect.center()
+        point.setX(rect.right())
+        return QPointF(self.mapToGlobal(point))
 
     def _hp_format(self) -> str:
         return f"{max(0, int(self._combatant.stats.hp))} / {max(1, int(self._combatant.max_hp))}"
 
     def _details_text(self) -> str:
         stats = self._combatant.stats
-        return f"ATK {stats.atk}  DEF {stats.defense}  SPD {stats.spd}"
+        crit_rate = f"{stats.crit_rate * 100:.1f}%"
+        dodge = f"{stats.dodge_odds * 100:.1f}%"
+        return (
+            f"ATK {stats.atk}  DEF {stats.defense}  SPD {stats.spd}\n"
+            f"CRIT {crit_rate} / {stats.crit_damage:.2f}x  DOD {dodge}  REG {stats.regain}  MIT {stats.mitigation:.2f}"
+        )
+
+    def _refresh_tooltip(self) -> None:
+        if self._compact:
+            self._tooltip_html = ""
+            return
+        self._tooltip_html = build_character_stats_tooltip(
+            name=self._combatant.name,
+            stars=self._stars,
+            stacks=self._stack_count,
+            stackable=self._stack_count > 1,
+            stats=self._combatant.stats,
+        )
+
+    def enterEvent(self, event: object) -> None:
+        if self._tooltip_html:
+            show_stained_tooltip(self, self._tooltip_html)
+        try:
+            super().enterEvent(event)  # type: ignore[misc]
+        except Exception:
+            return
+
+    def leaveEvent(self, event: object) -> None:
+        hide_stained_tooltip()
+        try:
+            super().leaveEvent(event)  # type: ignore[misc]
+        except Exception:
+            return
 
 
 class OffsiteStrip(QFrame):
@@ -173,8 +234,9 @@ class LineOverlay(QWidget):
         self.setAutoFillBackground(False)
         self._pulses: list[LinePulse] = []
 
-    def add_pulse(self, source: QWidget, target: QWidget, color: QColor) -> None:
-        self._pulses.append(LinePulse(source=source, target=target, color=color))
+    def add_pulse(self, source: QWidget, target: QWidget, color: QColor, *, crit: bool = False) -> None:
+        width = 6 if crit else 3
+        self._pulses.append(LinePulse(source=source, target=target, color=color, width=width, crit=crit))
         self.update()
 
     def tick(self, delta_ms: int) -> None:
@@ -202,8 +264,10 @@ class LineOverlay(QWidget):
             if not pulse.source.isVisible() or not pulse.target.isVisible():
                 continue
 
-            start = pulse.source.mapTo(self, pulse.source.rect().center())
-            end = pulse.target.mapTo(self, pulse.target.rect().center())
+            start = self._anchor_point(pulse.source)
+            end = self._anchor_point(pulse.target)
+            if start == end:
+                continue
 
             alpha = max(0, min(255, int(255 * (pulse.remaining_ms / 220.0))))
             color = QColor(pulse.color)
@@ -214,7 +278,61 @@ class LineOverlay(QWidget):
             painter.setPen(pen)
             painter.drawLine(start, end)
 
+            self._draw_arrow_head(painter, start, end, color, width=pulse.width)
+
+            if pulse.crit:
+                progress = 1.0 - (pulse.remaining_ms / 220.0)
+                progress = max(0.0, min(1.0, float(progress)))
+                point = QPointF(
+                    start.x() + (end.x() - start.x()) * progress,
+                    start.y() + (end.y() - start.y()) * progress,
+                )
+                gold = QColor(255, 215, 0)
+                gold.setAlpha(alpha)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QBrush(gold))
+                radius = 6.0 + 4.0 * (1.0 - (alpha / 255.0))
+                painter.drawEllipse(point, radius, radius)
+
         painter.end()
+
+    def _anchor_point(self, widget: QWidget) -> QPointF:
+        if isinstance(widget, CombatantCard):
+            return QPointF(self.mapFromGlobal(widget.pulse_anchor_global().toPoint()))
+        center = widget.mapToGlobal(widget.rect().center())
+        return QPointF(self.mapFromGlobal(center))
+
+    def _draw_arrow_head(
+        self,
+        painter: QPainter,
+        start: QPointF,
+        end: QPointF,
+        color: QColor,
+        *,
+        width: int,
+    ) -> None:
+        dx = float(end.x() - start.x())
+        dy = float(end.y() - start.y())
+        length = (dx * dx + dy * dy) ** 0.5
+        if length <= 1e-6:
+            return
+
+        ux = dx / length
+        uy = dy / length
+        head_len = max(10.0, float(width) * 3.0)
+        head_w = max(6.0, float(width) * 2.0)
+
+        base = QPointF(end.x() - ux * head_len, end.y() - uy * head_len)
+        perp = QPointF(-uy, ux)
+        left = QPointF(base.x() + perp.x() * head_w, base.y() + perp.y() * head_w)
+        right = QPointF(base.x() - perp.x() * head_w, base.y() - perp.y() * head_w)
+
+        brush = QBrush(color)
+        painter.save()
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(brush)
+        painter.drawPolygon(QPolygonF([end, left, right]))
+        painter.restore()
 
 
 class Arena(QFrame):
@@ -231,8 +349,8 @@ class Arena(QFrame):
         timer.start()
         self._timer = timer
 
-    def add_pulse(self, source: QWidget, target: QWidget, color: QColor) -> None:
-        self._overlay.add_pulse(source, target, color)
+    def add_pulse(self, source: QWidget, target: QWidget, color: QColor, *, crit: bool = False) -> None:
+        self._overlay.add_pulse(source, target, color, crit=crit)
         self._overlay.raise_()
 
     def resizeEvent(self, event: object) -> None:
@@ -245,4 +363,3 @@ class Arena(QFrame):
 
     def _tick(self) -> None:
         self._overlay.tick(30)
-
