@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
 from endless_idler.ui.assets import asset_path
+from endless_idler.ui.battle import BattleScreenWidget
 from endless_idler.ui.party_builder import PartyBuilderWidget
 
 
@@ -98,6 +99,7 @@ class MainMenuWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self._party_builder: PartyBuilderWidget | None = None
+        self._battle_screen: BattleScreenWidget | None = None
         self._menu_screen: QWidget | None = None
 
         self.setWindowTitle("Stained Glass Odyssey Idle")
@@ -126,9 +128,40 @@ class MainMenuWindow(QMainWindow):
         if self._party_builder is None:
             self._party_builder = PartyBuilderWidget()
             self._party_builder.back_requested.connect(self._open_main_menu)
+            self._party_builder.fight_requested.connect(self._open_battle_screen)
             self._stack.addWidget(self._party_builder)
         self._stack.setCurrentWidget(self._party_builder)
 
     def _open_main_menu(self) -> None:
         if self._menu_screen is not None:
             self._stack.setCurrentWidget(self._menu_screen)
+
+    def _open_battle_screen(self, payload: object) -> None:
+        if self._battle_screen is not None:
+            try:
+                self._battle_screen.deleteLater()
+            except Exception:
+                pass
+            self._battle_screen = None
+
+        battle = BattleScreenWidget(payload=payload)
+        battle.finished.connect(self._close_battle_screen)
+        self._battle_screen = battle
+        self._stack.addWidget(battle)
+        self._stack.setCurrentWidget(battle)
+
+    def _close_battle_screen(self) -> None:
+        if self._party_builder is not None:
+            self._stack.setCurrentWidget(self._party_builder)
+        if self._battle_screen is None:
+            return
+        battle = self._battle_screen
+        self._battle_screen = None
+        try:
+            self._stack.removeWidget(battle)
+        except Exception:
+            pass
+        try:
+            battle.deleteLater()
+        except Exception:
+            pass

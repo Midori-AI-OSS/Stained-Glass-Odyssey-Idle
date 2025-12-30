@@ -302,6 +302,79 @@ QToolTip {
     padding: 8px 10px;
     font-size: 12px;
 }
+
+QWidget#battleScreen {
+    background-color: rgba(0, 0, 0, 180);
+}
+
+QPushButton#battleBackButton {
+    background-color: rgba(255, 255, 255, 16);
+    border: 1px solid rgba(255, 255, 255, 22);
+    border-radius: 0px;
+    padding: 8px 16px;
+    color: rgba(255, 255, 255, 235);
+    font-size: 13px;
+}
+
+QPushButton#battleBackButton:hover {
+    background-color: rgba(120, 180, 255, 44);
+}
+
+QLabel#battleTitle {
+    color: rgba(255, 255, 255, 240);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel#battleStatus {
+    color: rgba(255, 255, 255, 210);
+    font-size: 12px;
+}
+
+QFrame#battleArena {
+    background-color: rgba(10, 14, 26, 140);
+    border: 1px solid rgba(255, 255, 255, 18);
+}
+
+QFrame#battleCombatantCard {
+    background-color: rgba(255, 255, 255, 10);
+    border: 1px solid rgba(255, 255, 255, 18);
+}
+
+QLabel#battleCombatantName {
+    color: rgba(255, 255, 255, 235);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+QLabel#battleCombatantDetails {
+    color: rgba(255, 255, 255, 170);
+    font-size: 11px;
+}
+
+QProgressBar#battleHpBar {
+    background-color: rgba(0, 0, 0, 35);
+    border: 1px solid rgba(255, 255, 255, 20);
+    color: rgba(255, 255, 255, 220);
+    font-size: 10px;
+    text-align: center;
+    height: 14px;
+}
+
+QProgressBar#battleHpBar::chunk {
+    background-color: rgba(46, 204, 113, 165);
+}
+
+QFrame#battleOffsiteStrip {
+    background-color: rgba(20, 30, 60, 90);
+    border: 1px solid rgba(255, 255, 255, 18);
+}
+
+QLabel#battleOffsiteTitle {
+    color: rgba(255, 255, 255, 200);
+    font-size: 11px;
+    font-weight: 700;
+}
 """.strip()
 
 

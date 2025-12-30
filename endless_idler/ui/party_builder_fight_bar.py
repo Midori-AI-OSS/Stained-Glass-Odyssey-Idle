@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from PySide6.QtCore import Signal
 from PySide6.QtCore import QEasingCurve
 from PySide6.QtCore import QPropertyAnimation
 from PySide6.QtCore import Qt
@@ -10,10 +11,13 @@ from PySide6.QtWidgets import QVBoxLayout
 
 
 class FightBar(QFrame):
+    clicked = Signal()
+
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("fightBar")
         self.setFixedSize(230, 44)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         layout = QVBoxLayout()
         layout.setContentsMargins(10, 8, 10, 8)
@@ -38,3 +42,12 @@ class FightBar(QFrame):
         anim.setKeyValueAt(1.0, 0.55)
         anim.start()
         self._pulse_anim = anim
+
+    def mousePressEvent(self, event: object) -> None:
+        try:
+            button = event.button()
+        except AttributeError:
+            return
+        if button != Qt.MouseButton.LeftButton:
+            return
+        self.clicked.emit()

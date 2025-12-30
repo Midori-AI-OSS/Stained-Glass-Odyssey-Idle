@@ -47,6 +47,7 @@ class PartyBuilderWindow(QMainWindow):
 
 class PartyBuilderWidget(QWidget):
     back_requested = Signal()
+    fight_requested = Signal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -66,6 +67,7 @@ class PartyBuilderWidget(QWidget):
         self._party_level_tile: StandbyPartyLevelTile | None = None
         self._overlay_layout: QGridLayout | None = None
         self._shop_clearance: QWidget | None = None
+        self._fight_bar: FightBar | None = None
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 16, 16, 16)
@@ -324,7 +326,9 @@ class PartyBuilderWidget(QWidget):
         fight_row.setContentsMargins(0, 0, 14, 0)
         fight_row.setSpacing(0)
         fight_row.addStretch(1)
-        fight_row.addWidget(FightBar())
+        self._fight_bar = FightBar()
+        self._fight_bar.clicked.connect(self._request_fight)
+        fight_row.addWidget(self._fight_bar)
         wrapper_layout.addLayout(fight_row)
 
         wrapper_layout.addWidget(self._make_standby_row())
@@ -725,3 +729,16 @@ class PartyBuilderWidget(QWidget):
             return
         self._party_level_tile.set_level(self._save.party_level)
         self._party_level_tile.set_cost(self._save.party_level_up_cost)
+
+    def _request_fight(self) -> None:
+        onsite = [item for item in self._save.onsite if item]
+        if not onsite:
+            return
+
+        payload = {
+            "party_level": int(self._save.party_level),
+            "onsite": list(self._save.onsite),
+            "offsite": list(self._save.offsite),
+            "stacks": dict(self._save.stacks),
+        }
+        self.fight_requested.emit(payload)
