@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-import math
 import json
+import math
 
 from dataclasses import dataclass
 from dataclasses import field
@@ -11,7 +11,7 @@ from pathlib import Path
 from PySide6.QtCore import QStandardPaths
 
 
-SAVE_VERSION = 2
+SAVE_VERSION = 3
 DEFAULT_RUN_TOKENS = 20
 DEFAULT_CHARACTER_COST = 1
 DEFAULT_PARTY_LEVEL = 1
@@ -33,6 +33,9 @@ class RunSave:
     offsite: list[str | None] = field(default_factory=lambda: [None] * OFFSITE_SLOTS)
     standby: list[str | None] = field(default_factory=lambda: [None] * STANDBY_SLOTS)
     stacks: dict[str, int] = field(default_factory=dict)
+    character_progress: dict[str, dict[str, float | int]] = field(default_factory=dict)
+    idle_exp_bonus_until: float = 0.0
+    idle_exp_penalty_until: float = 0.0
 
 
 class SaveManager:
@@ -72,6 +75,9 @@ class SaveManager:
             offsite=_as_optional_str_list(data.get("offsite", [])),
             standby=_as_optional_str_list(data.get("standby", [])),
             stacks=_as_int_dict(data.get("stacks", {})),
+            character_progress=_as_character_progress_dict(data.get("character_progress", {})),
+            idle_exp_bonus_until=_as_float(data.get("idle_exp_bonus_until", 0.0), default=0.0),
+            idle_exp_penalty_until=_as_float(data.get("idle_exp_penalty_until", 0.0), default=0.0),
         )
         return _normalized_save(save)
 
@@ -87,6 +93,9 @@ class SaveManager:
             "offsite": save.offsite,
             "standby": save.standby,
             "stacks": save.stacks,
+            "character_progress": save.character_progress,
+            "idle_exp_bonus_until": save.idle_exp_bonus_until,
+            "idle_exp_penalty_until": save.idle_exp_penalty_until,
         }
 
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -189,6 +198,9 @@ def _normalized_save(save: RunSave) -> RunSave:
         offsite=deduped_offsite,
         standby=standby,
         stacks=stacks,
+        character_progress=_normalized_character_progress(save.character_progress),
+        idle_exp_bonus_until=float(max(0.0, save.idle_exp_bonus_until)),
+        idle_exp_penalty_until=float(max(0.0, save.idle_exp_penalty_until)),
     )
 
 
@@ -242,6 +254,63 @@ def _as_int_dict(value: object) -> dict[str, int]:
             continue
         result[stripped] = number
     return result
+
+
+def _as_float(value: object, *, default: float) -> float:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _as_character_progress_dict(value: object) -> dict[str, dict[str, float | int]]:
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, dict[str, float | int]] = {}
+    for key, raw_progress in value.items():
+        if not isinstance(key, str):
+            continue
+        char_id = key.strip()
+        if not char_id:
+            continue
+        if not isinstance(raw_progress, dict):
+            continue
+
+        level = _as_int(raw_progress.get("level", 1), default=1)
+        exp = _as_float(raw_progress.get("exp", 0.0), default=0.0)
+        next_exp = _as_float(raw_progress.get("next_exp", 30.0), default=30.0)
+
+        progress: dict[str, float | int] = {
+            "level": max(1, level),
+            "exp": float(max(0.0, exp)),
+            "next_exp": float(max(1.0, next_exp)),
+        }
+        result[char_id] = progress
+    return result
+
+
+def _normalized_character_progress(
+    value: dict[str, dict[str, float | int]],
+) -> dict[str, dict[str, float | int]]:
+    normalized: dict[str, dict[str, float | int]] = {}
+    for key, raw in value.items():
+        if not isinstance(key, str):
+            continue
+        char_id = key.strip()
+        if not char_id:
+            continue
+        if not isinstance(raw, dict):
+            continue
+
+        level = _as_int(raw.get("level", 1), default=1)
+        exp = _as_float(raw.get("exp", 0.0), default=0.0)
+        next_exp = _as_float(raw.get("next_exp", 30.0), default=30.0)
+        normalized[char_id] = {
+            "level": max(1, level),
+            "exp": float(max(0.0, exp)),
+            "next_exp": float(max(1.0, next_exp)),
+        }
+    return normalized
 
 
 def next_party_level_up_cost(*, new_level: int, previous_cost: int) -> int:

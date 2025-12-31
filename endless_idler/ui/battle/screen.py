@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import random
 
 from PySide6.QtCore import QTimer
@@ -25,6 +26,8 @@ from endless_idler.ui.battle.stat_bars import CombatantStatBars
 from endless_idler.ui.battle.stat_bars import compute_stat_maxima
 from endless_idler.ui.battle.widgets import Arena
 from endless_idler.ui.battle.widgets import CombatantCard
+from endless_idler.save import RunSave
+from endless_idler.save import SaveManager
 
 
 class BattleScreenWidget(QWidget):
@@ -329,8 +332,10 @@ class BattleScreenWidget(QWidget):
         foes_alive = any(c.stats.hp > 0 for c in self._foes)
         if party_alive and not foes_alive:
             self._set_status("Victory")
+            self._apply_idle_exp_bonus()
         elif foes_alive and not party_alive:
             self._set_status("Defeat")
+            self._apply_idle_exp_penalty()
         else:
             self._set_status("Over")
 
@@ -338,6 +343,23 @@ class BattleScreenWidget(QWidget):
             self._battle_timer.stop()
         except Exception:
             pass
+
+    def _apply_idle_exp_bonus(self) -> None:
+        self._extend_idle_exp_timer(key="idle_exp_bonus_until", seconds=5 * 60)
+
+    def _apply_idle_exp_penalty(self) -> None:
+        self._extend_idle_exp_timer(key="idle_exp_penalty_until", seconds=15 * 60)
+
+    def _extend_idle_exp_timer(self, *, key: str, seconds: int) -> None:
+        try:
+            manager = SaveManager()
+            save = manager.load() or RunSave()
+            now = float(time.time())
+            current = float(max(0.0, getattr(save, key, 0.0)))
+            setattr(save, key, max(current, now) + max(0, int(seconds)))
+            manager.save(save)
+        except Exception:
+            return
 
     def _is_over(self) -> bool:
         party_alive = any(c.stats.hp > 0 for c in self._party)

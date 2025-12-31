@@ -16,8 +16,13 @@ from PySide6.QtWidgets import QWidget
 from PySide6.QtWidgets import QFrame
 
 from endless_idler.characters.plugins import discover_character_plugins
+from endless_idler.save import OFFSITE_SLOTS
+from endless_idler.save import ONSITE_SLOTS
+from endless_idler.save import RunSave
+from endless_idler.save import SaveManager
 from endless_idler.ui.idle.widgets import IdleCharacterCard
 from endless_idler.ui.idle.widgets import IdleArena
+from endless_idler.ui.idle.widgets import IdleOffsiteCard
 from endless_idler.ui.idle.idle_state import IdleGameState
 
 
@@ -31,9 +36,11 @@ class IdleScreenWidget(QWidget):
         data = payload if isinstance(payload, dict) else {}
         party_level = int(data.get("party_level", 1) or 1)
         onsite_raw = data.get("onsite", [])
+        offsite_raw = data.get("offsite", [])
         stacks_raw = data.get("stacks", {})
 
         onsite = [str(item) for item in onsite_raw if item]
+        offsite = [str(item) for item in offsite_raw if item]
         stacks: dict[str, int] = {}
         if isinstance(stacks_raw, dict):
             for key, value in stacks_raw.items():
@@ -47,16 +54,30 @@ class IdleScreenWidget(QWidget):
         self._rng = random.Random()
         self._party_level = max(1, party_level)
         self._stacks = stacks
+        self._save_manager = SaveManager()
+        self._save = self._save_manager.load()
+        if self._save is None:
+            self._save = RunSave(
+                party_level=self._party_level,
+                onsite=[str(item) if item else None for item in list(onsite_raw)[:ONSITE_SLOTS]],
+                offsite=[str(item) if item else None for item in list(offsite_raw)[:OFFSITE_SLOTS]],
+                stacks=dict(self._stacks),
+            )
+            self._save_manager.save(self._save)
 
         self._plugins = discover_character_plugins()
         self._plugin_by_id = {plugin.char_id: plugin for plugin in self._plugins}
 
         self._idle_state = IdleGameState(
             char_ids=onsite,
+            offsite_ids=offsite,
             party_level=self._party_level,
             stacks=self._stacks,
             plugins_by_id=self._plugin_by_id,
             rng=self._rng,
+            progress_by_id=dict(self._save.character_progress),
+            exp_bonus_until=float(self._save.idle_exp_bonus_until),
+            exp_penalty_until=float(self._save.idle_exp_penalty_until),
         )
 
         self._character_cards: list[IdleCharacterCard] = []
@@ -82,10 +103,6 @@ class IdleScreenWidget(QWidget):
         title.setObjectName("battleTitle")
         header.addWidget(title, 0, Qt.AlignmentFlag.AlignCenter)
         header.addStretch(1)
-
-        self._tick_label = QLabel("Tick: 0")
-        self._tick_label.setObjectName("idleTickLabel")
-        header.addWidget(self._tick_label, 0, Qt.AlignmentFlag.AlignRight)
 
         arena = IdleArena()
         self._arena = arena
@@ -122,9 +139,42 @@ class IdleScreenWidget(QWidget):
 
         left_layout.addStretch(1)
 
+        reserves_panel = QWidget()
+        reserves_layout = QVBoxLayout()
+        reserves_layout.setContentsMargins(0, 0, 0, 0)
+        reserves_layout.setSpacing(10)
+        reserves_panel.setLayout(reserves_layout)
+        reserves_layout.addStretch(1)
+
+        for char_id in offsite:
+            plugin = self._plugin_by_id.get(char_id)
+            if not plugin:
+                continue
+
+            stack_count = int(self._stacks.get(char_id, 1))
+            card = IdleOffsiteCard(
+                char_id=char_id,
+                plugin=plugin,
+                idle_state=self._idle_state,
+                rng=self._rng,
+                stack_count=stack_count,
+            )
+            self._character_cards.append(card)
+            reserves_layout.addWidget(card, 0, Qt.AlignmentFlag.AlignVCenter)
+        reserves_layout.addStretch(1)
+
+        left_side = QWidget()
+        left_side_layout = QHBoxLayout()
+        left_side_layout.setContentsMargins(0, 0, 0, 0)
+        left_side_layout.setSpacing(12)
+        left_side.setLayout(left_side_layout)
+        if offsite:
+            left_side_layout.addWidget(reserves_panel, 0, Qt.AlignmentFlag.AlignVCenter)
+        left_side_layout.addWidget(left, 0, Qt.AlignmentFlag.AlignVCenter)
+
         right_panel = self._make_mods_panel()
 
-        arena_layout.addWidget(left, 0, 0, 1, 1, Qt.AlignmentFlag.AlignVCenter)
+        arena_layout.addWidget(left_side, 0, 0, 1, 1, Qt.AlignmentFlag.AlignVCenter)
         arena_layout.addWidget(QWidget(), 0, 1, 1, 1)
         arena_layout.addWidget(right_panel, 0, 2, 1, 1, Qt.AlignmentFlag.AlignTop)
         arena_layout.setColumnStretch(0, 0)
@@ -211,11 +261,18 @@ class IdleScreenWidget(QWidget):
         self._rr_level.setValue(self._idle_state.get_risk_reward_level())
 
     def _on_tick(self, tick_count: int) -> None:
-        self._tick_label.setText(f"Tick: {tick_count}")
         for card in self._character_cards:
             card.update_display()
 
     def _finish(self) -> None:
         if self._idle_timer:
             self._idle_timer.stop()
+        try:
+            save = self._save_manager.load() or self._save or RunSave()
+            progress = save.character_progress
+            progress.update(self._idle_state.export_progress())
+            save.character_progress = progress
+            self._save_manager.save(save)
+        except Exception:
+            pass
         self.finished.emit()
