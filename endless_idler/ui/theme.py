@@ -495,6 +495,120 @@ QLabel#battleOffsiteTitle {
     font-size: 11px;
     font-weight: 700;
 }
+
+QWidget#idleScreen {
+    background-color: rgba(0, 0, 0, 180);
+}
+
+QFrame#idleArena {
+    background-color: rgba(10, 14, 26, 140);
+    border: 1px solid rgba(255, 255, 255, 18);
+}
+
+QFrame#idleCharacterCard {
+    background-color: rgba(255, 255, 255, 10);
+    border: 1px solid rgba(255, 255, 255, 18);
+}
+
+QLabel#idlePortrait {
+    background-color: rgba(0, 0, 0, 35);
+    border: 1px solid rgba(255, 255, 255, 20);
+}
+
+QLabel#idleCharName {
+    color: rgba(255, 255, 255, 235);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+QLabel#idleCharLevel,
+QLabel#idleCharStack {
+    color: rgba(255, 255, 255, 170);
+    font-size: 11px;
+}
+
+QLabel#idleExpLabel,
+QLabel#idleHpLabel {
+    color: rgba(255, 255, 255, 200);
+    font-size: 10px;
+}
+
+QLabel#idleTickLabel {
+    color: rgba(255, 255, 255, 210);
+    font-size: 12px;
+}
+
+QProgressBar#idleExpBar {
+    background-color: rgba(0, 0, 0, 35);
+    border: 1px solid rgba(255, 255, 255, 20);
+    color: rgba(255, 255, 255, 220);
+    font-size: 10px;
+    text-align: center;
+}
+
+QProgressBar#idleExpBar::chunk {
+    background-color: rgba(241, 196, 15, 175);
+}
+
+QProgressBar#idleHpBar {
+    background-color: rgba(0, 0, 0, 35);
+    border: 1px solid rgba(255, 255, 255, 20);
+    color: rgba(255, 255, 255, 220);
+    font-size: 10px;
+    text-align: center;
+}
+
+QProgressBar#idleHpBar::chunk {
+    background-color: rgba(46, 204, 113, 165);
+}
+
+QFrame#idleModsPanel {
+    background-color: rgba(20, 30, 60, 120);
+    border: 1px solid rgba(255, 255, 255, 18);
+}
+
+QLabel#idleModsTitle,
+QLabel#idleRRTitle {
+    color: rgba(255, 255, 255, 235);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+QLabel#idleModsHelp {
+    color: rgba(255, 255, 255, 160);
+    font-size: 10px;
+}
+
+QPushButton#idleSharedExpButton {
+    background-color: rgba(255, 255, 255, 20);
+    border: 1px solid rgba(255, 255, 255, 28);
+    border-radius: 0px;
+    padding: 8px 12px;
+    color: rgba(255, 255, 255, 235);
+    font-size: 12px;
+}
+
+QPushButton#idleSharedExpButton:hover {
+    background-color: rgba(120, 180, 255, 56);
+}
+
+QPushButton#idleSharedExpButton:checked {
+    background-color: rgba(46, 204, 113, 90);
+    border: 1px solid rgba(46, 204, 113, 140);
+}
+
+QCheckBox#idleRRToggle {
+    color: rgba(255, 255, 255, 220);
+    font-size: 11px;
+}
+
+QSpinBox#idleRRLevel {
+    background-color: rgba(255, 255, 255, 16);
+    border: 1px solid rgba(255, 255, 255, 22);
+    color: rgba(255, 255, 255, 235);
+    font-size: 11px;
+    padding: 4px;
+}
 """.strip()
 
 

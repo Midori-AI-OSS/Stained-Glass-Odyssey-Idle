@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QWidget
 
 from endless_idler.ui.assets import asset_path
 from endless_idler.ui.battle import BattleScreenWidget
+from endless_idler.ui.idle import IdleScreenWidget
 from endless_idler.ui.party_builder import PartyBuilderWidget
 
 
@@ -100,6 +101,7 @@ class MainMenuWindow(QMainWindow):
         super().__init__()
         self._party_builder: PartyBuilderWidget | None = None
         self._battle_screen: BattleScreenWidget | None = None
+        self._idle_screen: IdleScreenWidget | None = None
         self._menu_screen: QWidget | None = None
 
         self.setWindowTitle("Stained Glass Odyssey Idle")
@@ -129,6 +131,7 @@ class MainMenuWindow(QMainWindow):
             self._party_builder = PartyBuilderWidget()
             self._party_builder.back_requested.connect(self._open_main_menu)
             self._party_builder.fight_requested.connect(self._open_battle_screen)
+            self._party_builder.idle_requested.connect(self._open_idle_screen)
             self._stack.addWidget(self._party_builder)
         self._stack.setCurrentWidget(self._party_builder)
 
@@ -163,5 +166,35 @@ class MainMenuWindow(QMainWindow):
             pass
         try:
             battle.deleteLater()
+        except Exception:
+            pass
+
+    def _open_idle_screen(self, payload: object) -> None:
+        if self._idle_screen is not None:
+            try:
+                self._idle_screen.deleteLater()
+            except Exception:
+                pass
+            self._idle_screen = None
+
+        idle = IdleScreenWidget(payload=payload)
+        idle.finished.connect(self._close_idle_screen)
+        self._idle_screen = idle
+        self._stack.addWidget(idle)
+        self._stack.setCurrentWidget(idle)
+
+    def _close_idle_screen(self) -> None:
+        if self._party_builder is not None:
+            self._stack.setCurrentWidget(self._party_builder)
+        if self._idle_screen is None:
+            return
+        idle = self._idle_screen
+        self._idle_screen = None
+        try:
+            self._stack.removeWidget(idle)
+        except Exception:
+            pass
+        try:
+            idle.deleteLater()
         except Exception:
             pass
