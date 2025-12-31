@@ -69,8 +69,12 @@ def build_foes(
         pool = [plugin.char_id for plugin in plugins]
 
     foes: list[Combatant] = []
-    for index in range(1, foe_count + 1):
-        char_id = rng.choice(pool)
+    foe_count = max(1, int(foe_count))
+    unique_count = min(len(pool), foe_count)
+    if unique_count <= 0:
+        return foes
+
+    for index, char_id in enumerate(rng.sample(pool, k=unique_count), start=1):
         plugin = plugins_by_id.get(char_id)
         display = plugin.display_name if plugin else char_id
         name = f"{display} (Foe {index})"
@@ -85,6 +89,41 @@ def build_foes(
         stats.hp = stats.max_hp
         foes.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
     return foes
+
+
+def build_reserves(
+    *,
+    char_ids: list[str],
+    party_level: int,
+    stacks: dict[str, int],
+    plugins_by_id: dict[str, CharacterPlugin],
+    rng: random.Random,
+    limit: int = 6,
+) -> list[Combatant]:
+    reserves: list[Combatant] = []
+    party_level = max(1, int(party_level))
+    limit = max(0, int(limit))
+    seen: set[str] = set()
+    for char_id in [str(item) for item in char_ids if item]:
+        if limit and len(reserves) >= limit:
+            break
+        if char_id in seen:
+            continue
+        seen.add(char_id)
+
+        plugin = plugins_by_id.get(char_id)
+        name = plugin.display_name if plugin else char_id
+        stars = plugin.stars if plugin else 1
+        stack_count = max(1, int(stacks.get(char_id, 1)))
+
+        stats = Stats()
+        scale = party_scaling(party_level=party_level, stars=stars, stacks=stack_count)
+        apply_scaled_bases(stats, scale=scale, spd=2 + stars)
+        stats.damage_type = resolve_damage_type_id(plugin, rng)
+        stats.level = party_level
+        stats.hp = stats.max_hp
+        reserves.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
+    return reserves
 
 
 def resolve_damage_type_id(plugin: CharacterPlugin | None, rng: random.Random) -> str:

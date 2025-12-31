@@ -347,6 +347,14 @@ QLabel#battleCombatantName {
     font-weight: 700;
 }
 
+QLabel#battleCombatantName[battleVariant="onsite"] {
+    font-size: 13px;
+}
+
+QLabel#battleCombatantName[battleVariant="offsite"] {
+    font-size: 10px;
+}
+
 QLabel#battleCombatantDetails {
     color: rgba(255, 255, 255, 170);
     font-size: 11px;
@@ -361,8 +369,107 @@ QProgressBar#battleHpBar {
     height: 14px;
 }
 
+QProgressBar#battleHpBar[battleVariant="onsite"] {
+    height: 16px;
+    font-size: 11px;
+}
+
+QProgressBar#battleHpBar[battleVariant="offsite"] {
+    height: 10px;
+    font-size: 9px;
+}
+
 QProgressBar#battleHpBar::chunk {
     background-color: rgba(46, 204, 113, 165);
+}
+
+QProgressBar#battleExpBar {
+    background-color: rgba(0, 0, 0, 35);
+    border: 1px solid rgba(255, 255, 255, 20);
+    color: rgba(255, 255, 255, 210);
+    font-size: 10px;
+    text-align: center;
+    height: 12px;
+}
+
+QProgressBar#battleExpBar[battleVariant="onsite"] {
+    height: 13px;
+    font-size: 10px;
+}
+
+QProgressBar#battleExpBar[battleVariant="offsite"] {
+    height: 9px;
+    font-size: 9px;
+}
+
+QProgressBar#battleExpBar::chunk {
+    background-color: rgba(52, 152, 219, 170);
+}
+
+QPushButton#battleToggleStatBars {
+    background-color: rgba(255, 255, 255, 14);
+    border: 1px solid rgba(255, 255, 255, 20);
+    border-radius: 0px;
+    padding: 6px 10px;
+    color: rgba(255, 255, 255, 230);
+    font-size: 12px;
+}
+
+QPushButton#battleToggleStatBars:hover {
+    background-color: rgba(120, 180, 255, 44);
+}
+
+QPushButton#battleToggleStatBars:checked {
+    background-color: rgba(120, 180, 255, 32);
+}
+
+QFrame#battleCombatantStatBars {
+    background-color: rgba(0, 0, 0, 18);
+    border: 1px solid rgba(255, 255, 255, 14);
+}
+
+QLabel#battleStatLabel {
+    color: rgba(255, 255, 255, 185);
+    font-size: 9px;
+    font-weight: 700;
+}
+
+QProgressBar#battleStatBar {
+    background-color: rgba(0, 0, 0, 40);
+    border: 1px solid rgba(255, 255, 255, 18);
+    height: 10px;
+}
+
+QProgressBar#battleStatBar::chunk {
+    background-color: rgba(155, 89, 182, 165);
+}
+
+QProgressBar#battleStatBar[statKey="atk"]::chunk {
+    background-color: rgba(231, 76, 60, 170);
+}
+
+QProgressBar#battleStatBar[statKey="defense"]::chunk {
+    background-color: rgba(52, 152, 219, 175);
+}
+
+QProgressBar#battleStatBar[statKey="spd"]::chunk {
+    background-color: rgba(46, 204, 113, 175);
+}
+
+QProgressBar#battleStatBar[statKey="crit_rate"]::chunk {
+    background-color: rgba(241, 196, 15, 185);
+}
+
+QProgressBar#battleStatBar[statKey="dodge_odds"]::chunk {
+    background-color: rgba(26, 188, 156, 175);
+}
+
+QProgressBar#battleStatBar[statKey="regain"]::chunk {
+    background-color: rgba(155, 89, 182, 175);
+}
+
+QProgressBar#battleStatBar[statKey="mitigation"]::chunk {
+    background-color: rgba(149, 165, 166, 175);
 }
 
 QFrame#battleOffsiteStrip {

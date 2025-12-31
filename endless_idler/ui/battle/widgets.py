@@ -70,6 +70,7 @@ class CombatantCard(QFrame):
         portrait_size: int | None = None,
         card_width: int | None = None,
         compact: bool = False,
+        variant: str = "onsite",
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -77,18 +78,27 @@ class CombatantCard(QFrame):
         self._compact = bool(compact)
         self._team_side = (team_side or "left").strip().lower()
         self._stack_count = max(1, int(stack_count))
-        self._details_label: QLabel | None = None
+        self._variant = (variant or "onsite").strip().lower()
+        self._exp: QProgressBar | None = None
         self._tooltip_html = ""
         self._stars: int | None = plugin.stars if plugin else None
 
         self.setObjectName("battleCombatantCard")
         self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setProperty("battleVariant", self._variant)
         default_width = 260 if not compact else 180
         self.setFixedWidth(max(120, int(card_width or default_width)))
 
         root = QHBoxLayout()
-        root.setContentsMargins(10, 10, 10, 10)
-        root.setSpacing(10)
+        if self._variant == "offsite":
+            root.setContentsMargins(8, 8, 8, 8)
+            root.setSpacing(8)
+        elif self._variant == "onsite":
+            root.setContentsMargins(12, 12, 12, 12)
+            root.setSpacing(10)
+        else:
+            root.setContentsMargins(10, 10, 10, 10)
+            root.setSpacing(10)
         self.setLayout(root)
 
         default_portrait = 56 if compact else 72
@@ -99,16 +109,18 @@ class CombatantCard(QFrame):
 
         body = QVBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(6)
+        body.setSpacing(4 if self._variant == "offsite" else 6)
         root.addWidget(self._portrait, 0, Qt.AlignmentFlag.AlignTop)
         root.addLayout(body, 1)
 
         self._name = QLabel(combatant.name)
         self._name.setObjectName("battleCombatantName")
+        self._name.setProperty("battleVariant", self._variant)
         body.addWidget(self._name)
 
         self._hp = QProgressBar()
         self._hp.setObjectName("battleHpBar")
+        self._hp.setProperty("battleVariant", self._variant)
         self._hp.setTextVisible(True)
         self._hp.setRange(0, max(1, int(combatant.max_hp)))
         self._hp.setValue(int(combatant.stats.hp))
@@ -116,10 +128,15 @@ class CombatantCard(QFrame):
         body.addWidget(self._hp)
 
         if not compact:
-            self._details_label = QLabel(self._details_text())
-            self._details_label.setObjectName("battleCombatantDetails")
-            self._details_label.setWordWrap(True)
-            body.addWidget(self._details_label)
+            self._exp = QProgressBar()
+            self._exp.setObjectName("battleExpBar")
+            self._exp.setProperty("battleVariant", self._variant)
+            self._exp.setTextVisible(True)
+            exp_value, exp_max = self._exp_progress()
+            self._exp.setRange(0, exp_max)
+            self._exp.setValue(exp_value)
+            self._exp.setFormat(self._exp_format())
+            body.addWidget(self._exp)
 
         self._refresh_tooltip()
 
@@ -131,8 +148,11 @@ class CombatantCard(QFrame):
         self._hp.setValue(int(self._combatant.stats.hp))
         self._hp.setFormat(self._hp_format())
         self._hp.update()
-        if self._details_label is not None:
-            self._details_label.setText(self._details_text())
+        if self._exp is not None:
+            exp_value, exp_max = self._exp_progress()
+            self._exp.setRange(0, exp_max)
+            self._exp.setValue(exp_value)
+            self._exp.setFormat(self._exp_format())
         self._refresh_tooltip()
         self.update()
 
@@ -149,14 +169,15 @@ class CombatantCard(QFrame):
     def _hp_format(self) -> str:
         return f"{max(0, int(self._combatant.stats.hp))} / {max(1, int(self._combatant.max_hp))}"
 
-    def _details_text(self) -> str:
+    def _exp_progress(self) -> tuple[int, int]:
         stats = self._combatant.stats
-        crit_rate = f"{stats.crit_rate * 100:.1f}%"
-        dodge = f"{stats.dodge_odds * 100:.1f}%"
-        return (
-            f"ATK {stats.atk}  DEF {stats.defense}  SPD {stats.spd}\n"
-            f"CRIT {crit_rate} / {stats.crit_damage:.2f}x  DOD {dodge}  REG {stats.regain}  MIT {stats.mitigation:.2f}"
-        )
+        exp_max = max(1, 100 * max(1, int(stats.level)))
+        exp_value = max(0, int(stats.exp))
+        return min(exp_value, exp_max), exp_max
+
+    def _exp_format(self) -> str:
+        exp_value, exp_max = self._exp_progress()
+        return f"EXP {exp_value} / {exp_max}"
 
     def _refresh_tooltip(self) -> None:
         if self._compact:
