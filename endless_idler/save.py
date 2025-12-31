@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import os
 import json
 import math
+import os
 
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from PySide6.QtCore import QStandardPaths

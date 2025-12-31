@@ -5,12 +5,8 @@ import html
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
-from PySide6.QtGui import QPainter
-from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QGraphicsDropShadowEffect
-from PySide6.QtWidgets import QWidget
+from PySide6.QtGui import QColor, QPainter, QPixmap
+from PySide6.QtWidgets import QGraphicsDropShadowEffect, QLabel, QWidget
 
 from endless_idler.combat.stats import Stats
 
