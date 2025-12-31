@@ -49,6 +49,7 @@ class PartyBuilderWindow(QMainWindow):
 class PartyBuilderWidget(QWidget):
     back_requested = Signal()
     fight_requested = Signal(object)
+    idle_requested = Signal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -759,4 +760,14 @@ class PartyBuilderWidget(QWidget):
         self.fight_requested.emit(payload)
 
     def _request_idle(self) -> None:
-        self._set_shop_open(False)
+        onsite = [item for item in self._save.onsite if item]
+        if not onsite:
+            return
+
+        payload = {
+            "party_level": int(self._save.party_level),
+            "onsite": list(self._save.onsite),
+            "offsite": list(self._save.offsite),
+            "stacks": dict(self._save.stacks),
+        }
+        self.idle_requested.emit(payload)
