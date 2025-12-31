@@ -29,6 +29,7 @@ from endless_idler.save import SaveManager
 from endless_idler.save import next_party_level_up_cost
 from endless_idler.ui.party_builder_bar import CharacterBar
 from endless_idler.ui.party_builder_fight_bar import FightBar
+from endless_idler.ui.party_builder_idle_bar import IdleBar
 from endless_idler.ui.party_builder_planes import PulsingPlane
 from endless_idler.ui.party_builder_party_level_tile import StandbyPartyLevelTile
 from endless_idler.ui.party_builder_shop_tile import StandbyShopTile
@@ -68,6 +69,7 @@ class PartyBuilderWidget(QWidget):
         self._overlay_layout: QGridLayout | None = None
         self._shop_clearance: QWidget | None = None
         self._fight_bar: FightBar | None = None
+        self._idle_bar: IdleBar | None = None
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 16, 16, 16)
@@ -119,7 +121,7 @@ class PartyBuilderWidget(QWidget):
 
         self._refresh_tokens()
         self._load_slots_from_save()
-        self._refresh_fight_bar_state()
+        self._refresh_action_bars_state()
 
     def _maybe_build_char_bar(self) -> None:
         if not self._shop_open:
@@ -325,8 +327,11 @@ class PartyBuilderWidget(QWidget):
 
         fight_row = QHBoxLayout()
         fight_row.setContentsMargins(0, 0, 14, 0)
-        fight_row.setSpacing(0)
+        fight_row.setSpacing(12)
         fight_row.addStretch(1)
+        self._idle_bar = IdleBar()
+        self._idle_bar.clicked.connect(self._request_idle)
+        fight_row.addWidget(self._idle_bar)
         self._fight_bar = FightBar()
         self._fight_bar.clicked.connect(self._request_fight)
         fight_row.addWidget(self._fight_bar)
@@ -588,7 +593,7 @@ class PartyBuilderWidget(QWidget):
         self._refresh_tokens()
         self._refresh_party_level()
         self._load_slots_from_save()
-        self._refresh_fight_bar_state()
+        self._refresh_action_bars_state()
         if self._char_bar is not None:
             self._char_bar.set_char_ids(self._save.bar)
 
@@ -703,7 +708,7 @@ class PartyBuilderWidget(QWidget):
         self._apply_auto_merges()
         self._refresh_standby_slots()
         self._save_manager.save(self._save)
-        self._refresh_fight_bar_state()
+        self._refresh_action_bars_state()
         if self._char_bar is not None:
             self._char_bar.refresh_stack_badges()
 
@@ -727,11 +732,12 @@ class PartyBuilderWidget(QWidget):
         if self._shop_tile is not None:
             self._shop_tile.set_tokens(self._save.tokens)
 
-    def _refresh_fight_bar_state(self) -> None:
-        if self._fight_bar is None:
-            return
+    def _refresh_action_bars_state(self) -> None:
         has_onsite = any(item for item in self._save.onsite if item)
-        self._fight_bar.set_active(has_onsite)
+        if self._fight_bar is not None:
+            self._fight_bar.set_active(has_onsite)
+        if self._idle_bar is not None:
+            self._idle_bar.set_active(has_onsite)
 
     def _refresh_party_level(self) -> None:
         if self._party_level_tile is None:
@@ -751,3 +757,6 @@ class PartyBuilderWidget(QWidget):
             "stacks": dict(self._save.stacks),
         }
         self.fight_requested.emit(payload)
+
+    def _request_idle(self) -> None:
+        self._set_shop_open(False)
