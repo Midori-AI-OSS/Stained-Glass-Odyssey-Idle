@@ -2,21 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QPoint
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QCursor
-from PySide6.QtGui import QGuiApplication
-from PySide6.QtGui import QColor
-from PySide6.QtGui import QPainter
-from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame
-from PySide6.QtWidgets import QGraphicsBlurEffect
-from PySide6.QtWidgets import QGraphicsDropShadowEffect
-from PySide6.QtWidgets import QGridLayout
-from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QSizePolicy
-from PySide6.QtWidgets import QVBoxLayout
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtGui import QColor, QCursor, QGuiApplication, QPainter, QPixmap
+from PySide6.QtWidgets import (
+    QFrame,
+    QGraphicsBlurEffect,
+    QGraphicsDropShadowEffect,
+    QGridLayout,
+    QLabel,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from endless_idler.ui.assets import asset_path
 

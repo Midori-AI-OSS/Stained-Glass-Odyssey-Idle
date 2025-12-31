@@ -1,18 +1,17 @@
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt
-from PySide6.QtCore import Signal
-from PySide6.QtGui import QColor
-from PySide6.QtGui import QPainter
-from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame
-from PySide6.QtWidgets import QGraphicsDropShadowEffect
-from PySide6.QtWidgets import QHBoxLayout
-from PySide6.QtWidgets import QMainWindow
-from PySide6.QtWidgets import QPushButton
-from PySide6.QtWidgets import QStackedWidget
-from PySide6.QtWidgets import QVBoxLayout
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor, QPainter, QPixmap
+from PySide6.QtWidgets import (
+    QFrame,
+    QGraphicsDropShadowEffect,
+    QHBoxLayout,
+    QMainWindow,
+    QPushButton,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from endless_idler.ui.assets import asset_path
 from endless_idler.ui.battle import BattleScreenWidget
@@ -109,11 +108,11 @@ class MainMenuWindow(QMainWindow):
 
         menu = MainMenuWidget()
         menu.play_requested.connect(self._open_party_builder)
-        menu.settings_requested.connect(lambda: print("Settings clicked"))
-        menu.warp_requested.connect(lambda: print("Warp clicked"))
-        menu.inventory_requested.connect(lambda: print("Inventory clicked"))
-        menu.guidebook_requested.connect(lambda: print("Guidebook clicked"))
-        menu.feedback_requested.connect(lambda: print("Feedback clicked"))
+        menu.settings_requested.connect(self._stub_settings)
+        menu.warp_requested.connect(self._stub_warp)
+        menu.inventory_requested.connect(self._stub_inventory)
+        menu.guidebook_requested.connect(self._stub_guidebook)
+        menu.feedback_requested.connect(self._stub_feedback)
 
         background = MainMenuBackground()
         layout = QVBoxLayout()
@@ -158,16 +157,8 @@ class MainMenuWindow(QMainWindow):
             self._stack.setCurrentWidget(self._party_builder)
         if self._battle_screen is None:
             return
-        battle = self._battle_screen
+        self._cleanup_widget(self._battle_screen)
         self._battle_screen = None
-        try:
-            self._stack.removeWidget(battle)
-        except Exception:
-            pass
-        try:
-            battle.deleteLater()
-        except Exception:
-            pass
 
     def _open_idle_screen(self, payload: object) -> None:
         if self._idle_screen is not None:
@@ -188,13 +179,36 @@ class MainMenuWindow(QMainWindow):
             self._stack.setCurrentWidget(self._party_builder)
         if self._idle_screen is None:
             return
-        idle = self._idle_screen
+        self._cleanup_widget(self._idle_screen)
         self._idle_screen = None
+
+    def _cleanup_widget(self, widget: QWidget) -> None:
+        """Safely remove and delete a widget from the stack."""
         try:
-            self._stack.removeWidget(idle)
+            self._stack.removeWidget(widget)
         except Exception:
             pass
         try:
-            idle.deleteLater()
+            widget.deleteLater()
         except Exception:
             pass
+
+    def _stub_settings(self) -> None:
+        """Placeholder for Settings feature."""
+        pass
+
+    def _stub_warp(self) -> None:
+        """Placeholder for Warp feature."""
+        pass
+
+    def _stub_inventory(self) -> None:
+        """Placeholder for Inventory feature."""
+        pass
+
+    def _stub_guidebook(self) -> None:
+        """Placeholder for Guidebook feature."""
+        pass
+
+    def _stub_feedback(self) -> None:
+        """Placeholder for Feedback feature."""
+        pass

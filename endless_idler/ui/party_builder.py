@@ -2,39 +2,41 @@ from __future__ import annotations
 
 import random
 
-from PySide6.QtCore import Signal
-from PySide6.QtCore import Qt
-from PySide6.QtCore import QPropertyAnimation
-from PySide6.QtWidgets import QHBoxLayout
-from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QMainWindow
-from PySide6.QtWidgets import QFrame
-from PySide6.QtWidgets import QGraphicsOpacityEffect
-from PySide6.QtWidgets import QGridLayout
-from PySide6.QtWidgets import QMessageBox
-from PySide6.QtWidgets import QPushButton
-from PySide6.QtWidgets import QSizePolicy
-from PySide6.QtWidgets import QVBoxLayout
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import QPropertyAnimation, Qt, Signal
+from PySide6.QtWidgets import (
+    QFrame,
+    QGraphicsOpacityEffect,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from endless_idler.characters.plugins import discover_character_plugins
-from endless_idler.save import BAR_SLOTS
-from endless_idler.save import DEFAULT_CHARACTER_COST
-from endless_idler.save import DEFAULT_RUN_TOKENS
-from endless_idler.save import OFFSITE_SLOTS
-from endless_idler.save import ONSITE_SLOTS
-from endless_idler.save import STANDBY_SLOTS
-from endless_idler.save import RunSave
-from endless_idler.save import SaveManager
-from endless_idler.save import next_party_level_up_cost
+from endless_idler.save import (
+    BAR_SLOTS,
+    DEFAULT_CHARACTER_COST,
+    DEFAULT_RUN_TOKENS,
+    OFFSITE_SLOTS,
+    ONSITE_SLOTS,
+    STANDBY_SLOTS,
+    RunSave,
+    SaveManager,
+    next_party_level_up_cost,
+)
 from endless_idler.ui.party_builder_bar import CharacterBar
 from endless_idler.ui.party_builder_fight_bar import FightBar
 from endless_idler.ui.party_builder_idle_bar import IdleBar
-from endless_idler.ui.party_builder_planes import PulsingPlane
 from endless_idler.ui.party_builder_party_level_tile import StandbyPartyLevelTile
+from endless_idler.ui.party_builder_planes import PulsingPlane
+from endless_idler.ui.party_builder_sell import SellZone
 from endless_idler.ui.party_builder_shop_tile import StandbyShopTile
 from endless_idler.ui.party_builder_slot import DropSlot
-from endless_idler.ui.party_builder_sell import SellZone
 
 
 class PartyBuilderWindow(QMainWindow):
