@@ -121,6 +121,11 @@ QFrame#fightBar {
     border: 1px solid rgba(255, 120, 160, 120);
 }
 
+QFrame#idleBar {
+    background-color: rgba(70, 140, 255, 120);
+    border: 1px solid rgba(170, 220, 255, 120);
+}
+
 QFrame#groupFxPlane[tone="light"] {
     background-color: rgba(120, 185, 255, 30);
     border: 1px solid rgba(210, 235, 255, 45);
@@ -132,6 +137,14 @@ QFrame#rewardsPlane[tone="dark"] {
 }
 
 QLabel#fightBarLabel {
+    color: rgba(255, 255, 255, 235);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+QLabel#idleBarLabel {
     color: rgba(255, 255, 255, 235);
     font-size: 14px;
     font-weight: 700;
