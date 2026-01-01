@@ -24,10 +24,11 @@ from endless_idler.ui.battle.sim import build_foes
 from endless_idler.ui.battle.sim import build_party
 from endless_idler.ui.battle.sim import calculate_damage
 from endless_idler.ui.battle.sim import choose_weighted_attacker
-from endless_idler.ui.battle.stat_bars import CombatantStatBars
-from endless_idler.ui.battle.stat_bars import compute_stat_maxima
+from endless_idler.ui.battle.sim import choose_weighted_target_by_aggro
 from endless_idler.ui.battle.widgets import Arena
 from endless_idler.ui.battle.widgets import CombatantCard
+from endless_idler.ui.onsite import BattleOnsiteCharacterCard
+from endless_idler.ui.onsite import compute_stat_maxima
 from endless_idler.ui.party_hp_bar import PartyHpHeader
 from endless_idler.save import RunSave
 from endless_idler.save import SaveManager
@@ -106,10 +107,8 @@ class BattleScreenWidget(QWidget):
             rng=self._rng,
         )
 
-        self._party_cards: list[CombatantCard] = []
+        self._party_cards: list[QWidget] = []
         self._foe_cards: list[CombatantCard] = []
-        self._party_stat_bars: list[CombatantStatBars] = []
-        self._stat_bars_by_card: dict[CombatantCard, CombatantStatBars] = {}
         self._turn_side = "party"
         self._battle_over = False
         self._foe_kills = 0
@@ -143,16 +142,6 @@ class BattleScreenWidget(QWidget):
         )
         header.addWidget(party_hp, 0, Qt.AlignmentFlag.AlignVCenter)
         self._party_hp_header = party_hp
-
-        toggle_stats = QPushButton("👁")
-        toggle_stats.setObjectName("battleToggleStatBars")
-        toggle_stats.setCursor(Qt.CursorShape.PointingHandCursor)
-        toggle_stats.setCheckable(True)
-        toggle_stats.setChecked(True)
-        toggle_stats.setToolTip("Toggle stat bars")
-        toggle_stats.toggled.connect(self._set_stat_bars_visible)
-        header.addWidget(toggle_stats, 0, Qt.AlignmentFlag.AlignRight)
-        self._toggle_stat_bars_button = toggle_stats
 
         self._status = QLabel("")
         self._status.setObjectName("battleStatus")
@@ -192,32 +181,20 @@ class BattleScreenWidget(QWidget):
             party_portrait = 92
             party_card_width = 340
 
-        party_stat_maxima = compute_stat_maxima(self._party)
+        party_stat_maxima = compute_stat_maxima([combatant.stats for combatant in self._party])
         for combatant in self._party:
-            card = CombatantCard(
+            card = BattleOnsiteCharacterCard(
                 combatant=combatant,
                 plugin=self._plugin_by_id.get(combatant.char_id),
                 rng=self._rng,
                 team_side="left",
                 stack_count=int(self._stacks.get(combatant.char_id, 1)),
-                portrait_size=party_portrait,
                 card_width=party_card_width,
-                variant="onsite",
+                portrait_size=(party_portrait, party_portrait),
+                maxima=party_stat_maxima,
             )
             self._party_cards.append(card)
-            stat_bars = CombatantStatBars(combatant=combatant, maxima=party_stat_maxima)
-            self._party_stat_bars.append(stat_bars)
-            self._stat_bars_by_card[card] = stat_bars
-
-            row = QWidget()
-            row_layout = QHBoxLayout()
-            row_layout.setContentsMargins(0, 0, 0, 0)
-            row_layout.setSpacing(10)
-            row.setLayout(row_layout)
-            row_layout.addWidget(card, 0, Qt.AlignmentFlag.AlignVCenter)
-            row_layout.addWidget(stat_bars, 0, Qt.AlignmentFlag.AlignVCenter)
-            row_layout.addStretch(1)
-            left_layout.addWidget(row)
+            left_layout.addWidget(card, 0, Qt.AlignmentFlag.AlignVCenter)
 
         left_layout.addStretch(1)
         reserves_panel = QWidget()
@@ -324,7 +301,7 @@ class BattleScreenWidget(QWidget):
             self._turn_side = "foes"
         else:
             attacker, attacker_widget = choose_weighted_attacker(foes_alive, self._rng)
-            target, target_widget = self._rng.choice(party_alive)
+            target, target_widget = choose_weighted_target_by_aggro(party_alive, self._rng)
             self._turn_side = "party"
 
         color = color_for_damage_type_id(attacker.stats.element_id)
@@ -343,9 +320,6 @@ class BattleScreenWidget(QWidget):
         self._set_status(f"{attacker.name} hits {target.name} for {damage}{' (CRIT)' if crit else ''}")
 
         target_widget.refresh()
-        stat_bars = self._stat_bars_by_card.get(target_widget)
-        if stat_bars is not None:
-            stat_bars.refresh()
         if previous_hp > 0 and target.stats.hp <= 0:
             self._set_status(f"{target.name} fell!")
             if target in self._party:
@@ -365,10 +339,6 @@ class BattleScreenWidget(QWidget):
             clipped = max(0, limit - 1)
             message = f"{message[:clipped]}…"
         self._status.setText(message)
-
-    def _set_stat_bars_visible(self, visible: bool) -> None:
-        for stat_bars in self._party_stat_bars:
-            stat_bars.setVisible(bool(visible))
 
     def _on_battle_over(self) -> None:
         if self._battle_over:

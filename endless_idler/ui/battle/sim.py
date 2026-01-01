@@ -330,6 +330,24 @@ def choose_weighted_attacker(
     return alive[-1]
 
 
+def choose_weighted_target_by_aggro(
+    alive: list[tuple[Combatant, object]],
+    rng: random.Random,
+) -> tuple[Combatant, object]:
+    weights = [max(0.0, float(item[0].stats.aggro)) for item in alive]
+    total = sum(weights)
+    if total <= 0:
+        return rng.choice(alive)
+
+    roll = rng.random() * total
+    running = 0.0
+    for (combatant, widget), weight in zip(alive, weights, strict=False):
+        running += weight
+        if running >= roll:
+            return combatant, widget
+    return alive[-1]
+
+
 def calculate_damage(
     attacker: Stats,
     target: Stats,

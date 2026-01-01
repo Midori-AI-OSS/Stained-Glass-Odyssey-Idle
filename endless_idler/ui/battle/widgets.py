@@ -318,8 +318,14 @@ class LineOverlay(QWidget):
         painter.end()
 
     def _anchor_point(self, widget: QWidget) -> QPointF:
-        if isinstance(widget, CombatantCard):
-            return QPointF(self.mapFromGlobal(widget.pulse_anchor_global().toPoint()))
+        anchor = getattr(widget, "pulse_anchor_global", None)
+        if callable(anchor):
+            try:
+                point = anchor()
+            except Exception:
+                point = None
+            if isinstance(point, QPointF):
+                return QPointF(self.mapFromGlobal(point.toPoint()))
         center = widget.mapToGlobal(widget.rect().center())
         return QPointF(self.mapFromGlobal(center))
 
