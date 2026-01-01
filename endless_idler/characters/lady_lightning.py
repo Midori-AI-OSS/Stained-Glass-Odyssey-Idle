@@ -12,7 +12,7 @@ placement = "both"
 @dataclass
 class LadyLightning(PlayerBase):
     id = "lady_lightning"
-    name = "LadyLightning"
+    name = "Lady Lightning"
     full_about = (
         "An aasimar who answers to Electra—the storm-tossed twin of Lady Wind. "
         "Though she looks about thirty, her sunburst hair is permanently "

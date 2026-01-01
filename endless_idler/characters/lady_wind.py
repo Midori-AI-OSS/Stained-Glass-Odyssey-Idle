@@ -7,12 +7,12 @@ from plugins.damage_types._base import DamageTypeBase
 from plugins.damage_types.wind import Wind
 
 
-placement = "both"
+placement = "onsite"
 
 @dataclass
 class LadyWind(PlayerBase):
     id = "lady_wind"
-    name = "LadyWind"
+    name = "Lady Wind"
     full_about = (
         "Persona Wind - Lady Wind is the twin sister of Lady Lightning, a"
         " female Aasimar whose ageless features hover somewhere between twenty"

@@ -270,8 +270,8 @@ def _derive_display_name(char_id: str) -> str:
 def _sanitize_stars(stars: int) -> int:
     if stars <= 0:
         return 1
-    if stars > 6:
-        return 6
+    if stars > 7:
+        return 7
     return stars
 
 

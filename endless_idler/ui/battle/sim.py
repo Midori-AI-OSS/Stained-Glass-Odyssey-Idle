@@ -234,7 +234,7 @@ def resolve_damage_type_id(plugin: CharacterPlugin | None, rng: random.Random) -
 
 
 def party_scaling(*, party_level: int, stars: int, stacks: int) -> float:
-    stars = max(1, min(6, int(stars)))
+    stars = max(1, min(7, int(stars)))
     stacks = max(1, int(stacks))
     party_level = max(1, int(party_level))
 

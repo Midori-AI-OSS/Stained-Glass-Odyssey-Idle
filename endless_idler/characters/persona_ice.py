@@ -7,12 +7,12 @@ from plugins.damage_types._base import DamageTypeBase
 from plugins.damage_types.ice import Ice
 
 
-placement = "both"
+placement = "offsite"
 
 @dataclass
 class PersonaIce(PlayerBase):
     id = "persona_ice"
-    name = "PersonaIce"
+    name = "Persona Ice"
     full_about = (
         "A disciplined cryokinetic tank who keeps his real name hidden behind the Persona"
         "Ice moniker. He is most comfortable blanketing a battlefield in calming frost, "

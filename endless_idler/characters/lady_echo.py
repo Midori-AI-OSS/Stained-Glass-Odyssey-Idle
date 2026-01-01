@@ -13,7 +13,7 @@ placement = "offsite"
 @dataclass
 class LadyEcho(PlayerBase):
     id = "lady_echo"
-    name = "LadyEcho"
+    name = "Lady Echo"
     full_about = "Echo, a 22-year-old Aasimar inventor with distinctive light yellow hair and a brilliant mind shaped by Asperger's Syndrome. Her high intelligence manifests in an obsessive passion for building and creating, constantly tinkering with devices that blur the line between magic and technology. In combat, her resonant static abilities create powerful lightning echoes that reverberate across the battlefield—but every use of her powers comes with a cost. Minor abilities de-age her by 12 hours, while major powers can steal up to a year from her apparent age. This limitation drives her inventive nature as she seeks to build devices that might mitigate or reverse the de-aging effect. Despite social challenges from her neurodiversity, her heroic drive compels her to help others, even when the price is measured in lost time."
     summarized_about = "A brilliant Aasimar inventor whose lightning echoes reverberate across the battlefield, each use costing her time from her age."
     looks = """

@@ -74,7 +74,7 @@ def discover_character_plugins() -> list[CharacterPlugin]:
 
     plugins: list[CharacterPlugin] = []
     for path in sorted(_CHARACTERS_DIR.glob("*.py")):
-        if path.name in {"__init__.py", "plugins.py", "foe_base.py"}:
+        if path.name in {"__init__.py", "plugins.py", "foe_base.py", "player.py", "slime.py"}:
             continue
 
         (

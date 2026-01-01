@@ -208,6 +208,7 @@ QFrame#characterTileInner[starRank="3"] { border: 2px solid #228B22; }
 QFrame#characterTileInner[starRank="4"] { border: 2px solid #800080; }
 QFrame#characterTileInner[starRank="5"] { border: 2px solid #FF3B30; }
 QFrame#characterTileInner[starRank="6"] { border: 2px solid #FFD700; }
+QFrame#characterTileInner[starRank="7"] { border: 2px solid #00FFD1; }
 
 QLabel#shopSlotPlaceholder {
     color: rgba(255, 255, 255, 120);
@@ -270,6 +271,7 @@ QFrame#dropSlotInner[starRank="3"] { border: 2px solid #228B22; }
 QFrame#dropSlotInner[starRank="4"] { border: 2px solid #800080; }
 QFrame#dropSlotInner[starRank="5"] { border: 2px solid #FF3B30; }
 QFrame#dropSlotInner[starRank="6"] { border: 2px solid #FFD700; }
+QFrame#dropSlotInner[starRank="7"] { border: 2px solid #00FFD1; }
 
 QLabel#dropSlotLabel {
     color: rgba(255, 255, 255, 220);
