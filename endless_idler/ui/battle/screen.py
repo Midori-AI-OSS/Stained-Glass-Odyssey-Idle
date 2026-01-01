@@ -379,8 +379,8 @@ class BattleScreenWidget(QWidget):
                 preserved_stats = dict(save.character_stats)
                 preserved_initial_stats = dict(getattr(save, "character_initial_stats", {}) or {})
                 preserved_deaths = dict(getattr(save, "character_deaths", {}) or {})
-                preserved_bonus = float(save.idle_exp_bonus_until)
-                preserved_penalty = float(save.idle_exp_penalty_until)
+                preserved_bonus = float(save.idle_exp_bonus_seconds)
+                preserved_penalty = float(save.idle_exp_penalty_seconds)
 
                 save = new_run_save(
                     available_char_ids=[plugin.char_id for plugin in self._plugins],
@@ -390,8 +390,8 @@ class BattleScreenWidget(QWidget):
                 save.character_stats = preserved_stats
                 save.character_initial_stats = preserved_initial_stats
                 save.character_deaths = preserved_deaths
-                save.idle_exp_bonus_until = preserved_bonus
-                save.idle_exp_penalty_until = preserved_penalty
+                save.idle_exp_bonus_seconds = preserved_bonus
+                save.idle_exp_penalty_seconds = preserved_penalty
 
             self._save_manager.save(save)
             self._save = save
@@ -405,10 +405,10 @@ class BattleScreenWidget(QWidget):
             pass
 
     def _apply_idle_exp_bonus(self) -> None:
-        self._extend_idle_exp_timer(key="idle_exp_bonus_until", seconds=5 * 60)
+        self._extend_idle_exp_timer(key="idle_exp_bonus_seconds", seconds=5 * 60)
 
     def _apply_idle_exp_penalty(self) -> None:
-        self._extend_idle_exp_timer(key="idle_exp_penalty_until", seconds=15 * 60)
+        self._extend_idle_exp_timer(key="idle_exp_penalty_seconds", seconds=15 * 60)
 
     def _award_gold(self, kills: int) -> None:
         gold = max(0, int(kills))
@@ -427,9 +427,8 @@ class BattleScreenWidget(QWidget):
         try:
             manager = SaveManager()
             save = manager.load() or RunSave()
-            now = float(time.time())
             current = float(max(0.0, getattr(save, key, 0.0)))
-            setattr(save, key, max(current, now) + max(0, int(seconds)))
+            setattr(save, key, current + max(0, int(seconds)))
             manager.save(save)
         except Exception:
             return

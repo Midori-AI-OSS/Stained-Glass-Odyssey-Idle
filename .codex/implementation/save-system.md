@@ -8,6 +8,7 @@ Persistent state is stored in a single JSON save file managed by `endless_idler/
 - `RunSave.character_stats`: Per-character saved base stat overrides (applied when building combat/idle stats).
 - `RunSave.character_initial_stats`: Per-character "level 1" base stat snapshots used for rebirth resets.
 - `RunSave.character_deaths`: Per-character death counts used to apply death-based stat bonuses.
+- `RunSave.idle_exp_bonus_seconds` / `RunSave.idle_exp_penalty_seconds`: Remaining seconds for the run-level Idle EXP bonus/penalty; decremented only while Idle mode is running.
 
 ## Death tracking
 

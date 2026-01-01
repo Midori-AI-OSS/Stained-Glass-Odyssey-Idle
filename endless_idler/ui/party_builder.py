@@ -5,6 +5,7 @@ import random
 from PySide6.QtCore import QPropertyAnimation
 from PySide6.QtCore import Qt
 from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QGraphicsOpacityEffect
 from PySide6.QtWidgets import QGridLayout
@@ -42,11 +43,14 @@ from endless_idler.ui.party_builder_sell import SellZone
 from endless_idler.ui.party_builder_shop_tile import StandbyShopTile
 from endless_idler.ui.party_builder_slot import DropSlot
 from endless_idler.ui.party_hp_bar import PartyHpHeader
+from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
+from endless_idler.ui.idle.idle_state import IdleGameState
 
 
 SHOP_HIGH_STAR_THRESHOLD = 6
 SHOP_HIGH_STAR_WEIGHT_MULTIPLIER = 1e-4
 SHOP_DUPLICATE_WEIGHT_BASE = 0.05
+SHOP_IDLE_EXP_SCALE = 0.0001
 
 
 class PartyBuilderWindow(QMainWindow):
@@ -77,6 +81,13 @@ class PartyBuilderWidget(QWidget):
         self._slots_by_id: dict[str, DropSlot] = {}
         self._shop_open = False
         self._sell_zones: list[SellZone] = []
+        self._drag_active = False
+        self._party_dirty = False
+        self._party_finalize_timer: QTimer | None = None
+        self._shop_exp_state: IdleGameState | None = None
+        self._shop_exp_signature: tuple[tuple[str, ...], tuple[str, ...], int] | None = None
+        self._shop_exp_timer: QTimer | None = None
+        self._shop_exp_ticks = 0
         self._shop_tile: StandbyShopTile | None = None
         self._party_level_tile: StandbyPartyLevelTile | None = None
         self._rewards_plane: RewardsPlane | None = None
@@ -141,6 +152,16 @@ class PartyBuilderWidget(QWidget):
         merge_fx.raise_()
         self._merge_fx = merge_fx
 
+        finalize_timer = QTimer(self)
+        finalize_timer.setSingleShot(True)
+        finalize_timer.timeout.connect(self._finalize_party_changes)
+        self._party_finalize_timer = finalize_timer
+
+        shop_timer = QTimer(self)
+        shop_timer.setInterval(int(max(1, IDLE_TICK_INTERVAL_SECONDS * 1000)))
+        shop_timer.timeout.connect(self._shop_exp_tick)
+        self._shop_exp_timer = shop_timer
+
         self._maybe_build_char_bar()
 
         self._refresh_tokens()
@@ -148,6 +169,23 @@ class PartyBuilderWidget(QWidget):
         self._refresh_party_hp()
         self._refresh_rewards_plane()
         self._refresh_action_bars_state()
+
+    def showEvent(self, event: object) -> None:
+        if self._shop_exp_timer is not None and not self._shop_exp_timer.isActive():
+            self._shop_exp_timer.start()
+        try:
+            super().showEvent(event)  # type: ignore[misc]
+        except Exception:
+            return
+
+    def hideEvent(self, event: object) -> None:
+        if self._shop_exp_timer is not None:
+            self._shop_exp_timer.stop()
+        self._save_shop_exp_state()
+        try:
+            super().hideEvent(event)  # type: ignore[misc]
+        except Exception:
+            return
 
     def resizeEvent(self, event: object) -> None:
         if self._merge_fx is not None:
@@ -618,8 +656,11 @@ class PartyBuilderWidget(QWidget):
         self._save_manager.save(self._save)
 
     def _set_sell_zones_active(self, active: bool) -> None:
+        self._drag_active = bool(active)
         for zone in self._sell_zones:
             zone.set_active(active)
+        if not self._drag_active and self._party_dirty:
+            self._schedule_party_finalize()
 
     def _pulse_tokens(self) -> None:
         if self._token_label is None:
@@ -657,8 +698,8 @@ class PartyBuilderWidget(QWidget):
         preserved_stats = dict(self._save.character_stats)
         preserved_initial_stats = dict(getattr(self._save, "character_initial_stats", {}) or {})
         preserved_deaths = dict(getattr(self._save, "character_deaths", {}) or {})
-        preserved_bonus = float(self._save.idle_exp_bonus_until)
-        preserved_penalty = float(self._save.idle_exp_penalty_until)
+        preserved_bonus = float(self._save.idle_exp_bonus_seconds)
+        preserved_penalty = float(self._save.idle_exp_penalty_seconds)
 
         for char_id in sorted({item for item in (self._save.onsite + self._save.offsite) if item}):
             plugin = self._plugin_by_id.get(char_id)
@@ -676,8 +717,8 @@ class PartyBuilderWidget(QWidget):
         self._save.character_stats = preserved_stats
         self._save.character_initial_stats = preserved_initial_stats
         self._save.character_deaths = preserved_deaths
-        self._save.idle_exp_bonus_until = preserved_bonus
-        self._save.idle_exp_penalty_until = preserved_penalty
+        self._save.idle_exp_bonus_seconds = preserved_bonus
+        self._save.idle_exp_penalty_seconds = preserved_penalty
         self._save_manager.save(self._save)
 
         self._set_sell_zones_active(False)
@@ -811,6 +852,23 @@ class PartyBuilderWidget(QWidget):
         if char_id and prefix in {"onsite", "offsite"}:
             self._save.stacks[char_id] = max(1, int(self._save.stacks.get(char_id, 1)))
 
+        self._party_dirty = True
+        self._schedule_party_finalize()
+
+    def _schedule_party_finalize(self) -> None:
+        if self._party_finalize_timer is None:
+            return
+        self._party_finalize_timer.stop()
+        self._party_finalize_timer.start(200)
+
+    def _finalize_party_changes(self) -> None:
+        if self._drag_active:
+            self._schedule_party_finalize()
+            return
+        if not self._party_dirty:
+            return
+
+        self._party_dirty = False
         self._apply_auto_merges()
         self._refresh_standby_slots()
         self._save_manager.save(self._save)
@@ -818,6 +876,67 @@ class PartyBuilderWidget(QWidget):
         self._refresh_party_hp()
         if self._char_bar is not None:
             self._char_bar.refresh_stack_badges()
+        self._refresh_rewards_plane()
+        self._shop_exp_signature = None
+
+    def _shop_exp_tick(self) -> None:
+        onsite = [item for item in self._save.onsite if item]
+        offsite = [item for item in self._save.offsite if item]
+        if not onsite:
+            self._save_shop_exp_state()
+            self._shop_exp_state = None
+            self._shop_exp_signature = None
+            self._shop_exp_ticks = 0
+            return
+
+        signature = (tuple(onsite), tuple(offsite), int(self._save.party_level))
+        if self._shop_exp_state is None or self._shop_exp_signature != signature:
+            self._shop_exp_state = IdleGameState(
+                char_ids=list(onsite),
+                offsite_ids=list(offsite),
+                party_level=int(self._save.party_level),
+                stacks=dict(self._save.stacks),
+                plugins_by_id=self._plugin_by_id,
+                rng=self._rng,
+                progress_by_id=dict(self._save.character_progress),
+                stats_by_id=dict(self._save.character_stats),
+                initial_stats_by_id=dict(getattr(self._save, "character_initial_stats", {}) or {}),
+                exp_bonus_seconds=float(self._save.idle_exp_bonus_seconds),
+                exp_penalty_seconds=float(self._save.idle_exp_penalty_seconds),
+                exp_gain_scale=SHOP_IDLE_EXP_SCALE,
+                advance_run_buffs=False,
+            )
+            self._shop_exp_signature = signature
+            self._shop_exp_ticks = 0
+
+        self._shop_exp_state.process_tick()
+        self._shop_exp_ticks += 1
+        self._merge_shop_exp_exports()
+
+        if IDLE_TICK_INTERVAL_SECONDS > 0 and self._shop_exp_ticks % int(max(1, round(5.0 / IDLE_TICK_INTERVAL_SECONDS))) == 0:
+            self._save_shop_exp_state()
+
+    def _merge_shop_exp_exports(self) -> None:
+        if self._shop_exp_state is None:
+            return
+
+        progress = dict(self._save.character_progress)
+        progress.update(self._shop_exp_state.export_progress())
+        self._save.character_progress = progress
+
+        stats = dict(self._save.character_stats)
+        stats.update(self._shop_exp_state.export_character_stats())
+        self._save.character_stats = stats
+
+        initial_stats = dict(getattr(self._save, "character_initial_stats", {}) or {})
+        initial_stats.update(self._shop_exp_state.export_initial_stats())
+        self._save.character_initial_stats = initial_stats
+
+    def _save_shop_exp_state(self) -> None:
+        if self._shop_exp_state is None:
+            return
+        self._merge_shop_exp_exports()
+        self._save_manager.save(self._save)
 
     def _load_slots_from_save(self) -> None:
         for index, char_id in enumerate(self._save.onsite):
@@ -852,8 +971,8 @@ class PartyBuilderWidget(QWidget):
         if self._rewards_plane is None:
             return
         self._rewards_plane.set_idle_exp_timers(
-            bonus_until=float(getattr(self._save, "idle_exp_bonus_until", 0.0)),
-            penalty_until=float(getattr(self._save, "idle_exp_penalty_until", 0.0)),
+            bonus_seconds=float(getattr(self._save, "idle_exp_bonus_seconds", 0.0)),
+            penalty_seconds=float(getattr(self._save, "idle_exp_penalty_seconds", 0.0)),
         )
 
     def _refresh_action_bars_state(self) -> None:
@@ -896,10 +1015,13 @@ class PartyBuilderWidget(QWidget):
         self.idle_requested.emit(payload)
 
     def reload_save(self) -> None:
+        self._save_shop_exp_state()
         try:
             self._save = self._save_manager.load() or self._save
         except Exception:
             return
+        self._shop_exp_state = None
+        self._shop_exp_signature = None
         self._refresh_tokens()
         self._refresh_party_level()
         self._refresh_action_bars_state()

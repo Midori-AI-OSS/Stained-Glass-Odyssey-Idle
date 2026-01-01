@@ -4,6 +4,7 @@ import json
 import math
 import os
 import random
+import time
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,7 +21,7 @@ from endless_idler.save_codec import normalized_character_progress
 from endless_idler.save_codec import normalized_character_stats
 
 
-SAVE_VERSION = 7
+SAVE_VERSION = 8
 DEFAULT_RUN_TOKENS = 20
 DEFAULT_CHARACTER_COST = 1
 DEFAULT_SHOP_REROLL_COST = 2
@@ -55,8 +56,8 @@ class RunSave:
     character_stats: dict[str, dict[str, float]] = field(default_factory=dict)
     character_initial_stats: dict[str, dict[str, float]] = field(default_factory=dict)
     character_deaths: dict[str, int] = field(default_factory=dict)
-    idle_exp_bonus_until: float = 0.0
-    idle_exp_penalty_until: float = 0.0
+    idle_exp_bonus_seconds: float = 0.0
+    idle_exp_penalty_seconds: float = 0.0
 
 
 class SaveManager:
@@ -82,6 +83,21 @@ class SaveManager:
 
         if not isinstance(data, dict):
             return None
+
+        bonus_seconds = as_float(data.get("idle_exp_bonus_seconds", 0.0), default=0.0)
+        penalty_seconds = as_float(data.get("idle_exp_penalty_seconds", 0.0), default=0.0)
+        if "idle_exp_bonus_seconds" not in data:
+            legacy_bonus = as_float(data.get("idle_exp_bonus_until", 0.0), default=0.0)
+            if legacy_bonus > 1_000_000_000:
+                bonus_seconds = max(0.0, legacy_bonus - float(time.time()))
+            else:
+                bonus_seconds = max(0.0, legacy_bonus)
+        if "idle_exp_penalty_seconds" not in data:
+            legacy_penalty = as_float(data.get("idle_exp_penalty_until", 0.0), default=0.0)
+            if legacy_penalty > 1_000_000_000:
+                penalty_seconds = max(0.0, legacy_penalty - float(time.time()))
+            else:
+                penalty_seconds = max(0.0, legacy_penalty)
 
         save = RunSave(
             version=as_int(data.get("version", SAVE_VERSION), default=SAVE_VERSION),
@@ -110,8 +126,8 @@ class SaveManager:
             character_stats=as_character_stats_dict(data.get("character_stats", {})),
             character_initial_stats=as_character_stats_dict(data.get("character_initial_stats", {})),
             character_deaths=as_int_dict(data.get("character_deaths", {})),
-            idle_exp_bonus_until=as_float(data.get("idle_exp_bonus_until", 0.0), default=0.0),
-            idle_exp_penalty_until=as_float(data.get("idle_exp_penalty_until", 0.0), default=0.0),
+            idle_exp_bonus_seconds=bonus_seconds,
+            idle_exp_penalty_seconds=penalty_seconds,
         )
         return _normalized_save(save)
 
@@ -135,8 +151,8 @@ class SaveManager:
             "character_stats": save.character_stats,
             "character_initial_stats": save.character_initial_stats,
             "character_deaths": save.character_deaths,
-            "idle_exp_bonus_until": save.idle_exp_bonus_until,
-            "idle_exp_penalty_until": save.idle_exp_penalty_until,
+            "idle_exp_bonus_seconds": save.idle_exp_bonus_seconds,
+            "idle_exp_penalty_seconds": save.idle_exp_penalty_seconds,
         }
 
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -270,8 +286,8 @@ def _normalized_save(save: RunSave) -> RunSave:
         character_stats=normalized_character_stats(save.character_stats),
         character_initial_stats=normalized_character_stats(save.character_initial_stats),
         character_deaths=deaths,
-        idle_exp_bonus_until=float(max(0.0, save.idle_exp_bonus_until)),
-        idle_exp_penalty_until=float(max(0.0, save.idle_exp_penalty_until)),
+        idle_exp_bonus_seconds=float(max(0.0, getattr(save, "idle_exp_bonus_seconds", 0.0))),
+        idle_exp_penalty_seconds=float(max(0.0, getattr(save, "idle_exp_penalty_seconds", 0.0))),
     )
 
 

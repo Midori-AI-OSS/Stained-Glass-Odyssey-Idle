@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import time
 
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import Qt
@@ -30,7 +29,7 @@ class BuffStackTile(QFrame):
         self.setObjectName("rewardsBuffContainer")
         self.setProperty("kind", kind)
 
-        self._until = 0.0
+        self._remaining_seconds = 0.0
         self._stack_seconds = 60
         self._title_text = title
 
@@ -56,17 +55,19 @@ class BuffStackTile(QFrame):
 
         self.setVisible(False)
 
-    def set_timer(self, *, until: float, stack_seconds: int) -> None:
-        self._until = float(max(0.0, float(until)))
+    def set_timer(self, *, remaining_seconds: float, stack_seconds: int) -> None:
+        self._remaining_seconds = float(max(0.0, float(remaining_seconds)))
         self._stack_seconds = max(1, int(stack_seconds))
         self._refresh()
 
     def refresh_view(self) -> None:
         self._refresh()
 
+    def is_active(self) -> bool:
+        return self._remaining_seconds > 0.0
+
     def _refresh(self) -> None:
-        now = float(time.time())
-        remaining = max(0.0, self._until - now)
+        remaining = max(0.0, self._remaining_seconds)
         if remaining <= 0.0:
             self.setVisible(False)
             return
@@ -94,6 +95,7 @@ class RewardsPlane(QFrame):
         header.setObjectName("rewardsHeader")
         header.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         layout.addWidget(header)
+        self._header = header
 
         self._win = BuffStackTile(kind="win", title="Win Bonus (Idle EXP)")
         layout.addWidget(self._win)
@@ -108,11 +110,19 @@ class RewardsPlane(QFrame):
         timer.timeout.connect(self._tick)
         timer.start()
         self._timer = timer
+        self._update_visibility()
 
-    def set_idle_exp_timers(self, *, bonus_until: float, penalty_until: float) -> None:
-        self._win.set_timer(until=bonus_until, stack_seconds=WIN_STACK_SECONDS)
-        self._loss.set_timer(until=penalty_until, stack_seconds=LOSS_STACK_SECONDS)
+    def set_idle_exp_timers(self, *, bonus_seconds: float, penalty_seconds: float) -> None:
+        self._win.set_timer(remaining_seconds=bonus_seconds, stack_seconds=WIN_STACK_SECONDS)
+        self._loss.set_timer(remaining_seconds=penalty_seconds, stack_seconds=LOSS_STACK_SECONDS)
+        self._update_visibility()
+
+    def _update_visibility(self) -> None:
+        any_active = bool(self._win.is_active() or self._loss.is_active())
+        self._header.setVisible(any_active)
+        self.setVisible(any_active)
 
     def _tick(self) -> None:
         self._win.refresh_view()
         self._loss.refresh_view()
+        self._update_visibility()
