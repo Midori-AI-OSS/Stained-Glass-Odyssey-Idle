@@ -42,6 +42,7 @@ class CharacterBar(QFrame):
         plugins_by_id: dict[str, CharacterPlugin],
         rng: random.Random,
         on_reroll: Callable[[], None],
+        reroll_cost: int,
         get_stack_count: Callable[[str], int],
         character_cost: int,
         can_afford: Callable[[int], bool],
@@ -54,6 +55,7 @@ class CharacterBar(QFrame):
         self._rng = rng
         self._get_stack_count = get_stack_count
         self._character_cost = max(0, int(character_cost))
+        self._reroll_cost = max(0, int(reroll_cost))
         self._can_afford = can_afford
         self._on_insufficient_funds = on_insufficient_funds
 
@@ -84,6 +86,8 @@ class CharacterBar(QFrame):
         reroll = QPushButton("Reroll")
         reroll.setObjectName("partyRerollButton")
         reroll.setCursor(Qt.CursorShape.PointingHandCursor)
+        if self._reroll_cost > 0:
+            reroll.setText(f"Reroll (-{self._reroll_cost})")
         reroll.clicked.connect(on_reroll)
         footer.addWidget(reroll, 0, Qt.AlignmentFlag.AlignRight)
 

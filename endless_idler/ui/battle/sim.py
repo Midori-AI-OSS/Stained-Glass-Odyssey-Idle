@@ -105,6 +105,7 @@ def build_party(
         stack_count = max(1, int(stacks.get(char_id, 1)))
 
         stats = Stats()
+        stats.passive_modifier = 1.5 ** max(0, stack_count - 1)
         scale = party_scaling(party_level=party_level, stars=stars, stacks=stack_count)
         apply_scaled_bases(
             stats,
@@ -152,6 +153,7 @@ def build_foes(
         stars = plugin.stars if plugin else 1
 
         stats = Stats()
+        stats.passive_modifier = 1.0
         base = party_scaling(party_level=party_level, stars=stars, stacks=1)
         scale = base * rng.uniform(0.85, 1.1)
         apply_scaled_bases(stats, base_stats=getattr(plugin, "base_stats", None), scale=scale, spd=2 + max(0, stars - 1))
@@ -194,6 +196,7 @@ def build_reserves(
         stack_count = max(1, int(stacks.get(char_id, 1)))
 
         stats = Stats()
+        stats.passive_modifier = 1.5 ** max(0, stack_count - 1)
         scale = party_scaling(party_level=party_level, stars=stars, stacks=stack_count)
         apply_scaled_bases(
             stats,

@@ -85,6 +85,7 @@ class IdleScreenWidget(QWidget):
             rng=self._rng,
             progress_by_id=dict(self._save.character_progress),
             stats_by_id=dict(self._save.character_stats),
+            initial_stats_by_id=dict(getattr(self._save, "character_initial_stats", {}) or {}),
             exp_bonus_until=float(self._save.idle_exp_bonus_until),
             exp_penalty_until=float(self._save.idle_exp_penalty_until),
         )
@@ -150,6 +151,7 @@ class IdleScreenWidget(QWidget):
                 idle_state=self._idle_state,
                 rng=self._rng,
                 stack_count=stack_count,
+                on_rebirth=self._rebirth_character,
             )
             self._character_cards.append(card)
             left_layout.addWidget(card, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -175,6 +177,7 @@ class IdleScreenWidget(QWidget):
                 idle_state=self._idle_state,
                 rng=self._rng,
                 stack_count=stack_count,
+                on_rebirth=self._rebirth_character,
             )
             self._character_cards.append(card)
             reserves_layout.addWidget(card, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -297,6 +300,29 @@ class IdleScreenWidget(QWidget):
             self._save_manager.save(self._save)
             self._refresh_party_hp()
 
+    def _rebirth_character(self, char_id: str) -> None:
+        if not self._idle_state.rebirth_character(char_id):
+            return
+
+        try:
+            save = self._save_manager.load() or self._save or RunSave()
+            progress = save.character_progress
+            progress.update(self._idle_state.export_progress())
+            save.character_progress = progress
+            stats = save.character_stats
+            stats.update(self._idle_state.export_character_stats())
+            save.character_stats = stats
+            initial_stats = getattr(save, "character_initial_stats", {}) or {}
+            initial_stats.update(self._idle_state.export_initial_stats())
+            save.character_initial_stats = initial_stats
+            self._save_manager.save(save)
+            self._save = save
+        except Exception:
+            return
+
+        for card in self._character_cards:
+            card.update_display()
+
     def _finish(self) -> None:
         if self._idle_timer:
             self._idle_timer.stop()
@@ -308,6 +334,9 @@ class IdleScreenWidget(QWidget):
             stats = save.character_stats
             stats.update(self._idle_state.export_character_stats())
             save.character_stats = stats
+            initial_stats = getattr(save, "character_initial_stats", {}) or {}
+            initial_stats.update(self._idle_state.export_initial_stats())
+            save.character_initial_stats = initial_stats
             self._save_manager.save(save)
         except Exception:
             pass

@@ -24,6 +24,7 @@ from endless_idler.save import (
     DEFAULT_CHARACTER_COST,
     OFFSITE_SLOTS,
     ONSITE_SLOTS,
+    DEFAULT_SHOP_REROLL_COST,
     STANDBY_SLOTS,
     RunSave,
     SaveManager,
@@ -104,12 +105,10 @@ class PartyBuilderWidget(QWidget):
         self._party_hp_header = party_hp
         header.addWidget(party_hp, 0, 1, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
         header.setColumnStretch(1, 1)
-
-        reset = QPushButton("Reset")
-        reset.setObjectName("partyResetButton")
-        reset.setCursor(Qt.CursorShape.PointingHandCursor)
-        reset.clicked.connect(self._reset_run)
-        header.addWidget(reset, 0, 2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        spacer = QWidget()
+        spacer.setFixedWidth(back.sizeHint().width())
+        spacer.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        header.addWidget(spacer, 0, 2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         self._char_bar: CharacterBar | None = None
         self._token_label: QLabel | None = None
@@ -152,6 +151,7 @@ class PartyBuilderWidget(QWidget):
             plugins_by_id=self._plugin_by_id,
             rng=self._rng,
             on_reroll=self._reroll_shop,
+            reroll_cost=DEFAULT_SHOP_REROLL_COST,
             get_stack_count=self._get_stack_count,
             character_cost=DEFAULT_CHARACTER_COST,
             can_afford=self._can_afford,
@@ -603,6 +603,7 @@ class PartyBuilderWidget(QWidget):
 
         preserved_progress = dict(self._save.character_progress)
         preserved_stats = dict(self._save.character_stats)
+        preserved_initial_stats = dict(getattr(self._save, "character_initial_stats", {}) or {})
         preserved_deaths = dict(getattr(self._save, "character_deaths", {}) or {})
         preserved_bonus = float(self._save.idle_exp_bonus_until)
         preserved_penalty = float(self._save.idle_exp_penalty_until)
@@ -615,11 +616,13 @@ class PartyBuilderWidget(QWidget):
                 base_stats_template=getattr(plugin, "base_stats", None),
             )
         preserved_stats = dict(self._save.character_stats)
+        preserved_initial_stats = dict(getattr(self._save, "character_initial_stats", {}) or {})
         preserved_deaths = dict(getattr(self._save, "character_deaths", {}) or {})
 
         self._save = self._new_run_save()
         self._save.character_progress = preserved_progress
         self._save.character_stats = preserved_stats
+        self._save.character_initial_stats = preserved_initial_stats
         self._save.character_deaths = preserved_deaths
         self._save.idle_exp_bonus_until = preserved_bonus
         self._save.idle_exp_penalty_until = preserved_penalty
@@ -635,6 +638,13 @@ class PartyBuilderWidget(QWidget):
             self._char_bar.set_char_ids(self._save.bar)
 
     def _reroll_shop(self) -> None:
+        reroll_cost = max(0, int(DEFAULT_SHOP_REROLL_COST))
+        if reroll_cost > 0:
+            if self._save.tokens < reroll_cost:
+                self._pulse_tokens()
+                return
+            self._save.tokens -= reroll_cost
+
         party = [item for item in (self._save.onsite + self._save.offsite) if item]
         party_unique = sorted(set(party))
         filled = len(party_unique)
@@ -657,6 +667,7 @@ class PartyBuilderWidget(QWidget):
 
         self._save.bar = offers
 
+        self._refresh_tokens()
         self._save_manager.save(self._save)
         if self._char_bar is not None:
             self._char_bar.set_char_ids(self._save.bar)

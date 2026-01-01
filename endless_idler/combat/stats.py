@@ -26,7 +26,7 @@ class Stats:
     actions_display: str = "pips"
     actions_pips_max: int = 5
 
-    passive_pot: float = 1.0
+    passive_modifier: float = 1.0
 
     _base_max_hp: int = field(default=1000, init=False)
     _base_atk: int = field(default=200, init=False)
@@ -286,4 +286,3 @@ def collect_stat_modifier_keys(effects: Iterable[StatEffect]) -> set[str]:
     for effect in effects:
         keys.update(effect.stat_modifiers.keys())
     return keys
-

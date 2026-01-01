@@ -17,6 +17,7 @@ The PySide6 UI uses a stained-glass inspired theme for the main menu:
 
 - Idle screen widget: `endless_idler/ui/idle/screen.py` (`IdleScreenWidget`)
 - Per-character EXP bars show current EXP and the current gain rate as `+X.XX/s` (computed from the live idle state)
+- Character cards show a `Rebirth` button at level 50+ (triggers `IdleGameState.rebirth_character`).
 
 ## Party HP (shared run stat)
 
