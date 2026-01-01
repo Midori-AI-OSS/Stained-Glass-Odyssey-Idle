@@ -41,6 +41,11 @@ from endless_idler.ui.party_builder_slot import DropSlot
 from endless_idler.ui.party_hp_bar import PartyHpHeader
 
 
+SHOP_HIGH_STAR_THRESHOLD = 6
+SHOP_HIGH_STAR_WEIGHT_MULTIPLIER = 1e-4
+SHOP_DUPLICATE_WEIGHT_BASE = 0.05
+
+
 class PartyBuilderWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -690,10 +695,15 @@ class PartyBuilderWidget(QWidget):
         extra = max(0, int(stacks) - 1)
         stack_weight = 1.0 / (1.0 + extra * 0.25)
 
-        duplicates = max(0, int(offered_counts.get(char_id, 0)))
-        duplicate_weight = 0.25**duplicates
+        plugin = self._plugin_by_id.get(char_id)
+        stars = 1 if plugin is None else int(getattr(plugin, "stars", 1) or 1)
+        stars = max(1, stars)
+        star_weight = SHOP_HIGH_STAR_WEIGHT_MULTIPLIER if stars >= SHOP_HIGH_STAR_THRESHOLD else 1.0
 
-        return stack_weight * duplicate_weight
+        duplicates = max(0, int(offered_counts.get(char_id, 0)))
+        duplicate_weight = SHOP_DUPLICATE_WEIGHT_BASE**duplicates
+
+        return stack_weight * star_weight * duplicate_weight
 
     def _weighted_choice(self, items: list[str], weights: list[float]) -> str | None:
         if not items:
