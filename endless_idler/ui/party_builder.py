@@ -1015,11 +1015,27 @@ class PartyBuilderWidget(QWidget):
         self.idle_requested.emit(payload)
 
     def reload_save(self) -> None:
-        self._save_shop_exp_state()
         try:
-            self._save = self._save_manager.load() or self._save
+            latest = self._save_manager.load() or self._save
         except Exception:
             return
+
+        if self._shop_exp_state is not None:
+            progress = dict(latest.character_progress)
+            progress.update(self._shop_exp_state.export_progress())
+            latest.character_progress = progress
+
+            stats = dict(latest.character_stats)
+            stats.update(self._shop_exp_state.export_character_stats())
+            latest.character_stats = stats
+
+            initial_stats = dict(getattr(latest, "character_initial_stats", {}) or {})
+            initial_stats.update(self._shop_exp_state.export_initial_stats())
+            latest.character_initial_stats = initial_stats
+
+            self._save_manager.save(latest)
+
+        self._save = latest
         self._shop_exp_state = None
         self._shop_exp_signature = None
         self._refresh_tokens()
