@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QProgressBar
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
-from endless_idler.ui.battle.sim import Combatant
+from endless_idler.combat.stats import Stats
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,10 +30,9 @@ STAT_BARS: tuple[StatBarSpec, ...] = (
 )
 
 
-def compute_stat_maxima(combatants: list[Combatant]) -> dict[str, float]:
+def compute_stat_maxima(stats_list: list[Stats]) -> dict[str, float]:
     maxima: dict[str, float] = {spec.key: 0.0 for spec in STAT_BARS}
-    for combatant in combatants:
-        stats = combatant.stats
+    for stats in stats_list:
         maxima["atk"] = max(maxima["atk"], float(stats.atk))
         maxima["defense"] = max(maxima["defense"], float(stats.defense))
         maxima["spd"] = max(maxima["spd"], float(stats.spd))
@@ -48,24 +47,24 @@ def compute_stat_maxima(combatants: list[Combatant]) -> dict[str, float]:
     return maxima
 
 
-class CombatantStatBars(QFrame):
+class StatBarsPanel(QFrame):
     def __init__(
         self,
         *,
-        combatant: Combatant,
+        stats: Stats,
         maxima: dict[str, float],
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self._combatant = combatant
+        self._stats = stats
         self._maxima = dict(maxima)
         self._bars: dict[str, QProgressBar] = {}
 
-        self.setObjectName("battleCombatantStatBars")
+        self.setObjectName("onsiteStatBars")
         self.setFrameShape(QFrame.Shape.NoFrame)
 
         root = QVBoxLayout()
-        root.setContentsMargins(8, 10, 8, 10)
+        root.setContentsMargins(10, 10, 10, 10)
         root.setSpacing(6)
         self.setLayout(root)
 
@@ -77,17 +76,17 @@ class CombatantStatBars(QFrame):
             row.setLayout(row_layout)
 
             label = QLabel(spec.label)
-            label.setObjectName("battleStatLabel")
+            label.setObjectName("onsiteStatLabel")
             label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             label.setFixedWidth(82)
             row_layout.addWidget(label, 0)
 
             bar = QProgressBar()
-            bar.setObjectName("battleStatBar")
+            bar.setObjectName("onsiteStatBar")
             bar.setProperty("statKey", spec.key)
             bar.setRange(0, 100)
             bar.setTextVisible(False)
-            bar.setFixedWidth(116)
+            bar.setFixedWidth(150)
             bar.setFixedHeight(10)
             row_layout.addWidget(bar, 1)
 
@@ -96,8 +95,16 @@ class CombatantStatBars(QFrame):
 
         self.refresh()
 
+    def set_stats(self, stats: Stats) -> None:
+        self._stats = stats
+        self.refresh()
+
+    def set_maxima(self, maxima: dict[str, float]) -> None:
+        self._maxima = dict(maxima)
+        self.refresh()
+
     def refresh(self) -> None:
-        stats = self._combatant.stats
+        stats = self._stats
         values: dict[str, tuple[float, str]] = {
             "atk": (float(stats.atk), f"Attack {stats.atk}"),
             "defense": (float(stats.defense), f"Defense {stats.defense}"),
@@ -118,3 +125,4 @@ class CombatantStatBars(QFrame):
             bar.setValue(percent)
             if tooltip:
                 bar.setToolTip(tooltip)
+

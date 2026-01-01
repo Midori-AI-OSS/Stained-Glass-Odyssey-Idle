@@ -22,11 +22,12 @@ from endless_idler.save import OFFSITE_SLOTS
 from endless_idler.save import ONSITE_SLOTS
 from endless_idler.save import RunSave
 from endless_idler.save import SaveManager
-from endless_idler.ui.idle.widgets import IdleCharacterCard
 from endless_idler.ui.idle.widgets import IdleArena
 from endless_idler.ui.idle.widgets import IdleOffsiteCard
 from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
 from endless_idler.ui.idle.idle_state import IdleGameState
+from endless_idler.ui.onsite import IdleOnsiteCharacterCard
+from endless_idler.ui.onsite import compute_stat_maxima
 from endless_idler.ui.party_hp_bar import PartyHpHeader
 
 
@@ -90,7 +91,8 @@ class IdleScreenWidget(QWidget):
             exp_penalty_until=float(self._save.idle_exp_penalty_until),
         )
 
-        self._character_cards: list[IdleCharacterCard] = []
+        self._onsite_cards: list[IdleOnsiteCharacterCard] = []
+        self._offsite_cards: list[IdleOffsiteCard] = []
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 16, 16, 16)
@@ -145,7 +147,7 @@ class IdleScreenWidget(QWidget):
                 continue
 
             stack_count = int(self._stacks.get(char_id, 1))
-            card = IdleCharacterCard(
+            card = IdleOnsiteCharacterCard(
                 char_id=char_id,
                 plugin=plugin,
                 idle_state=self._idle_state,
@@ -153,7 +155,7 @@ class IdleScreenWidget(QWidget):
                 stack_count=stack_count,
                 on_rebirth=self._rebirth_character,
             )
-            self._character_cards.append(card)
+            self._onsite_cards.append(card)
             left_layout.addWidget(card, 0, Qt.AlignmentFlag.AlignVCenter)
 
         left_layout.addStretch(1)
@@ -179,7 +181,7 @@ class IdleScreenWidget(QWidget):
                 stack_count=stack_count,
                 on_rebirth=self._rebirth_character,
             )
-            self._character_cards.append(card)
+            self._offsite_cards.append(card)
             reserves_layout.addWidget(card, 0, Qt.AlignmentFlag.AlignVCenter)
         reserves_layout.addStretch(1)
 
@@ -288,9 +290,26 @@ class IdleScreenWidget(QWidget):
         self._rr_toggle.setChecked(self._idle_state.is_risk_reward_enabled())
         self._rr_level.setValue(self._idle_state.get_risk_reward_level())
 
-    def _on_tick(self, tick_count: int) -> None:
-        for card in self._character_cards:
+    def _refresh_character_cards(self) -> None:
+        snapshots: list[tuple[IdleOnsiteCharacterCard, dict, object]] = []
+        stats_list = []
+        for card in self._onsite_cards:
+            snapshot = card.snapshot()
+            if snapshot is None:
+                continue
+            data, stats = snapshot
+            snapshots.append((card, data, stats))
+            stats_list.append(stats)
+
+        maxima = compute_stat_maxima(stats_list)
+        for card, data, stats in snapshots:
+            card.apply_snapshot(data, stats, maxima=maxima)
+
+        for card in self._offsite_cards:
             card.update_display()
+
+    def _on_tick(self, tick_count: int) -> None:
+        self._refresh_character_cards()
         healed = 0
         try:
             healed = apply_idle_party_heal(self._save)
@@ -320,8 +339,7 @@ class IdleScreenWidget(QWidget):
         except Exception:
             return
 
-        for card in self._character_cards:
-            card.update_display()
+        self._refresh_character_cards()
 
     def _finish(self) -> None:
         if self._idle_timer:

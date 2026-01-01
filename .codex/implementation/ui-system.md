@@ -12,12 +12,23 @@ The PySide6 UI uses a stained-glass inspired theme for the main menu:
 
 - Battle screen widget: `endless_idler/ui/battle/screen.py` (`BattleScreenWidget`)
 - Launched from the party builder "Fight" bar and returns to the party builder when the battle ends.
+- Onsite character cards use the shared onsite card widget (see below).
+- Party targets for foe turns are weighted by the party members' `aggro` stat.
 
 ## Idle screen
 
 - Idle screen widget: `endless_idler/ui/idle/screen.py` (`IdleScreenWidget`)
 - Per-character EXP bars show current EXP and the current gain rate as `+X.XX/s` (computed from the live idle state)
 - Character cards show a `Rebirth` button at level 50+ (triggers `IdleGameState.rebirth_character`).
+- Onsite character cards use the shared onsite card widget (see below).
+
+## Onsite character cards (shared)
+
+Both Battle and Idle use a standardized onsite character layout and controls:
+
+- Onsite card widgets: `endless_idler/ui/onsite/card.py` (`BattleOnsiteCharacterCard`, `IdleOnsiteCharacterCard`)
+- Stat bars: `endless_idler/ui/onsite/stat_bars.py` (`StatBarsPanel`)
+- Per-card stats UI: each onsite card has an `👁` button which opens a small popup containing stat bars.
 
 ## Party HP (shared run stat)
 
