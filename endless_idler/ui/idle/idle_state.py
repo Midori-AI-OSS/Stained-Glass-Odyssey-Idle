@@ -10,6 +10,7 @@ from PySide6.QtCore import Signal
 LOSS_EXP_MULTIPLIER = 0.5
 WIN_EXP_MULTIPLIER = 4.0
 OFFSITE_EXP_SHARE_PER_CHAR = 0.01
+STACK_HP_BONUS = 100
 
 
 class IdleGameState(QObject):
@@ -25,6 +26,7 @@ class IdleGameState(QObject):
         plugins_by_id: dict[str, object],
         rng: random.Random,
         progress_by_id: dict[str, dict[str, float | int]] | None = None,
+        stats_by_id: dict[str, dict[str, float]] | None = None,
         exp_bonus_until: float = 0.0,
         exp_penalty_until: float = 0.0,
     ) -> None:
@@ -36,6 +38,7 @@ class IdleGameState(QObject):
         self._plugins_by_id = plugins_by_id
         self._rng = rng
         self._progress_by_id = progress_by_id or {}
+        self._stats_by_id = stats_by_id or {}
         self._exp_bonus_until = float(max(0.0, exp_bonus_until))
         self._exp_penalty_until = float(max(0.0, exp_penalty_until))
         self._time = time.time
@@ -53,7 +56,18 @@ class IdleGameState(QObject):
                 continue
 
             stack = max(1, int(stacks.get(char_id, 1)))
-            base_hp = 1000 + (stack - 1) * 100
+            plugin_base_stats = getattr(plugin, "base_stats", None)
+            base_stats: dict[str, float] = dict(plugin_base_stats) if isinstance(plugin_base_stats, dict) else {}
+            saved_stats = self._stats_by_id.get(char_id)
+            if isinstance(saved_stats, dict):
+                for key, raw in saved_stats.items():
+                    if key in base_stats:
+                        try:
+                            base_stats[key] = float(raw)  # type: ignore[arg-type]
+                        except (TypeError, ValueError):
+                            continue
+
+            base_hp = int(base_stats.get("max_hp", 1000.0)) + (stack - 1) * STACK_HP_BONUS
             saved = self._progress_by_id.get(char_id, {})
             level = 1
             exp = 0.0
@@ -79,6 +93,10 @@ class IdleGameState(QObject):
                 "next_exp": next_exp,
                 "hp": max_hp,
                 "max_hp": max_hp,
+                "base_stats": base_stats,
+                "stack": stack,
+                "base_aggro": getattr(plugin, "base_aggro", None),
+                "damage_reduction_passes": getattr(plugin, "damage_reduction_passes", None),
                 "exp_multiplier": 1.0,
                 "req_multiplier": 1.0,
                 "rebirths": 0,
@@ -148,15 +166,57 @@ class IdleGameState(QObject):
         if not data:
             return
 
-        data["level"] += 1
-        data["exp"] = 0
-        data["max_hp"] += 10
+        data["level"] = max(1, int(data.get("level", 1))) + 1
+        data["exp"] = 0.0
+
+        base_stats = data.get("base_stats")
+        if isinstance(base_stats, dict):
+            self._apply_weighted_stat_upgrades(char_id=char_id, base_stats=base_stats, level=int(data["level"]))
+
+        stack = max(1, int(data.get("stack", 1)))
+        if isinstance(base_stats, dict):
+            intrinsic_hp = int(float(base_stats.get("max_hp", 1000.0)))
+        else:
+            intrinsic_hp = 1000
+        base_hp = intrinsic_hp + (stack - 1) * STACK_HP_BONUS
+        data["max_hp"] = base_hp + max(0, int(data["level"]) - 1) * 10
         data["hp"] = data["max_hp"]
 
         level = data["level"]
         req_mult = data["req_multiplier"]
         tax = 1.5 ** ((level - 50) // 5) if level >= 50 else 1.0
         data["next_exp"] = (level * 30 * req_mult * tax) * self._rng.uniform(0.95, 1.05)
+
+    def _apply_weighted_stat_upgrades(self, *, char_id: str, base_stats: dict[str, float], level: int) -> None:
+        points = 1 + (max(1, int(level)) // 10)
+        stat_keys = (
+            "atk",
+            "defense",
+            "mitigation",
+            "crit_rate",
+            "crit_damage",
+            "dodge_odds",
+            "regain",
+        )
+
+        weights: list[float] = []
+        for key in stat_keys:
+            value = float(base_stats.get(key, 0.1))
+            if key in {"crit_rate", "dodge_odds", "mitigation"}:
+                weight = value * 100.0
+            elif key == "crit_damage":
+                weight = value * 10.0
+            else:
+                weight = value
+
+            if char_id == "luna" and key == "dodge_odds":
+                weight *= 5.0
+
+            weights.append(max(0.1, float(weight)))
+
+        for stat_name in self._rng.choices(list(stat_keys), weights=weights, k=points):
+            current = float(base_stats.get(stat_name, 1.0))
+            base_stats[stat_name] = current * 1.001
 
     def get_char_data(self, char_id: str) -> dict | None:
         return self._char_data.get(char_id)
@@ -178,6 +238,26 @@ class IdleGameState(QObject):
                 next_exp = 30.0
 
             payload[char_id] = {"level": level, "exp": exp, "next_exp": next_exp}
+        return payload
+
+    def export_character_stats(self) -> dict[str, dict[str, float]]:
+        payload: dict[str, dict[str, float]] = {}
+        for char_id, data in self._char_data.items():
+            stats = data.get("base_stats")
+            if not isinstance(stats, dict):
+                continue
+            sanitized: dict[str, float] = {}
+            for key, raw in stats.items():
+                if not isinstance(key, str):
+                    continue
+                name = key.strip()
+                if not name:
+                    continue
+                try:
+                    sanitized[name] = float(raw)
+                except (TypeError, ValueError):
+                    continue
+            payload[char_id] = sanitized
         return payload
 
     def set_shared_exp(self, enabled: bool) -> None:

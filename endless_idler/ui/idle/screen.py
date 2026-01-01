@@ -76,6 +76,7 @@ class IdleScreenWidget(QWidget):
             plugins_by_id=self._plugin_by_id,
             rng=self._rng,
             progress_by_id=dict(self._save.character_progress),
+            stats_by_id=dict(self._save.character_stats),
             exp_bonus_until=float(self._save.idle_exp_bonus_until),
             exp_penalty_until=float(self._save.idle_exp_penalty_until),
         )
@@ -272,6 +273,9 @@ class IdleScreenWidget(QWidget):
             progress = save.character_progress
             progress.update(self._idle_state.export_progress())
             save.character_progress = progress
+            stats = save.character_stats
+            stats.update(self._idle_state.export_character_stats())
+            save.character_stats = stats
             self._save_manager.save(save)
         except Exception:
             pass
