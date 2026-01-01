@@ -160,14 +160,6 @@ QFrame#rewardsPlane[tone="dark"] {
     border: 1px solid rgba(170, 220, 255, 38);
 }
 
-QLabel#rewardsHeader {
-    color: rgba(255, 255, 255, 210);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-}
-
 QFrame#rewardsBuffContainer {
     background-color: rgba(10, 18, 40, 90);
     border: 1px solid rgba(255, 255, 255, 24);
