@@ -22,6 +22,12 @@ The PySide6 UI uses a stained-glass inspired theme for the main menu:
 - Character cards show a `Rebirth` button at level 50+ (triggers `IdleGameState.rebirth_character`).
 - Onsite character cards use the shared onsite card widget (see below).
 
+## Party Builder screen
+
+- Party Builder widget: `endless_idler/ui/party_builder.py` (`PartyBuilderWidget`)
+- Run buff display: `endless_idler/ui/party_builder_rewards_plane.py` (`RewardsPlane`) only shows when the run has an active bonus/penalty.
+- Shop EXP drip: while Party Builder is visible, party characters gain scaled Idle EXP (`SHOP_IDLE_EXP_SCALE`) without consuming run buff duration.
+
 ## Onsite character cards (shared)
 
 Both Battle and Idle use a standardized onsite character layout and controls:

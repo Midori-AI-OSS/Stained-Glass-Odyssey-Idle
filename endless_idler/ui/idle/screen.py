@@ -87,8 +87,8 @@ class IdleScreenWidget(QWidget):
             progress_by_id=dict(self._save.character_progress),
             stats_by_id=dict(self._save.character_stats),
             initial_stats_by_id=dict(getattr(self._save, "character_initial_stats", {}) or {}),
-            exp_bonus_until=float(self._save.idle_exp_bonus_until),
-            exp_penalty_until=float(self._save.idle_exp_penalty_until),
+            exp_bonus_seconds=float(self._save.idle_exp_bonus_seconds),
+            exp_penalty_seconds=float(self._save.idle_exp_penalty_seconds),
         )
 
         self._onsite_cards: list[IdleOnsiteCharacterCard] = []
@@ -334,6 +334,9 @@ class IdleScreenWidget(QWidget):
             initial_stats = getattr(save, "character_initial_stats", {}) or {}
             initial_stats.update(self._idle_state.export_initial_stats())
             save.character_initial_stats = initial_stats
+            bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
+            save.idle_exp_bonus_seconds = bonus_seconds
+            save.idle_exp_penalty_seconds = penalty_seconds
             self._save_manager.save(save)
             self._save = save
         except Exception:
@@ -355,6 +358,9 @@ class IdleScreenWidget(QWidget):
             initial_stats = getattr(save, "character_initial_stats", {}) or {}
             initial_stats.update(self._idle_state.export_initial_stats())
             save.character_initial_stats = initial_stats
+            bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
+            save.idle_exp_bonus_seconds = bonus_seconds
+            save.idle_exp_penalty_seconds = penalty_seconds
             self._save_manager.save(save)
         except Exception:
             pass

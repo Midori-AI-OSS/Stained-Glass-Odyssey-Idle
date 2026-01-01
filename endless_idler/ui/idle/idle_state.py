@@ -33,8 +33,10 @@ class IdleGameState(QObject):
         progress_by_id: dict[str, dict[str, float | int]] | None = None,
         stats_by_id: dict[str, dict[str, float]] | None = None,
         initial_stats_by_id: dict[str, dict[str, float]] | None = None,
-        exp_bonus_until: float = 0.0,
-        exp_penalty_until: float = 0.0,
+        exp_bonus_seconds: float = 0.0,
+        exp_penalty_seconds: float = 0.0,
+        exp_gain_scale: float = 1.0,
+        advance_run_buffs: bool = True,
     ) -> None:
         super().__init__()
         self._char_ids = char_ids
@@ -46,8 +48,10 @@ class IdleGameState(QObject):
         self._progress_by_id = progress_by_id or {}
         self._stats_by_id = stats_by_id or {}
         self._initial_stats_by_id = initial_stats_by_id or {}
-        self._exp_bonus_until = float(max(0.0, exp_bonus_until))
-        self._exp_penalty_until = float(max(0.0, exp_penalty_until))
+        self._exp_bonus_seconds = float(max(0.0, exp_bonus_seconds))
+        self._exp_penalty_seconds = float(max(0.0, exp_penalty_seconds))
+        self._exp_gain_scale = float(max(0.0, exp_gain_scale))
+        self._advance_run_buffs = bool(advance_run_buffs)
         self._time = time.time
         self._offsite_exp_share = OFFSITE_EXP_SHARE_PER_CHAR
 
@@ -229,6 +233,7 @@ class IdleGameState(QObject):
 
             gain *= exp_multiplier
             gain *= self._death_exp_debuff_multiplier(data)
+            gain *= self._exp_gain_scale
             total_onsite_gain_for_offsite += gain
             data["exp"] += gain * onsite_shared_mult
 
@@ -253,6 +258,12 @@ class IdleGameState(QObject):
                 if data["exp"] >= data["next_exp"]:
                     self._level_up(char_id)
 
+        if self._advance_run_buffs:
+            dt = float(max(0.0, IDLE_TICK_INTERVAL_SECONDS))
+            if dt > 0.0:
+                self._exp_bonus_seconds = max(0.0, self._exp_bonus_seconds - dt)
+                self._exp_penalty_seconds = max(0.0, self._exp_penalty_seconds - dt)
+
     def get_exp_gain_per_second(self, char_id: str) -> float:
         per_tick = self.get_exp_gain_per_tick(char_id)
         if IDLE_TICK_INTERVAL_SECONDS <= 0:
@@ -275,7 +286,7 @@ class IdleGameState(QObject):
                 gain *= (self._risk_reward_level + 1)
             gain *= exp_multiplier
             gain *= self._death_exp_debuff_multiplier(data)
-            return gain * onsite_shared_mult
+            return gain * onsite_shared_mult * self._exp_gain_scale
 
         if char_id in self._offsite_ids:
             total_onsite_gain_for_offsite = 0.0
@@ -289,6 +300,7 @@ class IdleGameState(QObject):
                     onsite_gain *= (self._risk_reward_level + 1)
                 onsite_gain *= exp_multiplier
                 onsite_gain *= self._death_exp_debuff_multiplier(onsite_data)
+                onsite_gain *= self._exp_gain_scale
                 total_onsite_gain_for_offsite += onsite_gain
 
             offsite_gain = float(total_onsite_gain_for_offsite) * float(self._offsite_exp_share) * offsite_shared_mult
@@ -319,13 +331,15 @@ class IdleGameState(QObject):
         return max(0.0, 1.0 - penalty)
 
     def _current_exp_multiplier(self) -> float:
-        now = float(self._time())
         multiplier = 1.0
-        if now < self._exp_bonus_until:
+        if self._exp_bonus_seconds > 0.0:
             multiplier *= WIN_EXP_MULTIPLIER
-        if now < self._exp_penalty_until:
+        if self._exp_penalty_seconds > 0.0:
             multiplier *= LOSS_EXP_MULTIPLIER
         return multiplier
+
+    def export_run_buff_seconds(self) -> tuple[float, float]:
+        return (float(max(0.0, self._exp_bonus_seconds)), float(max(0.0, self._exp_penalty_seconds)))
 
     def _level_up(self, char_id: str) -> None:
         data = self._char_data.get(char_id)
