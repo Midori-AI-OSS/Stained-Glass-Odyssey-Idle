@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from endless_idler.characters.plugins import discover_character_plugins
+from endless_idler.progression import record_character_death
 from endless_idler.save import (
     BAR_SLOTS,
     DEFAULT_CHARACTER_COST,
@@ -597,12 +598,24 @@ class PartyBuilderWidget(QWidget):
 
         preserved_progress = dict(self._save.character_progress)
         preserved_stats = dict(self._save.character_stats)
+        preserved_deaths = dict(getattr(self._save, "character_deaths", {}) or {})
         preserved_bonus = float(self._save.idle_exp_bonus_until)
         preserved_penalty = float(self._save.idle_exp_penalty_until)
+
+        for char_id in sorted({item for item in (self._save.onsite + self._save.offsite) if item}):
+            plugin = self._plugin_by_id.get(char_id)
+            record_character_death(
+                self._save,
+                char_id=char_id,
+                base_stats_template=getattr(plugin, "base_stats", None),
+            )
+        preserved_stats = dict(self._save.character_stats)
+        preserved_deaths = dict(getattr(self._save, "character_deaths", {}) or {})
 
         self._save = self._new_run_save()
         self._save.character_progress = preserved_progress
         self._save.character_stats = preserved_stats
+        self._save.character_deaths = preserved_deaths
         self._save.idle_exp_bonus_until = preserved_bonus
         self._save.idle_exp_penalty_until = preserved_penalty
         self._save_manager.save(self._save)

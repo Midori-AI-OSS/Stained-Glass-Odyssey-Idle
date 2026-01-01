@@ -15,6 +15,7 @@ DEATH_EXP_DEBUFF_DURATION_SECONDS = 60 * 60
 DEATH_EXP_DEBUFF_PER_STACK = 0.05
 SHARED_EXP_ONSITE_MULTIPLIER = 0.75
 SHARED_EXP_OFFSITE_MULTIPLIER = 1.5
+IDLE_TICK_INTERVAL_SECONDS = 0.1
 
 
 class IdleGameState(QObject):
@@ -112,6 +113,8 @@ class IdleGameState(QObject):
                 "next_exp": next_exp,
                 "death_exp_debuff_stacks": death_exp_debuff_stacks,
                 "death_exp_debuff_until": death_exp_debuff_until,
+                "next_vitality_gain_level": 0,
+                "next_mitigation_gain_level": 0,
                 "hp": max_hp,
                 "max_hp": max_hp,
                 "base_stats": base_stats,
@@ -122,6 +125,24 @@ class IdleGameState(QObject):
                 "req_multiplier": 1.0,
                 "rebirths": 0,
             }
+
+            if isinstance(saved, dict):
+                try:
+                    self._char_data[char_id]["next_vitality_gain_level"] = max(
+                        0,
+                        int(saved.get("next_vitality_gain_level", 0)),
+                    )
+                except (TypeError, ValueError):
+                    self._char_data[char_id]["next_vitality_gain_level"] = 0
+                try:
+                    self._char_data[char_id]["next_mitigation_gain_level"] = max(
+                        0,
+                        int(saved.get("next_mitigation_gain_level", 0)),
+                    )
+                except (TypeError, ValueError):
+                    self._char_data[char_id]["next_mitigation_gain_level"] = 0
+
+            self._ensure_sparse_growth_schedule(char_id)
 
     def process_tick(self) -> None:
         self._tick_count += 1
@@ -169,6 +190,49 @@ class IdleGameState(QObject):
                 if data["exp"] >= data["next_exp"]:
                     self._level_up(char_id)
 
+    def get_exp_gain_per_second(self, char_id: str) -> float:
+        per_tick = self.get_exp_gain_per_tick(char_id)
+        if IDLE_TICK_INTERVAL_SECONDS <= 0:
+            return 0.0
+        return per_tick / IDLE_TICK_INTERVAL_SECONDS
+
+    def get_exp_gain_per_tick(self, char_id: str) -> float:
+        data = self._char_data.get(char_id)
+        if not data:
+            return 0.0
+
+        onsite_shared_mult = SHARED_EXP_ONSITE_MULTIPLIER if self._shared_exp else 1.0
+        offsite_shared_mult = SHARED_EXP_OFFSITE_MULTIPLIER if self._shared_exp else 1.0
+        exp_multiplier = self._current_exp_multiplier()
+
+        if char_id in self._char_ids:
+            exp_mult = float(data.get("exp_multiplier", 1.0))
+            gain = exp_mult
+            if self._risk_reward_enabled:
+                gain *= (self._risk_reward_level + 1)
+            gain *= exp_multiplier
+            gain *= self._death_exp_debuff_multiplier(data)
+            return gain * onsite_shared_mult
+
+        if char_id in self._offsite_ids:
+            total_onsite_gain_for_offsite = 0.0
+            for onsite_id in self._char_ids:
+                onsite_data = self._char_data.get(onsite_id)
+                if not onsite_data:
+                    continue
+                onsite_mult = float(onsite_data.get("exp_multiplier", 1.0))
+                onsite_gain = onsite_mult
+                if self._risk_reward_enabled:
+                    onsite_gain *= (self._risk_reward_level + 1)
+                onsite_gain *= exp_multiplier
+                onsite_gain *= self._death_exp_debuff_multiplier(onsite_data)
+                total_onsite_gain_for_offsite += onsite_gain
+
+            offsite_gain = float(total_onsite_gain_for_offsite) * float(self._offsite_exp_share) * offsite_shared_mult
+            return offsite_gain * self._death_exp_debuff_multiplier(data)
+
+        return 0.0
+
     def _death_exp_debuff_multiplier(self, data: dict) -> float:
         now = float(self._time())
         try:
@@ -211,6 +275,7 @@ class IdleGameState(QObject):
         base_stats = data.get("base_stats")
         if isinstance(base_stats, dict):
             self._apply_weighted_stat_upgrades(char_id=char_id, base_stats=base_stats, level=int(data["level"]))
+            self._apply_sparse_growth(char_id=char_id, base_stats=base_stats)
 
         stack = max(1, int(data.get("stack", 1)))
         if isinstance(base_stats, dict):
@@ -231,7 +296,6 @@ class IdleGameState(QObject):
         stat_keys = (
             "atk",
             "defense",
-            "mitigation",
             "crit_rate",
             "crit_damage",
             "dodge_odds",
@@ -256,6 +320,46 @@ class IdleGameState(QObject):
         for stat_name in self._rng.choices(list(stat_keys), weights=weights, k=points):
             current = float(base_stats.get(stat_name, 1.0))
             base_stats[stat_name] = current * 1.001
+
+    def _ensure_sparse_growth_schedule(self, char_id: str) -> None:
+        data = self._char_data.get(char_id)
+        if not data:
+            return
+
+        level = max(1, int(data.get("level", 1)))
+
+        if max(0, int(data.get("next_vitality_gain_level", 0))) <= level:
+            data["next_vitality_gain_level"] = level + self._rng.randint(10, 15)
+
+        if max(0, int(data.get("next_mitigation_gain_level", 0))) <= level:
+            data["next_mitigation_gain_level"] = level + self._rng.randint(10, 15)
+
+    def _apply_sparse_growth(self, *, char_id: str, base_stats: dict[str, float]) -> None:
+        data = self._char_data.get(char_id)
+        if not data:
+            return
+
+        level = max(1, int(data.get("level", 1)))
+        self._ensure_sparse_growth_schedule(char_id)
+
+        for stat_key, schedule_key in (
+            ("vitality", "next_vitality_gain_level"),
+            ("mitigation", "next_mitigation_gain_level"),
+        ):
+            try:
+                next_gain_level = max(0, int(data.get(schedule_key, 0)))
+            except (TypeError, ValueError):
+                next_gain_level = 0
+
+            if next_gain_level <= 0:
+                next_gain_level = level + self._rng.randint(10, 15)
+
+            while level >= next_gain_level:
+                current = float(base_stats.get(stat_key, 1.0))
+                base_stats[stat_key] = current + 0.001 * self._rng.uniform(0.5, 1.5)
+                next_gain_level += self._rng.randint(10, 15)
+
+            data[schedule_key] = int(next_gain_level)
 
     def get_char_data(self, char_id: str) -> dict | None:
         return self._char_data.get(char_id)
@@ -290,6 +394,8 @@ class IdleGameState(QObject):
                 "next_exp": next_exp,
                 "death_exp_debuff_stacks": death_exp_debuff_stacks,
                 "death_exp_debuff_until": death_exp_debuff_until,
+                "next_vitality_gain_level": max(0, int(data.get("next_vitality_gain_level", 0))),
+                "next_mitigation_gain_level": max(0, int(data.get("next_mitigation_gain_level", 0))),
             }
         return payload
 

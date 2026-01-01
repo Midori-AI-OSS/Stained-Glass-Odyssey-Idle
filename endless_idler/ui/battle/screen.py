@@ -32,6 +32,7 @@ from endless_idler.ui.party_hp_bar import PartyHpHeader
 from endless_idler.save import RunSave
 from endless_idler.save import SaveManager
 from endless_idler.save import new_run_save
+from endless_idler.progression import record_character_death
 
 
 DEATH_EXP_DEBUFF_DURATION_SECONDS = 60 * 60
@@ -52,6 +53,8 @@ class BattleScreenWidget(QWidget):
 
         onsite = [str(item) for item in onsite_raw if item]
         offsite = [str(item) for item in offsite_raw if item]
+        self._onsite_ids = list(onsite)
+        self._offsite_ids = list(offsite)
         stacks: dict[str, int] = {}
         if isinstance(stacks_raw, dict):
             for key, value in stacks_raw.items():
@@ -394,8 +397,17 @@ class BattleScreenWidget(QWidget):
             elif defeat:
                 should_reset = apply_battle_result(save, victory=False)
             if should_reset:
+                for char_id in sorted(set(self._onsite_ids + self._offsite_ids)):
+                    plugin = self._plugin_by_id.get(char_id)
+                    record_character_death(
+                        save,
+                        char_id=char_id,
+                        base_stats_template=getattr(plugin, "base_stats", None),
+                    )
+
                 preserved_progress = dict(save.character_progress)
                 preserved_stats = dict(save.character_stats)
+                preserved_deaths = dict(getattr(save, "character_deaths", {}) or {})
                 preserved_bonus = float(save.idle_exp_bonus_until)
                 preserved_penalty = float(save.idle_exp_penalty_until)
 
@@ -405,6 +417,7 @@ class BattleScreenWidget(QWidget):
                 )
                 save.character_progress = preserved_progress
                 save.character_stats = preserved_stats
+                save.character_deaths = preserved_deaths
                 save.idle_exp_bonus_until = preserved_bonus
                 save.idle_exp_penalty_until = preserved_penalty
 
@@ -457,6 +470,14 @@ class BattleScreenWidget(QWidget):
         try:
             manager = SaveManager()
             save = manager.load() or RunSave()
+
+            plugin = getattr(self, "_plugin_by_id", {}).get(char_id)
+            record_character_death(
+                save,
+                char_id=char_id,
+                base_stats_template=getattr(plugin, "base_stats", None),
+            )
+
             progress = save.character_progress.get(char_id)
             if not isinstance(progress, dict):
                 progress = {"level": 1, "exp": 0.0, "next_exp": 30.0}
