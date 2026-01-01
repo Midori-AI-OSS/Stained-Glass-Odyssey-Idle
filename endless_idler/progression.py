@@ -11,7 +11,7 @@ DEATH_STAT_EXCLUDED_KEYS = frozenset(
         "exp_gain",
         "exp_multiplier",
         "mitigation",
-        "passive_pot",
+        "passive_modifier",
         "req_multiplier",
         "vitality",
     }
@@ -44,7 +44,21 @@ def record_character_death(
             if key not in stats and isinstance(value, (int, float)):
                 stats[key] = float(value)
 
+    initial_stats = getattr(save, "character_initial_stats", {}) or {}
+    if not isinstance(initial_stats, dict):
+        initial_stats = {}
+        save.character_initial_stats = initial_stats
+    initial_for_char = initial_stats.get(char_id)
+    if not isinstance(initial_for_char, dict):
+        initial_for_char = dict(template)
+        initial_stats[char_id] = initial_for_char
+    else:
+        for key, value in template.items():
+            if key not in initial_for_char and isinstance(value, (int, float)):
+                initial_for_char[key] = float(value)
+
     apply_death_stat_bonus(stats)
+    apply_death_stat_bonus(initial_for_char)
 
 
 def apply_death_stat_bonus(stats: dict[str, float]) -> None:
@@ -57,4 +71,3 @@ def apply_death_stat_bonus(stats: dict[str, float]) -> None:
         if not isinstance(value, (int, float)):
             continue
         stats[key] = float(value) * multiplier
-

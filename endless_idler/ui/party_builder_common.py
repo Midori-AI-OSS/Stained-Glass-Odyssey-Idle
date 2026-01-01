@@ -114,6 +114,7 @@ def build_character_stats_tooltip(
     stackable: bool | None = None,
     stats: Stats | None = None,
 ) -> str:
+    generated_stats = stats is None
     stats = stats or Stats()
 
     safe_name = html.escape(name)
@@ -150,6 +151,8 @@ def build_character_stats_tooltip(
             "<span style='color: rgba(255, 255, 255, 170);'>Stacks</span> "
             f"<span style='color: rgba(255, 255, 255, 235);'><b>x{int(stacks)}</b></span>"
         )
+    if generated_stats and stacks is not None:
+        stats.passive_modifier = 1.5 ** max(0, int(stacks) - 1)
     if stackable is True:
         meta_bits.append("<span style='color: #FFD700;'><b>Stackable</b></span>")
 
@@ -165,7 +168,7 @@ def build_character_stats_tooltip(
         ("Effect Hit", f"{stats.effect_hit_rate:.2f}"),
         ("Effect Res", f"{stats.effect_resistance:.2f}"),
         ("Dodge", f"{stats.dodge_odds * 100:.1f}%"),
-        ("Passive Pot", f"{stats.passive_pot:.2f}"),
+        ("Passive Modifier", f"{stats.passive_modifier:.2f}"),
         ("Aggro", f"{stats.aggro:.3f}"),
         ("Summon Slots", stats.summon_slot_capacity),
     ]

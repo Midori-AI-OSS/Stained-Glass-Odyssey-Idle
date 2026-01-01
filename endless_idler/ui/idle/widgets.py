@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import random
 
+from collections.abc import Callable
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QProgressBar
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
@@ -27,6 +30,7 @@ class IdleCharacterCard(QFrame):
         idle_state: object,
         rng: random.Random,
         stack_count: int,
+        on_rebirth: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__()
         self.setObjectName("idleCharacterCard")
@@ -35,6 +39,7 @@ class IdleCharacterCard(QFrame):
         self._idle_state = idle_state
         self._rng = rng
         self._stack_count = stack_count
+        self._on_rebirth = on_rebirth
 
         self.setFixedSize(420, 180)
 
@@ -80,6 +85,13 @@ class IdleCharacterCard(QFrame):
         plus.setObjectName("idleStackPlus")
         plus.setVisible(stack_count > 1)
         name_row.addWidget(plus, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        self._rebirth_button = QPushButton("Rebirth")
+        self._rebirth_button.setObjectName("idleRebirthButton")
+        self._rebirth_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._rebirth_button.setVisible(False)
+        self._rebirth_button.clicked.connect(self._request_rebirth)
+        name_row.addWidget(self._rebirth_button, 0, Qt.AlignmentFlag.AlignVCenter)
         name_row.addStretch(1)
 
         self._level_label = QLabel("Level: 1")
@@ -149,6 +161,13 @@ class IdleCharacterCard(QFrame):
         self._hp_bar.setValue(int(hp))
         self._hp_bar.setFormat(self._hp_format(hp=hp, max_hp=max_hp))
 
+        self._rebirth_button.setVisible(level >= 50)
+
+    def _request_rebirth(self) -> None:
+        if self._on_rebirth is None:
+            return
+        self._on_rebirth(self._char_id)
+
 
 class IdleOffsiteCard(QFrame):
     def __init__(
@@ -159,6 +178,7 @@ class IdleOffsiteCard(QFrame):
         idle_state: object,
         rng: random.Random,
         stack_count: int,
+        on_rebirth: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__()
         self.setObjectName("idleOffsiteCard")
@@ -167,6 +187,7 @@ class IdleOffsiteCard(QFrame):
         self._idle_state = idle_state
         self._rng = rng
         self._stack_count = stack_count
+        self._on_rebirth = on_rebirth
 
         self.setFixedSize(220, 96)
 
@@ -213,6 +234,13 @@ class IdleOffsiteCard(QFrame):
         plus.setObjectName("idleStackPlus")
         plus.setVisible(stack_count > 1)
         name_row.addWidget(plus, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        self._rebirth_button = QPushButton("Rebirth")
+        self._rebirth_button.setObjectName("idleRebirthButton")
+        self._rebirth_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._rebirth_button.setVisible(False)
+        self._rebirth_button.clicked.connect(self._request_rebirth)
+        name_row.addWidget(self._rebirth_button, 0, Qt.AlignmentFlag.AlignVCenter)
         name_row.addStretch(1)
 
         self._level_label = QLabel("Level: 1")
@@ -269,3 +297,10 @@ class IdleOffsiteCard(QFrame):
         self._hp_bar.setRange(0, max(1, int(max_hp)))
         self._hp_bar.setValue(int(hp))
         self._hp_bar.setFormat(f"{max(0, int(hp))} / {max(1, int(max_hp))}")
+
+        self._rebirth_button.setVisible(level >= 50)
+
+    def _request_rebirth(self) -> None:
+        if self._on_rebirth is None:
+            return
+        self._on_rebirth(self._char_id)

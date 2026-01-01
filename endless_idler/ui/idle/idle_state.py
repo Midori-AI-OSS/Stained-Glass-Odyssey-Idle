@@ -32,6 +32,7 @@ class IdleGameState(QObject):
         rng: random.Random,
         progress_by_id: dict[str, dict[str, float | int]] | None = None,
         stats_by_id: dict[str, dict[str, float]] | None = None,
+        initial_stats_by_id: dict[str, dict[str, float]] | None = None,
         exp_bonus_until: float = 0.0,
         exp_penalty_until: float = 0.0,
     ) -> None:
@@ -44,6 +45,7 @@ class IdleGameState(QObject):
         self._rng = rng
         self._progress_by_id = progress_by_id or {}
         self._stats_by_id = stats_by_id or {}
+        self._initial_stats_by_id = initial_stats_by_id or {}
         self._exp_bonus_until = float(max(0.0, exp_bonus_until))
         self._exp_penalty_until = float(max(0.0, exp_penalty_until))
         self._time = time.time
@@ -72,11 +74,21 @@ class IdleGameState(QObject):
                         except (TypeError, ValueError):
                             continue
 
+            initial_base_stats: dict[str, float]
+            saved_initial = self._initial_stats_by_id.get(char_id)
+            if isinstance(saved_initial, dict) and saved_initial:
+                initial_base_stats = dict(saved_initial)
+            else:
+                initial_base_stats = dict(base_stats)
+
             base_hp = int(base_stats.get("max_hp", 1000.0)) + (stack - 1) * STACK_HP_BONUS
             saved = self._progress_by_id.get(char_id, {})
             level = 1
             exp = 0.0
             next_exp = 30.0
+            exp_multiplier = 1.0
+            req_multiplier = 1.0
+            rebirths = 0
             death_exp_debuff_stacks = 0
             death_exp_debuff_until = 0.0
             if isinstance(saved, dict):
@@ -92,6 +104,18 @@ class IdleGameState(QObject):
                     next_exp = max(1.0, float(saved.get("next_exp", 30.0)))
                 except (TypeError, ValueError):
                     next_exp = 30.0
+                try:
+                    exp_multiplier = max(0.0, float(saved.get("exp_multiplier", 1.0)))
+                except (TypeError, ValueError):
+                    exp_multiplier = 1.0
+                try:
+                    req_multiplier = max(0.0, float(saved.get("req_multiplier", 1.0)))
+                except (TypeError, ValueError):
+                    req_multiplier = 1.0
+                try:
+                    rebirths = max(0, int(saved.get("rebirths", 0)))
+                except (TypeError, ValueError):
+                    rebirths = 0
                 try:
                     death_exp_debuff_stacks = max(0, int(saved.get("death_exp_debuff_stacks", 0)))
                 except (TypeError, ValueError):
@@ -118,12 +142,13 @@ class IdleGameState(QObject):
                 "hp": max_hp,
                 "max_hp": max_hp,
                 "base_stats": base_stats,
+                "initial_base_stats": initial_base_stats,
                 "stack": stack,
                 "base_aggro": getattr(plugin, "base_aggro", None),
                 "damage_reduction_passes": getattr(plugin, "damage_reduction_passes", None),
-                "exp_multiplier": 1.0,
-                "req_multiplier": 1.0,
-                "rebirths": 0,
+                "exp_multiplier": exp_multiplier,
+                "req_multiplier": req_multiplier,
+                "rebirths": rebirths,
             }
 
             if isinstance(saved, dict):
@@ -143,6 +168,44 @@ class IdleGameState(QObject):
                     self._char_data[char_id]["next_mitigation_gain_level"] = 0
 
             self._ensure_sparse_growth_schedule(char_id)
+
+    def rebirth_character(self, char_id: str) -> bool:
+        data = self._char_data.get(char_id)
+        if not data:
+            return False
+
+        level = max(1, int(data.get("level", 1)))
+        if level < 50:
+            return False
+
+        old_level = level
+        data["level"] = 1
+        data["exp"] = 0.0
+        data["next_vitality_gain_level"] = 0
+        data["next_mitigation_gain_level"] = 0
+
+        initial_base_stats = data.get("initial_base_stats")
+        if isinstance(initial_base_stats, dict) and initial_base_stats:
+            data["base_stats"] = dict(initial_base_stats)
+
+        base_stats = data.get("base_stats")
+        stack = max(1, int(data.get("stack", 1)))
+        intrinsic_hp = 1000
+        if isinstance(base_stats, dict):
+            intrinsic_hp = int(float(base_stats.get("max_hp", 1000.0)))
+        base_hp = intrinsic_hp + (stack - 1) * STACK_HP_BONUS
+        data["max_hp"] = base_hp
+        data["hp"] = base_hp
+        self._ensure_sparse_growth_schedule(char_id)
+
+        bonus = 0.25 * (1 + 0.01 * (old_level - 50))
+        data["exp_multiplier"] = float(max(0.0, float(data.get("exp_multiplier", 1.0)))) + bonus
+        data["req_multiplier"] = float(max(0.0, float(data.get("req_multiplier", 1.0)))) + 0.05
+        data["rebirths"] = max(0, int(data.get("rebirths", 0))) + 1
+
+        req_mult = float(data.get("req_multiplier", 1.0))
+        data["next_exp"] = (1 * 30 * req_mult) * self._rng.uniform(0.95, 1.05)
+        return True
 
     def process_tick(self) -> None:
         self._tick_count += 1
@@ -380,6 +443,18 @@ class IdleGameState(QObject):
             except (TypeError, ValueError):
                 next_exp = 30.0
             try:
+                exp_multiplier = max(0.0, float(data.get("exp_multiplier", 1.0)))
+            except (TypeError, ValueError):
+                exp_multiplier = 1.0
+            try:
+                req_multiplier = max(0.0, float(data.get("req_multiplier", 1.0)))
+            except (TypeError, ValueError):
+                req_multiplier = 1.0
+            try:
+                rebirths = max(0, int(data.get("rebirths", 0)))
+            except (TypeError, ValueError):
+                rebirths = 0
+            try:
                 death_exp_debuff_stacks = max(0, int(data.get("death_exp_debuff_stacks", 0)))
             except (TypeError, ValueError):
                 death_exp_debuff_stacks = 0
@@ -392,6 +467,9 @@ class IdleGameState(QObject):
                 "level": level,
                 "exp": exp,
                 "next_exp": next_exp,
+                "exp_multiplier": exp_multiplier,
+                "req_multiplier": req_multiplier,
+                "rebirths": rebirths,
                 "death_exp_debuff_stacks": death_exp_debuff_stacks,
                 "death_exp_debuff_until": death_exp_debuff_until,
                 "next_vitality_gain_level": max(0, int(data.get("next_vitality_gain_level", 0))),
@@ -403,6 +481,26 @@ class IdleGameState(QObject):
         payload: dict[str, dict[str, float]] = {}
         for char_id, data in self._char_data.items():
             stats = data.get("base_stats")
+            if not isinstance(stats, dict):
+                continue
+            sanitized: dict[str, float] = {}
+            for key, raw in stats.items():
+                if not isinstance(key, str):
+                    continue
+                name = key.strip()
+                if not name:
+                    continue
+                try:
+                    sanitized[name] = float(raw)
+                except (TypeError, ValueError):
+                    continue
+            payload[char_id] = sanitized
+        return payload
+
+    def export_initial_stats(self) -> dict[str, dict[str, float]]:
+        payload: dict[str, dict[str, float]] = {}
+        for char_id, data in self._char_data.items():
+            stats = data.get("initial_base_stats")
             if not isinstance(stats, dict):
                 continue
             sanitized: dict[str, float] = {}

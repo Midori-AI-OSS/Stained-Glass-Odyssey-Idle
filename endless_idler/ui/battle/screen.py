@@ -407,6 +407,7 @@ class BattleScreenWidget(QWidget):
 
                 preserved_progress = dict(save.character_progress)
                 preserved_stats = dict(save.character_stats)
+                preserved_initial_stats = dict(getattr(save, "character_initial_stats", {}) or {})
                 preserved_deaths = dict(getattr(save, "character_deaths", {}) or {})
                 preserved_bonus = float(save.idle_exp_bonus_until)
                 preserved_penalty = float(save.idle_exp_penalty_until)
@@ -417,6 +418,7 @@ class BattleScreenWidget(QWidget):
                 )
                 save.character_progress = preserved_progress
                 save.character_stats = preserved_stats
+                save.character_initial_stats = preserved_initial_stats
                 save.character_deaths = preserved_deaths
                 save.idle_exp_bonus_until = preserved_bonus
                 save.idle_exp_penalty_until = preserved_penalty
