@@ -67,9 +67,20 @@ class IdleCharacterCard(QFrame):
         info_column.setContentsMargins(0, 0, 0, 0)
 
         display_name = getattr(plugin, "display_name", char_id) if plugin else char_id
+        name_row = QHBoxLayout()
+        name_row.setContentsMargins(0, 0, 0, 0)
+        name_row.setSpacing(8)
+        info_column.addLayout(name_row)
+
         self._name_label = QLabel(display_name)
         self._name_label.setObjectName("idleCharName")
-        info_column.addWidget(self._name_label)
+        name_row.addWidget(self._name_label, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        plus = QLabel(f"+{max(0, stack_count - 1)}")
+        plus.setObjectName("idleStackPlus")
+        plus.setVisible(stack_count > 1)
+        name_row.addWidget(plus, 0, Qt.AlignmentFlag.AlignVCenter)
+        name_row.addStretch(1)
 
         self._level_label = QLabel("Level: 1")
         self._level_label.setObjectName("idleCharLevel")
@@ -181,7 +192,17 @@ class IdleOffsiteCard(QFrame):
 
         self._name_label = QLabel(display_name)
         self._name_label.setObjectName("idleOffsiteName")
-        body.addWidget(self._name_label)
+        name_row = QHBoxLayout()
+        name_row.setContentsMargins(0, 0, 0, 0)
+        name_row.setSpacing(6)
+        body.addLayout(name_row)
+
+        name_row.addWidget(self._name_label, 0, Qt.AlignmentFlag.AlignVCenter)
+        plus = QLabel(f"+{max(0, stack_count - 1)}")
+        plus.setObjectName("idleStackPlus")
+        plus.setVisible(stack_count > 1)
+        name_row.addWidget(plus, 0, Qt.AlignmentFlag.AlignVCenter)
+        name_row.addStretch(1)
 
         self._level_label = QLabel("Level: 1")
         self._level_label.setObjectName("idleOffsiteLevel")

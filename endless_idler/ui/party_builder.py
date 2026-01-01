@@ -21,12 +21,12 @@ from endless_idler.characters.plugins import discover_character_plugins
 from endless_idler.save import (
     BAR_SLOTS,
     DEFAULT_CHARACTER_COST,
-    DEFAULT_RUN_TOKENS,
     OFFSITE_SLOTS,
     ONSITE_SLOTS,
     STANDBY_SLOTS,
     RunSave,
     SaveManager,
+    new_run_save,
     next_party_level_up_cost,
 )
 from endless_idler.ui.party_builder_bar import CharacterBar
@@ -38,10 +38,6 @@ from endless_idler.ui.party_builder_sell import SellZone
 from endless_idler.ui.party_builder_shop_tile import StandbyShopTile
 from endless_idler.ui.party_builder_slot import DropSlot
 from endless_idler.ui.party_hp_bar import PartyHpHeader
-
-from endless_idler.ui.battle.sim import apply_offsite_stat_share
-from endless_idler.ui.battle.sim import build_party
-from endless_idler.ui.battle.sim import build_reserves
 
 
 class PartyBuilderWindow(QMainWindow):
@@ -203,13 +199,10 @@ class PartyBuilderWidget(QWidget):
         self._set_shop_clearance_height(self._char_bar.sizeHint().height() + 12)
 
     def _new_run_save(self) -> RunSave:
-        bar: list[str | None] = [None] * BAR_SLOTS
-        if self._plugins:
-            count = min(BAR_SLOTS, len(self._plugins))
-            chosen = [plugin.char_id for plugin in self._rng.sample(self._plugins, k=count)]
-            bar[: len(chosen)] = chosen
-
-        return RunSave(tokens=DEFAULT_RUN_TOKENS, bar=bar)
+        return new_run_save(
+            available_char_ids=[plugin.char_id for plugin in self._plugins],
+            rng=self._rng,
+        )
 
     def _make_onsite_row(self) -> QHBoxLayout:
         row = QHBoxLayout()
@@ -602,7 +595,16 @@ class PartyBuilderWidget(QWidget):
         if result != QMessageBox.StandardButton.Yes:
             return
 
+        preserved_progress = dict(self._save.character_progress)
+        preserved_stats = dict(self._save.character_stats)
+        preserved_bonus = float(self._save.idle_exp_bonus_until)
+        preserved_penalty = float(self._save.idle_exp_penalty_until)
+
         self._save = self._new_run_save()
+        self._save.character_progress = preserved_progress
+        self._save.character_stats = preserved_stats
+        self._save.idle_exp_bonus_until = preserved_bonus
+        self._save.idle_exp_penalty_until = preserved_penalty
         self._save_manager.save(self._save)
 
         self._set_sell_zones_active(False)
@@ -610,6 +612,7 @@ class PartyBuilderWidget(QWidget):
         self._refresh_party_level()
         self._load_slots_from_save()
         self._refresh_action_bars_state()
+        self._refresh_party_hp()
         if self._char_bar is not None:
             self._char_bar.set_char_ids(self._save.bar)
 
@@ -752,40 +755,11 @@ class PartyBuilderWidget(QWidget):
     def _refresh_party_hp(self) -> None:
         if self._party_hp_header is None:
             return
-        if not self._shop_open:
-            self._party_hp_header.setVisible(False)
-            return
-
-        onsite = [item for item in self._save.onsite if item]
-        if not onsite:
-            self._party_hp_header.set_hp(current=0, max_hp=0)
-            self._party_hp_header.setVisible(False)
-            return
-
-        reserves_ids = [item for item in self._save.offsite if item]
-        try:
-            party = build_party(
-                onsite=onsite,
-                party_level=int(self._save.party_level),
-                stacks=dict(self._save.stacks),
-                plugins_by_id=self._plugin_by_id,
-                rng=self._rng,
-            )
-            reserves = build_reserves(
-                char_ids=reserves_ids,
-                party_level=int(self._save.party_level),
-                stacks=dict(self._save.stacks),
-                plugins_by_id=self._plugin_by_id,
-                rng=self._rng,
-                limit=6,
-            )
-            apply_offsite_stat_share(party=party, reserves=reserves, share=0.10)
-            total_max = sum(max(0, int(combatant.max_hp)) for combatant in party)
-        except Exception:
-            total_max = 0
-
         self._party_hp_header.setVisible(True)
-        self._party_hp_header.set_hp(current=total_max, max_hp=total_max)
+        self._party_hp_header.set_hp(
+            current=int(getattr(self._save, "party_hp_current", 0)),
+            max_hp=int(getattr(self._save, "party_hp_max", 0)),
+        )
 
     def _refresh_action_bars_state(self) -> None:
         has_onsite = any(item for item in self._save.onsite if item)

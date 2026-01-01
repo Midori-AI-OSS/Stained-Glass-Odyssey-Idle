@@ -92,8 +92,12 @@ def build_party(
     stacks: dict[str, int],
     plugins_by_id: dict[str, CharacterPlugin],
     rng: random.Random,
+    progress_by_id: dict[str, dict[str, float | int]] | None = None,
+    stats_by_id: dict[str, dict[str, float]] | None = None,
 ) -> list[Combatant]:
     party: list[Combatant] = []
+    progress_by_id = progress_by_id or {}
+    stats_by_id = stats_by_id or {}
     for char_id in onsite[:4]:
         plugin = plugins_by_id.get(char_id)
         name = plugin.display_name if plugin else char_id
@@ -102,11 +106,21 @@ def build_party(
 
         stats = Stats()
         scale = party_scaling(party_level=party_level, stars=stars, stacks=stack_count)
-        apply_scaled_bases(stats, base_stats=getattr(plugin, "base_stats", None), scale=scale, spd=2 + stars)
+        apply_scaled_bases(
+            stats,
+            base_stats=_merged_base_stats(
+                plugin_base_stats=getattr(plugin, "base_stats", None),
+                saved_base_stats=stats_by_id.get(char_id),
+            ),
+            scale=scale,
+            spd=2 + stars,
+        )
         stats.damage_type = load_damage_type(resolve_damage_type_id(plugin, rng))
         if plugin:
             _apply_plugin_overrides(stats, plugin=plugin)
-        stats.level = party_level
+        char_level, char_exp = _progress_level_and_exp(progress_by_id.get(char_id))
+        stats.level = char_level
+        stats.exp = char_exp
         stats.hp = stats.max_hp
         party.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
     return party
@@ -158,10 +172,14 @@ def build_reserves(
     plugins_by_id: dict[str, CharacterPlugin],
     rng: random.Random,
     limit: int = 6,
+    progress_by_id: dict[str, dict[str, float | int]] | None = None,
+    stats_by_id: dict[str, dict[str, float]] | None = None,
 ) -> list[Combatant]:
     reserves: list[Combatant] = []
     party_level = max(1, int(party_level))
     limit = max(0, int(limit))
+    progress_by_id = progress_by_id or {}
+    stats_by_id = stats_by_id or {}
     seen: set[str] = set()
     for char_id in [str(item) for item in char_ids if item]:
         if limit and len(reserves) >= limit:
@@ -177,11 +195,21 @@ def build_reserves(
 
         stats = Stats()
         scale = party_scaling(party_level=party_level, stars=stars, stacks=stack_count)
-        apply_scaled_bases(stats, base_stats=getattr(plugin, "base_stats", None), scale=scale, spd=2 + stars)
+        apply_scaled_bases(
+            stats,
+            base_stats=_merged_base_stats(
+                plugin_base_stats=getattr(plugin, "base_stats", None),
+                saved_base_stats=stats_by_id.get(char_id),
+            ),
+            scale=scale,
+            spd=2 + stars,
+        )
         stats.damage_type = load_damage_type(resolve_damage_type_id(plugin, rng))
         if plugin:
             _apply_plugin_overrides(stats, plugin=plugin)
-        stats.level = party_level
+        char_level, char_exp = _progress_level_and_exp(progress_by_id.get(char_id))
+        stats.level = char_level
+        stats.exp = char_exp
         stats.hp = stats.max_hp
         reserves.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
     return reserves
@@ -256,6 +284,32 @@ def _apply_plugin_overrides(stats: Stats, *, plugin: CharacterPlugin) -> None:
     passes = getattr(plugin, "damage_reduction_passes", None)
     if isinstance(passes, int):
         stats.damage_reduction_passes = int(passes)
+
+
+def _merged_base_stats(*, plugin_base_stats: dict[str, float] | None, saved_base_stats: dict[str, float] | None) -> dict[str, float]:
+    base_stats: dict[str, float] = dict(plugin_base_stats) if isinstance(plugin_base_stats, dict) else {}
+    if isinstance(saved_base_stats, dict):
+        for key, raw in saved_base_stats.items():
+            if key in base_stats:
+                try:
+                    base_stats[key] = float(raw)  # type: ignore[arg-type]
+                except (TypeError, ValueError):
+                    continue
+    return base_stats
+
+
+def _progress_level_and_exp(progress: dict[str, float | int] | None) -> tuple[int, int]:
+    if not isinstance(progress, dict):
+        return 1, 0
+    try:
+        level = max(1, int(progress.get("level", 1)))
+    except (TypeError, ValueError):
+        level = 1
+    try:
+        exp = max(0, int(float(progress.get("exp", 0.0))))
+    except (TypeError, ValueError):
+        exp = 0
+    return level, exp
 
 
 def choose_weighted_attacker(
