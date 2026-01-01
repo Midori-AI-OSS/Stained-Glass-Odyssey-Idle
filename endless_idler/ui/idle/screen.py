@@ -16,6 +16,8 @@ from PySide6.QtWidgets import QWidget
 from PySide6.QtWidgets import QFrame
 
 from endless_idler.characters.plugins import discover_character_plugins
+from endless_idler.run_rules import apply_idle_party_heal
+from endless_idler.run_rules import start_idle_heal_timer
 from endless_idler.save import OFFSITE_SLOTS
 from endless_idler.save import ONSITE_SLOTS
 from endless_idler.save import RunSave
@@ -24,6 +26,7 @@ from endless_idler.ui.idle.widgets import IdleCharacterCard
 from endless_idler.ui.idle.widgets import IdleArena
 from endless_idler.ui.idle.widgets import IdleOffsiteCard
 from endless_idler.ui.idle.idle_state import IdleGameState
+from endless_idler.ui.party_hp_bar import PartyHpHeader
 
 
 class IdleScreenWidget(QWidget):
@@ -63,6 +66,10 @@ class IdleScreenWidget(QWidget):
                 offsite=[str(item) if item else None for item in list(offsite_raw)[:OFFSITE_SLOTS]],
                 stacks=dict(self._stacks),
             )
+            start_idle_heal_timer(self._save)
+            self._save_manager.save(self._save)
+        else:
+            start_idle_heal_timer(self._save)
             self._save_manager.save(self._save)
 
         self._plugins = discover_character_plugins()
@@ -104,6 +111,14 @@ class IdleScreenWidget(QWidget):
         title.setObjectName("battleTitle")
         header.addWidget(title, 0, Qt.AlignmentFlag.AlignCenter)
         header.addStretch(1)
+
+        party_hp = PartyHpHeader()
+        party_hp.set_hp(
+            current=int(getattr(self._save, "party_hp_current", 0)),
+            max_hp=int(getattr(self._save, "party_hp_max", 0)),
+        )
+        header.addWidget(party_hp, 0, Qt.AlignmentFlag.AlignVCenter)
+        self._party_hp_header = party_hp
 
         arena = IdleArena()
         self._arena = arena
@@ -189,6 +204,14 @@ class IdleScreenWidget(QWidget):
         self._idle_timer.timeout.connect(self._idle_state.process_tick)
         self._idle_timer.start(100)
 
+    def _refresh_party_hp(self) -> None:
+        if getattr(self, "_party_hp_header", None) is None:
+            return
+        self._party_hp_header.set_hp(
+            current=int(getattr(self._save, "party_hp_current", 0)),
+            max_hp=int(getattr(self._save, "party_hp_max", 0)),
+        )
+
     def _make_mods_panel(self) -> QFrame:
         panel = QFrame()
         panel.setObjectName("idleModsPanel")
@@ -264,6 +287,14 @@ class IdleScreenWidget(QWidget):
     def _on_tick(self, tick_count: int) -> None:
         for card in self._character_cards:
             card.update_display()
+        healed = 0
+        try:
+            healed = apply_idle_party_heal(self._save)
+        except Exception:
+            healed = 0
+        if healed > 0:
+            self._save_manager.save(self._save)
+            self._refresh_party_hp()
 
     def _finish(self) -> None:
         if self._idle_timer:

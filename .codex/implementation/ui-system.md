@@ -12,3 +12,9 @@ The PySide6 UI uses a stained-glass inspired theme for the main menu:
 
 - Battle screen widget: `endless_idler/ui/battle/screen.py` (`BattleScreenWidget`)
 - Launched from the party builder "Fight" bar and returns to the party builder when the battle ends.
+
+## Party HP (shared run stat)
+
+- Party HP UI: `endless_idler/ui/party_hp_bar.py` (`PartyHpHeader`) is shown in Party Builder, Battle, and Idle.
+- Party HP rules + idle regen: `endless_idler/run_rules.py`.
+- Party HP persistence + fight number: `endless_idler/save.py` (`RunSave`).

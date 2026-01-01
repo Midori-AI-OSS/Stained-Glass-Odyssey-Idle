@@ -178,6 +178,7 @@ class MainMenuWindow(QMainWindow):
     def _close_idle_screen(self) -> None:
         if self._party_builder is not None:
             self._stack.setCurrentWidget(self._party_builder)
+            self._party_builder.reload_save()
         if self._idle_screen is None:
             return
         self._cleanup_widget(self._idle_screen)

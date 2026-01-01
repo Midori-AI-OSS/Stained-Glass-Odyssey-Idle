@@ -534,7 +534,17 @@ QFrame#idleCharacterCard {
     border: 1px solid rgba(255, 255, 255, 18);
 }
 
+QFrame#idleOffsiteCard {
+    background-color: rgba(255, 255, 255, 10);
+    border: 1px solid rgba(255, 255, 255, 18);
+}
+
 QLabel#idlePortrait {
+    background-color: rgba(0, 0, 0, 35);
+    border: 1px solid rgba(255, 255, 255, 20);
+}
+
+QLabel#idleOffsitePortrait {
     background-color: rgba(0, 0, 0, 35);
     border: 1px solid rgba(255, 255, 255, 20);
 }
@@ -542,6 +552,18 @@ QLabel#idlePortrait {
 QLabel#idleCharName {
     color: rgba(255, 255, 255, 235);
     font-size: 13px;
+    font-weight: 700;
+}
+
+QLabel#idleOffsiteName {
+    color: rgba(255, 255, 255, 235);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+QLabel#idleStackPlus {
+    color: rgba(255, 255, 255, 170);
+    font-size: 11px;
     font-weight: 700;
 }
 

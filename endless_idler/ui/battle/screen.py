@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
 from endless_idler.characters.plugins import discover_character_plugins
+from endless_idler.run_rules import apply_battle_result
 from endless_idler.ui.battle.colors import color_for_damage_type_id
 from endless_idler.ui.battle.sim import Combatant
 from endless_idler.ui.battle.sim import apply_offsite_stat_share
@@ -27,8 +28,10 @@ from endless_idler.ui.battle.stat_bars import CombatantStatBars
 from endless_idler.ui.battle.stat_bars import compute_stat_maxima
 from endless_idler.ui.battle.widgets import Arena
 from endless_idler.ui.battle.widgets import CombatantCard
+from endless_idler.ui.party_hp_bar import PartyHpHeader
 from endless_idler.save import RunSave
 from endless_idler.save import SaveManager
+from endless_idler.save import new_run_save
 
 
 DEATH_EXP_DEBUFF_DURATION_SECONDS = 60 * 60
@@ -66,12 +69,18 @@ class BattleScreenWidget(QWidget):
         self._plugins = discover_character_plugins()
         self._plugin_by_id = {plugin.char_id: plugin for plugin in self._plugins}
 
+        self._save_manager = SaveManager()
+        self._save = self._save_manager.load() or RunSave()
+        self._fight_number = max(1, int(getattr(self._save, "fight_number", 1)))
+
         self._party: list[Combatant] = build_party(
             onsite=onsite,
             party_level=self._party_level,
             stacks=self._stacks,
             plugins_by_id=self._plugin_by_id,
             rng=self._rng,
+            progress_by_id=dict(self._save.character_progress),
+            stats_by_id=dict(self._save.character_stats),
         )
         self._reserves: list[Combatant] = build_reserves(
             char_ids=offsite,
@@ -80,11 +89,15 @@ class BattleScreenWidget(QWidget):
             plugins_by_id=self._plugin_by_id,
             rng=self._rng,
             limit=6,
+            progress_by_id=dict(self._save.character_progress),
+            stats_by_id=dict(self._save.character_stats),
         )
         apply_offsite_stat_share(party=self._party, reserves=self._reserves, share=0.10)
+
+        foe_level = max(1, int(self._party_level * float(self._fight_number) * 1.3))
         self._foes: list[Combatant] = build_foes(
             exclude_ids=set(onsite + offsite),
-            party_level=self._party_level,
+            party_level=foe_level,
             foe_count=5,
             plugins=self._plugins,
             rng=self._rng,
@@ -119,6 +132,14 @@ class BattleScreenWidget(QWidget):
         title.setObjectName("battleTitle")
         header.addWidget(title, 0, Qt.AlignmentFlag.AlignCenter)
         header.addStretch(1)
+
+        party_hp = PartyHpHeader()
+        party_hp.set_hp(
+            current=int(getattr(self._save, "party_hp_current", 0)),
+            max_hp=int(getattr(self._save, "party_hp_max", 0)),
+        )
+        header.addWidget(party_hp, 0, Qt.AlignmentFlag.AlignVCenter)
+        self._party_hp_header = party_hp
 
         toggle_stats = QPushButton("👁")
         toggle_stats.setObjectName("battleToggleStatBars")
@@ -261,6 +282,18 @@ class BattleScreenWidget(QWidget):
         self._battle_timer.timeout.connect(self._step_battle)
         self._battle_timer.start()
 
+    def _refresh_party_hp(self) -> None:
+        if getattr(self, "_party_hp_header", None) is None:
+            return
+        try:
+            save = self._save_manager.load() or self._save or RunSave()
+        except Exception:
+            save = self._save
+        self._party_hp_header.set_hp(
+            current=int(getattr(save, "party_hp_current", 0)),
+            max_hp=int(getattr(save, "party_hp_max", 0)),
+        )
+
     def _step_battle(self) -> None:
         if self._battle_over:
             return
@@ -341,6 +374,8 @@ class BattleScreenWidget(QWidget):
 
         party_alive = any(c.stats.hp > 0 for c in self._party)
         foes_alive = any(c.stats.hp > 0 for c in self._foes)
+        victory = bool(party_alive and not foes_alive)
+        defeat = bool(foes_alive and not party_alive)
         if party_alive and not foes_alive:
             self._award_gold(self._foe_kills)
             self._set_status("Victory")
@@ -350,6 +385,34 @@ class BattleScreenWidget(QWidget):
             self._apply_idle_exp_penalty()
         else:
             self._set_status("Over")
+
+        try:
+            save = self._save_manager.load() or self._save or RunSave()
+            should_reset = False
+            if victory:
+                should_reset = apply_battle_result(save, victory=True)
+            elif defeat:
+                should_reset = apply_battle_result(save, victory=False)
+            if should_reset:
+                preserved_progress = dict(save.character_progress)
+                preserved_stats = dict(save.character_stats)
+                preserved_bonus = float(save.idle_exp_bonus_until)
+                preserved_penalty = float(save.idle_exp_penalty_until)
+
+                save = new_run_save(
+                    available_char_ids=[plugin.char_id for plugin in self._plugins],
+                    rng=self._rng,
+                )
+                save.character_progress = preserved_progress
+                save.character_stats = preserved_stats
+                save.idle_exp_bonus_until = preserved_bonus
+                save.idle_exp_penalty_until = preserved_penalty
+
+            self._save_manager.save(save)
+            self._save = save
+            self._refresh_party_hp()
+        except Exception:
+            pass
 
         try:
             self._battle_timer.stop()
