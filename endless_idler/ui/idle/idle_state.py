@@ -11,6 +11,10 @@ LOSS_EXP_MULTIPLIER = 0.5
 WIN_EXP_MULTIPLIER = 4.0
 OFFSITE_EXP_SHARE_PER_CHAR = 0.01
 STACK_HP_BONUS = 100
+DEATH_EXP_DEBUFF_DURATION_SECONDS = 60 * 60
+DEATH_EXP_DEBUFF_PER_STACK = 0.05
+SHARED_EXP_ONSITE_MULTIPLIER = 0.75
+SHARED_EXP_OFFSITE_MULTIPLIER = 1.5
 
 
 class IdleGameState(QObject):
@@ -72,6 +76,8 @@ class IdleGameState(QObject):
             level = 1
             exp = 0.0
             next_exp = 30.0
+            death_exp_debuff_stacks = 0
+            death_exp_debuff_until = 0.0
             if isinstance(saved, dict):
                 try:
                     level = max(1, int(saved.get("level", 1)))
@@ -85,12 +91,27 @@ class IdleGameState(QObject):
                     next_exp = max(1.0, float(saved.get("next_exp", 30.0)))
                 except (TypeError, ValueError):
                     next_exp = 30.0
+                try:
+                    death_exp_debuff_stacks = max(0, int(saved.get("death_exp_debuff_stacks", 0)))
+                except (TypeError, ValueError):
+                    death_exp_debuff_stacks = 0
+                try:
+                    death_exp_debuff_until = float(max(0.0, float(saved.get("death_exp_debuff_until", 0.0))))
+                except (TypeError, ValueError):
+                    death_exp_debuff_until = 0.0
+
+            now = float(self._time())
+            if death_exp_debuff_until and now >= death_exp_debuff_until:
+                death_exp_debuff_stacks = 0
+                death_exp_debuff_until = 0.0
 
             max_hp = base_hp + max(0, level - 1) * 10
             self._char_data[char_id] = {
                 "level": level,
                 "exp": exp,
                 "next_exp": next_exp,
+                "death_exp_debuff_stacks": death_exp_debuff_stacks,
+                "death_exp_debuff_until": death_exp_debuff_until,
                 "hp": max_hp,
                 "max_hp": max_hp,
                 "base_stats": base_stats,
@@ -106,30 +127,26 @@ class IdleGameState(QObject):
         self._tick_count += 1
         self.tick_update.emit(self._tick_count)
 
-        shared_bonus = 0.0
-        if self._shared_exp:
-            for char_id in self._char_ids:
-                data = self._char_data.get(char_id)
-                if not data:
-                    continue
-                shared_bonus += data["exp_multiplier"] * 0.01
+        onsite_shared_mult = SHARED_EXP_ONSITE_MULTIPLIER if self._shared_exp else 1.0
+        offsite_shared_mult = SHARED_EXP_OFFSITE_MULTIPLIER if self._shared_exp else 1.0
 
         exp_multiplier = self._current_exp_multiplier()
-        total_onsite_gain = 0.0
+        total_onsite_gain_for_offsite = 0.0
         for char_id in self._char_ids:
             data = self._char_data.get(char_id)
             if not data:
                 continue
 
             exp_mult = data["exp_multiplier"]
-            gain = exp_mult + shared_bonus
+            gain = exp_mult
 
             if self._risk_reward_enabled:
                 gain *= (self._risk_reward_level + 1)
 
             gain *= exp_multiplier
-            total_onsite_gain += gain
-            data["exp"] += gain
+            gain *= self._death_exp_debuff_multiplier(data)
+            total_onsite_gain_for_offsite += gain
+            data["exp"] += gain * onsite_shared_mult
 
             regain = 0.1 if not self._shared_exp else 0.5
             data["hp"] = min(data["max_hp"], data["hp"] + regain)
@@ -141,16 +158,38 @@ class IdleGameState(QObject):
             if data["exp"] >= data["next_exp"]:
                 self._level_up(char_id)
 
-        if self._offsite_ids and total_onsite_gain > 0:
-            offsite_gain = float(total_onsite_gain) * float(self._offsite_exp_share)
+        if self._offsite_ids and total_onsite_gain_for_offsite > 0:
+            offsite_gain = float(total_onsite_gain_for_offsite) * float(self._offsite_exp_share) * offsite_shared_mult
             for char_id in self._offsite_ids:
                 data = self._char_data.get(char_id)
                 if not data:
                     continue
-                data["exp"] += offsite_gain
+                data["exp"] += offsite_gain * self._death_exp_debuff_multiplier(data)
                 data["hp"] = min(data["max_hp"], data["hp"] + 0.5)
                 if data["exp"] >= data["next_exp"]:
                     self._level_up(char_id)
+
+    def _death_exp_debuff_multiplier(self, data: dict) -> float:
+        now = float(self._time())
+        try:
+            until = float(max(0.0, float(data.get("death_exp_debuff_until", 0.0))))
+        except (TypeError, ValueError):
+            until = 0.0
+        try:
+            stacks = max(0, int(data.get("death_exp_debuff_stacks", 0)))
+        except (TypeError, ValueError):
+            stacks = 0
+
+        if until and now >= until:
+            data["death_exp_debuff_stacks"] = 0
+            data["death_exp_debuff_until"] = 0.0
+            return 1.0
+
+        if not until or stacks <= 0:
+            return 1.0
+
+        penalty = DEATH_EXP_DEBUFF_PER_STACK * stacks
+        return max(0.0, 1.0 - penalty)
 
     def _current_exp_multiplier(self) -> float:
         now = float(self._time())
@@ -236,8 +275,22 @@ class IdleGameState(QObject):
                 next_exp = max(1.0, float(data.get("next_exp", 30.0)))
             except (TypeError, ValueError):
                 next_exp = 30.0
+            try:
+                death_exp_debuff_stacks = max(0, int(data.get("death_exp_debuff_stacks", 0)))
+            except (TypeError, ValueError):
+                death_exp_debuff_stacks = 0
+            try:
+                death_exp_debuff_until = float(max(0.0, float(data.get("death_exp_debuff_until", 0.0))))
+            except (TypeError, ValueError):
+                death_exp_debuff_until = 0.0
 
-            payload[char_id] = {"level": level, "exp": exp, "next_exp": next_exp}
+            payload[char_id] = {
+                "level": level,
+                "exp": exp,
+                "next_exp": next_exp,
+                "death_exp_debuff_stacks": death_exp_debuff_stacks,
+                "death_exp_debuff_until": death_exp_debuff_until,
+            }
         return payload
 
     def export_character_stats(self) -> dict[str, dict[str, float]]:

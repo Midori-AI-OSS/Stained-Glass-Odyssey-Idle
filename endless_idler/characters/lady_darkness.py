@@ -7,7 +7,7 @@ from plugins.damage_types._base import DamageTypeBase
 from plugins.damage_types.dark import Dark
 
 
-placement = "both"
+placement = "onsite"
 
 @dataclass
 class LadyDarkness(PlayerBase):

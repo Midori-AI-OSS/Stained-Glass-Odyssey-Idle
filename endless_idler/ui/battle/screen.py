@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QWidget
 from endless_idler.characters.plugins import discover_character_plugins
 from endless_idler.ui.battle.colors import color_for_damage_type_id
 from endless_idler.ui.battle.sim import Combatant
+from endless_idler.ui.battle.sim import apply_offsite_stat_share
 from endless_idler.ui.battle.sim import build_reserves
 from endless_idler.ui.battle.sim import build_foes
 from endless_idler.ui.battle.sim import build_party
@@ -28,6 +29,9 @@ from endless_idler.ui.battle.widgets import Arena
 from endless_idler.ui.battle.widgets import CombatantCard
 from endless_idler.save import RunSave
 from endless_idler.save import SaveManager
+
+
+DEATH_EXP_DEBUFF_DURATION_SECONDS = 60 * 60
 
 
 class BattleScreenWidget(QWidget):
@@ -77,6 +81,7 @@ class BattleScreenWidget(QWidget):
             rng=self._rng,
             limit=6,
         )
+        apply_offsite_stat_share(party=self._party, reserves=self._reserves, share=0.10)
         self._foes: list[Combatant] = build_foes(
             exclude_ids=set(onsite + offsite),
             party_level=self._party_level,
@@ -305,6 +310,8 @@ class BattleScreenWidget(QWidget):
             stat_bars.refresh()
         if target.stats.hp <= 0:
             self._set_status(f"{target.name} fell!")
+            if target in self._party:
+                self._apply_death_exp_debuff(target.char_id)
 
         if self._is_over():
             self._on_battle_over()
@@ -357,6 +364,38 @@ class BattleScreenWidget(QWidget):
             now = float(time.time())
             current = float(max(0.0, getattr(save, key, 0.0)))
             setattr(save, key, max(current, now) + max(0, int(seconds)))
+            manager.save(save)
+        except Exception:
+            return
+
+    def _apply_death_exp_debuff(self, char_id: str) -> None:
+        char_id = str(char_id or "").strip()
+        if not char_id:
+            return
+
+        try:
+            manager = SaveManager()
+            save = manager.load() or RunSave()
+            progress = save.character_progress.get(char_id)
+            if not isinstance(progress, dict):
+                progress = {"level": 1, "exp": 0.0, "next_exp": 30.0}
+                save.character_progress[char_id] = progress
+
+            now = float(time.time())
+            try:
+                stacks = max(0, int(progress.get("death_exp_debuff_stacks", 0)))
+            except (TypeError, ValueError):
+                stacks = 0
+            try:
+                until = float(max(0.0, float(progress.get("death_exp_debuff_until", 0.0))))
+            except (TypeError, ValueError):
+                until = 0.0
+
+            if until and now >= until:
+                stacks = 0
+
+            progress["death_exp_debuff_stacks"] = stacks + 1
+            progress["death_exp_debuff_until"] = now + DEATH_EXP_DEBUFF_DURATION_SECONDS
             manager.save(save)
         except Exception:
             return
