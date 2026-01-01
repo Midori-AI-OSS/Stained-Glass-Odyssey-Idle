@@ -8,7 +8,7 @@ from plugins.damage_types._base import DamageTypeBase
 from plugins.damage_types.lightning import Lightning
 
 
-placement = "both"
+placement = "offsite"
 
 @dataclass
 class LadyEcho(PlayerBase):
