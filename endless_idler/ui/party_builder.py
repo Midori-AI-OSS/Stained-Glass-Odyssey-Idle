@@ -37,6 +37,11 @@ from endless_idler.ui.party_builder_planes import PulsingPlane
 from endless_idler.ui.party_builder_sell import SellZone
 from endless_idler.ui.party_builder_shop_tile import StandbyShopTile
 from endless_idler.ui.party_builder_slot import DropSlot
+from endless_idler.ui.party_hp_bar import PartyHpHeader
+
+from endless_idler.ui.battle.sim import apply_offsite_stat_share
+from endless_idler.ui.battle.sim import build_party
+from endless_idler.ui.battle.sim import build_reserves
 
 
 class PartyBuilderWindow(QMainWindow):
@@ -73,6 +78,7 @@ class PartyBuilderWidget(QWidget):
         self._shop_clearance: QWidget | None = None
         self._fight_bar: FightBar | None = None
         self._idle_bar: IdleBar | None = None
+        self._party_hp_header: PartyHpHeader | None = None
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 16, 16, 16)
@@ -80,24 +86,28 @@ class PartyBuilderWidget(QWidget):
         self.setLayout(root)
         self._root_layout = root
 
-        header = QHBoxLayout()
+        header = QGridLayout()
         header.setContentsMargins(0, 0, 0, 0)
-        header.setSpacing(10)
+        header.setHorizontalSpacing(10)
+        header.setVerticalSpacing(0)
         root.addLayout(header)
 
         back = QPushButton("Back")
         back.setObjectName("partyBackButton")
         back.setCursor(Qt.CursorShape.PointingHandCursor)
         back.clicked.connect(self.back_requested.emit)
-        header.addWidget(back, 0, Qt.AlignmentFlag.AlignLeft)
+        header.addWidget(back, 0, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
-        header.addStretch(1)
+        party_hp = PartyHpHeader()
+        self._party_hp_header = party_hp
+        header.addWidget(party_hp, 0, 1, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
+        header.setColumnStretch(1, 1)
 
         reset = QPushButton("Reset")
         reset.setObjectName("partyResetButton")
         reset.setCursor(Qt.CursorShape.PointingHandCursor)
         reset.clicked.connect(self._reset_run)
-        header.addWidget(reset, 0, Qt.AlignmentFlag.AlignRight)
+        header.addWidget(reset, 0, 2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         self._char_bar: CharacterBar | None = None
         self._token_label: QLabel | None = None
@@ -124,6 +134,7 @@ class PartyBuilderWidget(QWidget):
 
         self._refresh_tokens()
         self._load_slots_from_save()
+        self._refresh_party_hp()
         self._refresh_action_bars_state()
 
     def _maybe_build_char_bar(self) -> None:
@@ -156,6 +167,7 @@ class PartyBuilderWidget(QWidget):
         self._set_shop_clearance_height(0)
         if self._shop_tile is not None:
             self._shop_tile.set_open(False)
+        self._refresh_party_hp()
 
     def _set_shop_open(self, open_: bool) -> None:
         self._shop_open = open_
@@ -175,6 +187,7 @@ class PartyBuilderWidget(QWidget):
 
         if open_:
             self._maybe_build_char_bar()
+        self._refresh_party_hp()
 
     def _set_shop_clearance_height(self, height: int) -> None:
         if self._shop_clearance is None:
@@ -712,6 +725,7 @@ class PartyBuilderWidget(QWidget):
         self._refresh_standby_slots()
         self._save_manager.save(self._save)
         self._refresh_action_bars_state()
+        self._refresh_party_hp()
         if self._char_bar is not None:
             self._char_bar.refresh_stack_badges()
 
@@ -734,6 +748,44 @@ class PartyBuilderWidget(QWidget):
     def _refresh_tokens(self) -> None:
         if self._shop_tile is not None:
             self._shop_tile.set_tokens(self._save.tokens)
+
+    def _refresh_party_hp(self) -> None:
+        if self._party_hp_header is None:
+            return
+        if not self._shop_open:
+            self._party_hp_header.setVisible(False)
+            return
+
+        onsite = [item for item in self._save.onsite if item]
+        if not onsite:
+            self._party_hp_header.set_hp(current=0, max_hp=0)
+            self._party_hp_header.setVisible(False)
+            return
+
+        reserves_ids = [item for item in self._save.offsite if item]
+        try:
+            party = build_party(
+                onsite=onsite,
+                party_level=int(self._save.party_level),
+                stacks=dict(self._save.stacks),
+                plugins_by_id=self._plugin_by_id,
+                rng=self._rng,
+            )
+            reserves = build_reserves(
+                char_ids=reserves_ids,
+                party_level=int(self._save.party_level),
+                stacks=dict(self._save.stacks),
+                plugins_by_id=self._plugin_by_id,
+                rng=self._rng,
+                limit=6,
+            )
+            apply_offsite_stat_share(party=party, reserves=reserves, share=0.10)
+            total_max = sum(max(0, int(combatant.max_hp)) for combatant in party)
+        except Exception:
+            total_max = 0
+
+        self._party_hp_header.setVisible(True)
+        self._party_hp_header.set_hp(current=total_max, max_hp=total_max)
 
     def _refresh_action_bars_state(self) -> None:
         has_onsite = any(item for item in self._save.onsite if item)
@@ -773,3 +825,13 @@ class PartyBuilderWidget(QWidget):
             "stacks": dict(self._save.stacks),
         }
         self.idle_requested.emit(payload)
+
+    def reload_save(self) -> None:
+        try:
+            self._save = self._save_manager.load() or self._save
+        except Exception:
+            return
+        self._refresh_tokens()
+        self._refresh_party_level()
+        self._refresh_action_bars_state()
+        self._refresh_party_hp()
