@@ -114,8 +114,11 @@ class IdleCharacterCard(QFrame):
     def _hp_format(self, *, hp: float, max_hp: float) -> str:
         return f"{max(0, int(hp))} / {max(1, int(max_hp))}"
 
-    def _exp_format(self, *, exp: float, next_exp: float) -> str:
-        return f"EXP {max(0, int(exp))} / {max(1, int(next_exp))}"
+    def _exp_format(self, *, exp: float, next_exp: float, gain_per_second: float) -> str:
+        rate = float(gain_per_second)
+        if rate <= 0:
+            return f"EXP {max(0, int(exp))} / {max(1, int(next_exp))}"
+        return f"EXP {max(0, int(exp))} / {max(1, int(next_exp))} +{rate:.2f}/s"
 
     def update_display(self) -> None:
         data = self._idle_state.get_char_data(self._char_id)
@@ -128,11 +131,19 @@ class IdleCharacterCard(QFrame):
         hp = float(data.get("hp", 0))
         max_hp = float(data.get("max_hp", 1000))
 
+        gain_per_second = 0.0
+        getter = getattr(self._idle_state, "get_exp_gain_per_second", None)
+        if callable(getter):
+            try:
+                gain_per_second = float(getter(self._char_id))
+            except Exception:
+                gain_per_second = 0.0
+
         self._level_label.setText(f"Level: {level}")
 
         self._exp_bar.setRange(0, max(1, int(next_exp)))
         self._exp_bar.setValue(int(exp))
-        self._exp_bar.setFormat(self._exp_format(exp=exp, next_exp=next_exp))
+        self._exp_bar.setFormat(self._exp_format(exp=exp, next_exp=next_exp, gain_per_second=gain_per_second))
 
         self._hp_bar.setRange(0, max(1, int(max_hp)))
         self._hp_bar.setValue(int(hp))
@@ -239,10 +250,21 @@ class IdleOffsiteCard(QFrame):
         hp = float(data.get("hp", 0))
         max_hp = float(data.get("max_hp", 1000))
 
+        gain_per_second = 0.0
+        getter = getattr(self._idle_state, "get_exp_gain_per_second", None)
+        if callable(getter):
+            try:
+                gain_per_second = float(getter(self._char_id))
+            except Exception:
+                gain_per_second = 0.0
+
         self._level_label.setText(f"Level: {level}")
         self._exp_bar.setRange(0, max(1, int(next_exp)))
         self._exp_bar.setValue(int(exp))
-        self._exp_bar.setFormat(f"EXP {max(0, int(exp))} / {max(1, int(next_exp))}")
+        if gain_per_second > 0:
+            self._exp_bar.setFormat(f"EXP {max(0, int(exp))} / {max(1, int(next_exp))} +{gain_per_second:.2f}/s")
+        else:
+            self._exp_bar.setFormat(f"EXP {max(0, int(exp))} / {max(1, int(next_exp))}")
 
         self._hp_bar.setRange(0, max(1, int(max_hp)))
         self._hp_bar.setValue(int(hp))

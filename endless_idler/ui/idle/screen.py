@@ -25,6 +25,7 @@ from endless_idler.save import SaveManager
 from endless_idler.ui.idle.widgets import IdleCharacterCard
 from endless_idler.ui.idle.widgets import IdleArena
 from endless_idler.ui.idle.widgets import IdleOffsiteCard
+from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
 from endless_idler.ui.idle.idle_state import IdleGameState
 from endless_idler.ui.party_hp_bar import PartyHpHeader
 
@@ -202,7 +203,7 @@ class IdleScreenWidget(QWidget):
         self._idle_state.tick_update.connect(self._on_tick)
         self._idle_timer = QTimer(self)
         self._idle_timer.timeout.connect(self._idle_state.process_tick)
-        self._idle_timer.start(100)
+        self._idle_timer.start(int(max(1, IDLE_TICK_INTERVAL_SECONDS * 1000)))
 
     def _refresh_party_hp(self) -> None:
         if getattr(self, "_party_hp_header", None) is None:

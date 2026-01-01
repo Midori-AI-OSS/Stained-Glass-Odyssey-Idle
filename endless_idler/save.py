@@ -20,7 +20,7 @@ from endless_idler.save_codec import normalized_character_progress
 from endless_idler.save_codec import normalized_character_stats
 
 
-SAVE_VERSION = 5
+SAVE_VERSION = 6
 DEFAULT_RUN_TOKENS = 20
 DEFAULT_CHARACTER_COST = 1
 DEFAULT_PARTY_LEVEL = 1
@@ -52,6 +52,7 @@ class RunSave:
     stacks: dict[str, int] = field(default_factory=dict)
     character_progress: dict[str, dict[str, float | int]] = field(default_factory=dict)
     character_stats: dict[str, dict[str, float]] = field(default_factory=dict)
+    character_deaths: dict[str, int] = field(default_factory=dict)
     idle_exp_bonus_until: float = 0.0
     idle_exp_penalty_until: float = 0.0
 
@@ -105,6 +106,7 @@ class SaveManager:
             stacks=as_int_dict(data.get("stacks", {})),
             character_progress=as_character_progress_dict(data.get("character_progress", {})),
             character_stats=as_character_stats_dict(data.get("character_stats", {})),
+            character_deaths=as_int_dict(data.get("character_deaths", {})),
             idle_exp_bonus_until=as_float(data.get("idle_exp_bonus_until", 0.0), default=0.0),
             idle_exp_penalty_until=as_float(data.get("idle_exp_penalty_until", 0.0), default=0.0),
         )
@@ -128,6 +130,7 @@ class SaveManager:
             "stacks": save.stacks,
             "character_progress": save.character_progress,
             "character_stats": save.character_stats,
+            "character_deaths": save.character_deaths,
             "idle_exp_bonus_until": save.idle_exp_bonus_until,
             "idle_exp_penalty_until": save.idle_exp_penalty_until,
         }
@@ -228,6 +231,23 @@ def _normalized_save(save: RunSave) -> RunSave:
     for char_id in party_chars:
         stacks[char_id] = max(1, int(stacks.get(char_id, 1)))
 
+    deaths: dict[str, int] = {}
+    raw_deaths = getattr(save, "character_deaths", {}) or {}
+    if isinstance(raw_deaths, dict):
+        for key, value in raw_deaths.items():
+            if not isinstance(key, str):
+                continue
+            char_id = key.strip()
+            if not char_id:
+                continue
+            try:
+                count = int(value)
+            except (TypeError, ValueError):
+                continue
+            if count <= 0:
+                continue
+            deaths[char_id] = count
+
     return RunSave(
         version=SAVE_VERSION,
         tokens=tokens,
@@ -244,6 +264,7 @@ def _normalized_save(save: RunSave) -> RunSave:
         stacks=stacks,
         character_progress=normalized_character_progress(save.character_progress),
         character_stats=normalized_character_stats(save.character_stats),
+        character_deaths=deaths,
         idle_exp_bonus_until=float(max(0.0, save.idle_exp_bonus_until)),
         idle_exp_penalty_until=float(max(0.0, save.idle_exp_penalty_until)),
     )

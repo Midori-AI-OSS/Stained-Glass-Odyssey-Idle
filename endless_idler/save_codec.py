@@ -77,6 +77,8 @@ def as_character_progress_dict(value: object) -> dict[str, dict[str, float | int
         next_exp = as_float(raw_progress.get("next_exp", 30.0), default=30.0)
         death_stacks = as_int(raw_progress.get("death_exp_debuff_stacks", 0), default=0)
         death_until = as_float(raw_progress.get("death_exp_debuff_until", 0.0), default=0.0)
+        next_vitality_gain_level = as_int(raw_progress.get("next_vitality_gain_level", 0), default=0)
+        next_mitigation_gain_level = as_int(raw_progress.get("next_mitigation_gain_level", 0), default=0)
 
         progress: dict[str, float | int] = {
             "level": max(1, level),
@@ -84,6 +86,8 @@ def as_character_progress_dict(value: object) -> dict[str, dict[str, float | int
             "next_exp": float(max(1.0, next_exp)),
             "death_exp_debuff_stacks": max(0, death_stacks),
             "death_exp_debuff_until": float(max(0.0, death_until)),
+            "next_vitality_gain_level": max(0, next_vitality_gain_level),
+            "next_mitigation_gain_level": max(0, next_mitigation_gain_level),
         }
         result[char_id] = progress
     return result
@@ -134,12 +138,16 @@ def normalized_character_progress(
         next_exp = as_float(raw.get("next_exp", 30.0), default=30.0)
         death_stacks = as_int(raw.get("death_exp_debuff_stacks", 0), default=0)
         death_until = as_float(raw.get("death_exp_debuff_until", 0.0), default=0.0)
+        next_vitality_gain_level = as_int(raw.get("next_vitality_gain_level", 0), default=0)
+        next_mitigation_gain_level = as_int(raw.get("next_mitigation_gain_level", 0), default=0)
         normalized[char_id] = {
             "level": max(1, level),
             "exp": float(max(0.0, exp)),
             "next_exp": float(max(1.0, next_exp)),
             "death_exp_debuff_stacks": max(0, death_stacks),
             "death_exp_debuff_until": float(max(0.0, death_until)),
+            "next_vitality_gain_level": max(0, next_vitality_gain_level),
+            "next_mitigation_gain_level": max(0, next_mitigation_gain_level),
         }
     return normalized
 
