@@ -51,8 +51,8 @@ def extract_character_metadata(
         source = path.read_text(encoding="utf-8")
     except OSError:
         return (
-            char_id,
-            display_name,
+            "",
+            "",
             stars,
             placement,
             damage_type_id,
@@ -66,8 +66,8 @@ def extract_character_metadata(
         tree = ast.parse(source, filename=str(path))
     except SyntaxError:
         return (
-            char_id,
-            display_name,
+            "",
+            "",
             stars,
             placement,
             damage_type_id,
@@ -81,12 +81,15 @@ def extract_character_metadata(
     if module_placement:
         placement = module_placement
 
+    found_character = False
     for node in tree.body:
         if not isinstance(node, ast.ClassDef):
             continue
         found_id, found_name, found_stars, found_placement = _extract_from_classdef(node)
         found_damage_type, found_damage_random = _extract_damage_type_from_classdef(node)
         stat_overrides, found_base_aggro, found_damage_reduction_passes = _extract_stat_overrides_from_classdef(node)
+        if found_id or found_name:
+            found_character = True
         if found_id:
             char_id = found_id
         if found_name:
@@ -108,6 +111,19 @@ def extract_character_metadata(
             damage_reduction_passes = found_damage_reduction_passes
         if found_id or found_name:
             break
+
+    if not found_character:
+        return (
+            "",
+            "",
+            stars,
+            placement,
+            damage_type_id,
+            damage_type_random,
+            base_stats,
+            base_aggro,
+            damage_reduction_passes,
+        )
 
     if not display_name:
         display_name = _derive_display_name(char_id)
