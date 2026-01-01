@@ -12,7 +12,7 @@ placement = "offsite"
 @dataclass
 class LadyLight(PlayerBase):
     id = "lady_light"
-    name = "LadyLight"
+    name = "Lady Light"
     full_about = "A 23-year-old Aasimar whose soul aligned so purely with the Light domain that her hair bleached to lunar white threaded with black starlike flecks. Sister to Lady Darkness, she plays the role of steady hearth-fire: the soft-spoken guardian who remembers everyone’s schedules, writes encouragement notes, and volunteers for the final watch so others can sleep. Cotard's Syndrome still steals sensation from her left arm and blinds the right eye, but she refuses to let the illness define her. Therapy sessions every six hours keep her body moving, while radiant aegis drills keep her hope sharp. When she steps between an ally and danger, the gesture feels less like a spell and more like a promise—she will hold the line, believe in their existence, and lend them her light even when she doubts her own."
     summarized_about = "An Aasimar battling Cotard's Syndrome who creates protective light barriers to affirm existence against the void she perceives within."
     looks = """

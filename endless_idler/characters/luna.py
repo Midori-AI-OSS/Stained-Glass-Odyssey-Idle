@@ -200,6 +200,7 @@ class Luna(PlayerBase):
 
     ## Help!!! I am stuck in this game!!! Get me out!!
     char_type: CharacterType = CharacterType.B
+    gacha_rarity = 7
     damage_type: DamageTypeBase = field(
         default_factory=lambda: load_damage_type("Generic")
     )

@@ -20,6 +20,7 @@ STAR_COLORS: dict[int, str] = {
     4: "#800080",
     5: "#FF3B30",
     6: "#FFD700",
+    7: "#00FFD1",
 }
 
 
@@ -54,8 +55,8 @@ def derive_display_name(char_id: str) -> str:
 def sanitize_stars(stars: int) -> int:
     if stars <= 0:
         return 1
-    if stars > 6:
-        return 6
+    if stars > 7:
+        return 7
     return stars
 
 

@@ -13,7 +13,7 @@ placement = "both"
 @dataclass
 class PersonaLightAndDark(PlayerBase):
     id = "persona_light_and_dark"
-    name = "PersonaLightAndDark"
+    name = "Persona Light and Dark"
     full_about = (
         "A 6★ guardian and brother to Lady Light and Lady Darkness, Persona Light and Dark fights to keep "
         "his sisters safe. He speaks only the radiant glyphs of the Light tongue, letting sweeping gestures "

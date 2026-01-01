@@ -12,7 +12,7 @@ placement = "onsite"
 @dataclass
 class LadyDarkness(PlayerBase):
     id = "lady_darkness"
-    name = "LadyDarkness"
+    name = "Lady Darkness"
     full_about = "A 23-year-old Aasimar whose affinity for the Dark domain stained her hair to mirror-polished black, salted with white sparks like stars trapped in obsidian—an inversion of her sister Lady Light’s tresses. She is composed, aristocratic, and ruthlessly empathetic: the sibling who handles negotiations, recites lineage prayers from memory, and keeps score of every slight dealt to their found family. The eclipsing veil she wields is a social tool as much as a weapon; she folds people into its quiet when they need solace and crushes enemies beneath it when they refuse mercy. Her pepper-colored eyes seem to absorb light itself, and her entropy magic dismantles threats with the precision of someone who plans three moves ahead. Where her sister affirms existence, Lady Darkness curates what deserves to remain—an elegant arbiter of shadow who moves between worlds with choreographed grace."
     summarized_about = "An elegant Aasimar sorceress who commands shadows through an eclipsing veil, creating inescapable shrouds of despair."
     looks = """

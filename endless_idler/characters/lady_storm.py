@@ -13,7 +13,7 @@ placement = "both"
 @dataclass
 class LadyStorm(PlayerBase):
     id = "lady_storm"
-    name = "LadyStorm"
+    name = "Lady Storm"
     full_about = (
         "Lady Storm is a 6★ aasimar tempest caller whose light green-and-yellow hair flickers"
         " like bottled lightning. She keeps a cluttered war room and laughs through the chaos,"
