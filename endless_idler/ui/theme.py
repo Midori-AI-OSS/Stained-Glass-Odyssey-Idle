@@ -160,6 +160,43 @@ QFrame#rewardsPlane[tone="dark"] {
     border: 1px solid rgba(170, 220, 255, 38);
 }
 
+QLabel#rewardsHeader {
+    color: rgba(255, 255, 255, 210);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+QFrame#rewardsBuffContainer {
+    background-color: rgba(10, 18, 40, 90);
+    border: 1px solid rgba(255, 255, 255, 24);
+}
+
+QFrame#rewardsBuffContainer[kind="win"] {
+    border-left: 3px solid rgba(70, 200, 120, 180);
+}
+
+QFrame#rewardsBuffContainer[kind="loss"] {
+    border-left: 3px solid rgba(255, 90, 140, 170);
+}
+
+QLabel#rewardsBuffTitle {
+    color: rgba(255, 255, 255, 220);
+    font-size: 12px;
+}
+
+QLabel#rewardsBuffTime {
+    color: rgba(255, 255, 255, 245);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+QLabel#rewardsBuffStacks {
+    color: rgba(255, 255, 255, 200);
+    font-size: 12px;
+}
+
 QLabel#fightBarLabel {
     color: rgba(255, 255, 255, 235);
     font-size: 14px;
