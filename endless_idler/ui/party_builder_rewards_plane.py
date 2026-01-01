@@ -91,12 +91,6 @@ class RewardsPlane(QFrame):
         layout.setSpacing(10)
         self.setLayout(layout)
 
-        header = QLabel("Run Buffs")
-        header.setObjectName("rewardsHeader")
-        header.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        layout.addWidget(header)
-        self._header = header
-
         self._win = BuffStackTile(kind="win", title="Win Bonus (Idle EXP)")
         layout.addWidget(self._win)
 
@@ -118,9 +112,7 @@ class RewardsPlane(QFrame):
         self._update_visibility()
 
     def _update_visibility(self) -> None:
-        any_active = bool(self._win.is_active() or self._loss.is_active())
-        self._header.setVisible(any_active)
-        self.setVisible(any_active)
+        self.setVisible(True)
 
     def _tick(self) -> None:
         self._win.refresh_view()
