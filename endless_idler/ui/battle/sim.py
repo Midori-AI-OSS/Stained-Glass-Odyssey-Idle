@@ -33,6 +33,58 @@ class Combatant:
     max_hp: int
 
 
+STAT_SHARE_KEYS: tuple[str, ...] = (
+    "max_hp",
+    "atk",
+    "defense",
+    "regain",
+    "crit_rate",
+    "crit_damage",
+    "effect_hit_rate",
+    "mitigation",
+    "dodge_odds",
+    "effect_resistance",
+    "vitality",
+    "spd",
+)
+
+
+def apply_offsite_stat_share(
+    *,
+    party: list[Combatant],
+    reserves: list[Combatant],
+    share: float = 0.10,
+) -> None:
+    share = float(share)
+    if share <= 0:
+        return
+    if not party or not reserves:
+        return
+
+    totals: dict[str, float] = {}
+    for reserve in reserves:
+        stats = reserve.stats
+        for stat_name in STAT_SHARE_KEYS:
+            base = stats.get_base_stat(stat_name)
+            if isinstance(base, (int, float)):
+                totals[stat_name] = totals.get(stat_name, 0.0) + float(base) * share
+
+    if not totals:
+        return
+
+    int_stats = {"max_hp", "atk", "defense", "regain", "spd"}
+    for combatant in party:
+        stats = combatant.stats
+        for stat_name, amount in totals.items():
+            if stat_name in int_stats:
+                stats.modify_base_stat(stat_name, int(round(amount)))
+            else:
+                stats.modify_base_stat(stat_name, float(amount))
+
+        combatant.max_hp = stats.max_hp
+        stats.hp = stats.max_hp
+
+
 def build_party(
     *,
     onsite: list[str],

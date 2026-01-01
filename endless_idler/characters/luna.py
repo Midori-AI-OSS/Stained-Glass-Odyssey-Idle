@@ -180,7 +180,7 @@ class _LunaSwordCoordinator:
 
 
 
-placement = "both"
+placement = "onsite"
 
 @dataclass
 class Luna(PlayerBase):
