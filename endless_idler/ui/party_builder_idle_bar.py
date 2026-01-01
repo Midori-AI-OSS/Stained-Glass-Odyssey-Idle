@@ -2,14 +2,8 @@ from __future__ import annotations
 
 import random
 
-from PySide6.QtCore import QEasingCurve
-from PySide6.QtCore import QPropertyAnimation
-from PySide6.QtCore import Qt
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QFrame
-from PySide6.QtWidgets import QGraphicsOpacityEffect
-from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, Signal
+from PySide6.QtWidgets import QFrame, QGraphicsOpacityEffect, QLabel, QVBoxLayout
 
 
 class IdleBar(QFrame):
@@ -52,7 +46,11 @@ class IdleBar(QFrame):
     def set_active(self, active: bool) -> None:
         active = bool(active)
         self.setEnabled(active)
-        self.setCursor(Qt.CursorShape.PointingHandCursor if active else Qt.CursorShape.ForbiddenCursor)
+        self.setCursor(
+            Qt.CursorShape.PointingHandCursor
+            if active
+            else Qt.CursorShape.ForbiddenCursor
+        )
 
         if active:
             self.setToolTip("")

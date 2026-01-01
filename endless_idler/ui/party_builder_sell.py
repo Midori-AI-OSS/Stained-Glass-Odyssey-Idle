@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import json
-
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame
-from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
 from endless_idler.ui.party_builder_common import MIME_TYPE
 

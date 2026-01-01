@@ -1,5 +1,4 @@
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 from typing import ClassVar
 
 from autofighter.character import CharacterType
@@ -7,8 +6,8 @@ from plugins.characters._base import PlayerBase
 from plugins.damage_types._base import DamageTypeBase
 from plugins.damage_types.lightning import Lightning
 
-
 placement = "offsite"
+
 
 @dataclass
 class LadyEcho(PlayerBase):

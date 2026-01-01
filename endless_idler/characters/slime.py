@@ -3,7 +3,6 @@ from typing import ClassVar
 
 from plugins.characters._base import PlayerBase
 
-
 placement = "both"
 
 

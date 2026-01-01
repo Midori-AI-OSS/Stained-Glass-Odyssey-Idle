@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import random
-
 from dataclasses import dataclass
 
 from endless_idler.characters.plugins import CharacterPlugin
-from endless_idler.combat.damage_types import load_damage_type
-from endless_idler.combat.damage_types import normalize_damage_type_id
-from endless_idler.combat.damage_types import resolve_damage_type_for_battle
-from endless_idler.combat.damage_types import type_multiplier
+from endless_idler.combat.damage_types import (
+    load_damage_type,
+    normalize_damage_type_id,
+    resolve_damage_type_for_battle,
+    type_multiplier,
+)
 from endless_idler.combat.stats import Stats
-
 
 KNOWN_DAMAGE_TYPE_IDS = (
     "fire",
@@ -22,7 +22,9 @@ KNOWN_DAMAGE_TYPE_IDS = (
     "generic",
 )
 
-RANDOM_DAMAGE_TYPE_IDS = tuple(item for item in KNOWN_DAMAGE_TYPE_IDS if item != "generic")
+RANDOM_DAMAGE_TYPE_IDS = tuple(
+    item for item in KNOWN_DAMAGE_TYPE_IDS if item != "generic"
+)
 
 
 @dataclass(slots=True)
@@ -122,7 +124,9 @@ def build_party(
         stats.level = char_level
         stats.exp = char_exp
         stats.hp = stats.max_hp
-        party.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
+        party.append(
+            Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp)
+        )
     return party
 
 
@@ -154,13 +158,20 @@ def build_foes(
         stats = Stats()
         base = party_scaling(party_level=party_level, stars=stars, stacks=1)
         scale = base * rng.uniform(0.85, 1.1)
-        apply_scaled_bases(stats, base_stats=getattr(plugin, "base_stats", None), scale=scale, spd=2 + max(0, stars - 1))
+        apply_scaled_bases(
+            stats,
+            base_stats=getattr(plugin, "base_stats", None),
+            scale=scale,
+            spd=2 + max(0, stars - 1),
+        )
         stats.damage_type = load_damage_type(resolve_damage_type_id(plugin, rng))
         if plugin:
             _apply_plugin_overrides(stats, plugin=plugin)
         stats.level = party_level
         stats.hp = stats.max_hp
-        foes.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
+        foes.append(
+            Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp)
+        )
     return foes
 
 
@@ -211,7 +222,9 @@ def build_reserves(
         stats.level = char_level
         stats.exp = char_exp
         stats.hp = stats.max_hp
-        reserves.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
+        reserves.append(
+            Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp)
+        )
     return reserves
 
 
@@ -286,8 +299,14 @@ def _apply_plugin_overrides(stats: Stats, *, plugin: CharacterPlugin) -> None:
         stats.damage_reduction_passes = int(passes)
 
 
-def _merged_base_stats(*, plugin_base_stats: dict[str, float] | None, saved_base_stats: dict[str, float] | None) -> dict[str, float]:
-    base_stats: dict[str, float] = dict(plugin_base_stats) if isinstance(plugin_base_stats, dict) else {}
+def _merged_base_stats(
+    *,
+    plugin_base_stats: dict[str, float] | None,
+    saved_base_stats: dict[str, float] | None,
+) -> dict[str, float]:
+    base_stats: dict[str, float] = (
+        dict(plugin_base_stats) if isinstance(plugin_base_stats, dict) else {}
+    )
     if isinstance(saved_base_stats, dict):
         for key, raw in saved_base_stats.items():
             if key in base_stats:

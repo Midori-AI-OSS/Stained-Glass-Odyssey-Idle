@@ -4,21 +4,21 @@ import json
 import math
 import os
 import random
-
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from PySide6.QtCore import QStandardPaths
 
-from endless_idler.save_codec import as_character_progress_dict
-from endless_idler.save_codec import as_character_stats_dict
-from endless_idler.save_codec import as_float
-from endless_idler.save_codec import as_int
-from endless_idler.save_codec import as_int_dict
-from endless_idler.save_codec import as_optional_str_list
-from endless_idler.save_codec import normalized_character_progress
-from endless_idler.save_codec import normalized_character_stats
-
+from endless_idler.save_codec import (
+    as_character_progress_dict,
+    as_character_stats_dict,
+    as_float,
+    as_int,
+    as_int_dict,
+    as_optional_str_list,
+    normalized_character_progress,
+    normalized_character_stats,
+)
 
 SAVE_VERSION = 6
 DEFAULT_RUN_TOKENS = 20
@@ -83,20 +83,33 @@ class SaveManager:
 
         save = RunSave(
             version=as_int(data.get("version", SAVE_VERSION), default=SAVE_VERSION),
-            tokens=as_int(data.get("tokens", DEFAULT_RUN_TOKENS), default=DEFAULT_RUN_TOKENS),
-            party_level=as_int(data.get("party_level", DEFAULT_PARTY_LEVEL), default=DEFAULT_PARTY_LEVEL),
+            tokens=as_int(
+                data.get("tokens", DEFAULT_RUN_TOKENS), default=DEFAULT_RUN_TOKENS
+            ),
+            party_level=as_int(
+                data.get("party_level", DEFAULT_PARTY_LEVEL),
+                default=DEFAULT_PARTY_LEVEL,
+            ),
             party_level_up_cost=as_int(
                 data.get("party_level_up_cost", DEFAULT_PARTY_LEVEL_UP_COST),
                 default=DEFAULT_PARTY_LEVEL_UP_COST,
             ),
-            fight_number=as_int(data.get("fight_number", DEFAULT_FIGHT_NUMBER), default=DEFAULT_FIGHT_NUMBER),
-            party_hp_max=as_int(data.get("party_hp_max", DEFAULT_PARTY_HP_MAX), default=DEFAULT_PARTY_HP_MAX),
+            fight_number=as_int(
+                data.get("fight_number", DEFAULT_FIGHT_NUMBER),
+                default=DEFAULT_FIGHT_NUMBER,
+            ),
+            party_hp_max=as_int(
+                data.get("party_hp_max", DEFAULT_PARTY_HP_MAX),
+                default=DEFAULT_PARTY_HP_MAX,
+            ),
             party_hp_current=as_int(
                 data.get("party_hp_current", DEFAULT_PARTY_HP_CURRENT),
                 default=DEFAULT_PARTY_HP_CURRENT,
             ),
             party_hp_last_idle_heal_at=as_float(
-                data.get("party_hp_last_idle_heal_at", DEFAULT_PARTY_HP_LAST_IDLE_HEAL_AT),
+                data.get(
+                    "party_hp_last_idle_heal_at", DEFAULT_PARTY_HP_LAST_IDLE_HEAL_AT
+                ),
                 default=DEFAULT_PARTY_HP_LAST_IDLE_HEAL_AT,
             ),
             bar=as_optional_str_list(data.get("bar", [])),
@@ -104,11 +117,17 @@ class SaveManager:
             offsite=as_optional_str_list(data.get("offsite", [])),
             standby=as_optional_str_list(data.get("standby", [])),
             stacks=as_int_dict(data.get("stacks", {})),
-            character_progress=as_character_progress_dict(data.get("character_progress", {})),
+            character_progress=as_character_progress_dict(
+                data.get("character_progress", {})
+            ),
             character_stats=as_character_stats_dict(data.get("character_stats", {})),
             character_deaths=as_int_dict(data.get("character_deaths", {})),
-            idle_exp_bonus_until=as_float(data.get("idle_exp_bonus_until", 0.0), default=0.0),
-            idle_exp_penalty_until=as_float(data.get("idle_exp_penalty_until", 0.0), default=0.0),
+            idle_exp_bonus_until=as_float(
+                data.get("idle_exp_bonus_until", 0.0), default=0.0
+            ),
+            idle_exp_penalty_until=as_float(
+                data.get("idle_exp_penalty_until", 0.0), default=0.0
+            ),
         )
         return _normalized_save(save)
 
@@ -137,7 +156,9 @@ class SaveManager:
 
         self._path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = self._path.with_suffix(self._path.suffix + ".tmp")
-        tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        tmp_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+        )
         tmp_path.replace(self._path)
 
 
@@ -150,7 +171,9 @@ def _default_save_path() -> Path:
     if home.exists():
         return home / ".midoriai" / "idlesave.json"
 
-    base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
+    base = QStandardPaths.writableLocation(
+        QStandardPaths.StandardLocation.AppDataLocation
+    )
     if not base:
         base = str(Path.cwd())
     return Path(base) / "idlesave.json"
@@ -165,7 +188,9 @@ def _normalized_save(save: RunSave) -> RunSave:
     party_hp_max = max(1, int(getattr(save, "party_hp_max", DEFAULT_PARTY_HP_MAX)))
     party_hp_current = max(0, int(getattr(save, "party_hp_current", party_hp_max)))
     party_hp_current = min(party_hp_current, party_hp_max)
-    party_hp_last_idle_heal_at = float(max(0.0, float(getattr(save, "party_hp_last_idle_heal_at", 0.0))))
+    party_hp_last_idle_heal_at = float(
+        max(0.0, float(getattr(save, "party_hp_last_idle_heal_at", 0.0)))
+    )
 
     onsite = list(save.onsite[:ONSITE_SLOTS])
     onsite.extend([None] * (ONSITE_SLOTS - len(onsite)))
@@ -173,7 +198,9 @@ def _normalized_save(save: RunSave) -> RunSave:
     offsite = list(save.offsite[:OFFSITE_SLOTS])
     offsite.extend([None] * (OFFSITE_SLOTS - len(offsite)))
 
-    raw_standby = [item if item else None for item in list(save.standby[:STANDBY_SLOTS])]
+    raw_standby = [
+        item if item else None for item in list(save.standby[:STANDBY_SLOTS])
+    ]
     raw_standby.extend([None] * (STANDBY_SLOTS - len(raw_standby)))
     standby: list[str | None] = [None] * STANDBY_SLOTS
     for item in raw_standby:
@@ -222,7 +249,9 @@ def _normalized_save(save: RunSave) -> RunSave:
     for item in bar:
         deduped_bar.append(item if item else None)
 
-    party_chars = {item for item in (deduped_onsite + deduped_offsite + standby) if item}
+    party_chars = {
+        item for item in (deduped_onsite + deduped_offsite + standby) if item
+    }
     stacks: dict[str, int] = {}
     for key, value in save.stacks.items():
         if key in party_chars and isinstance(value, int) and value > 0:

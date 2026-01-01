@@ -1,5 +1,4 @@
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 from random import choice
 
 from autofighter.character import CharacterType
@@ -7,8 +6,8 @@ from plugins.characters._base import PlayerBase
 from plugins.damage_types import load_damage_type
 from plugins.damage_types._base import DamageTypeBase
 
-
 placement = "both"
+
 
 @dataclass
 class LadyFireAndIce(PlayerBase):
@@ -29,4 +28,6 @@ class LadyFireAndIce(PlayerBase):
     damage_type: DamageTypeBase = field(
         default_factory=lambda: load_damage_type(choice(["Fire", "Ice"]))
     )
-    passives: list[str] = field(default_factory=lambda: ["lady_fire_and_ice_duality_engine"])
+    passives: list[str] = field(
+        default_factory=lambda: ["lady_fire_and_ice_duality_engine"]
+    )

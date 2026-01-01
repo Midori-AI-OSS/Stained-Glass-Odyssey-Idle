@@ -1,6 +1,5 @@
-from dataclasses import dataclass
-from dataclasses import field
 import logging
+from dataclasses import dataclass, field
 
 from autofighter.character import CharacterType
 from plugins.characters._base import PlayerBase

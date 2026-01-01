@@ -1,30 +1,23 @@
 from __future__ import annotations
 
 import random
-
 from dataclasses import dataclass
 
-from PySide6.QtCore import QPointF
-from PySide6.QtCore import QTimer
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPolygonF
-from PySide6.QtGui import QBrush
-from PySide6.QtGui import QColor
-from PySide6.QtGui import QPainter
-from PySide6.QtGui import QPen
-from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame
-from PySide6.QtWidgets import QHBoxLayout
-from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QProgressBar
-from PySide6.QtWidgets import QVBoxLayout
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import QPointF, Qt, QTimer
+from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QPixmap, QPolygonF
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.ui.battle.sim import Combatant
 from endless_idler.ui.party_builder_common import build_character_stats_tooltip
-from endless_idler.ui.tooltip import hide_stained_tooltip
-from endless_idler.ui.tooltip import show_stained_tooltip
+from endless_idler.ui.tooltip import hide_stained_tooltip, show_stained_tooltip
 
 
 @dataclass(slots=True)
@@ -102,10 +95,14 @@ class CombatantCard(QFrame):
         self.setLayout(root)
 
         default_portrait = 56 if compact else 72
-        self._portrait = PortraitLabel(size=max(28, int(portrait_size or default_portrait)))
+        self._portrait = PortraitLabel(
+            size=max(28, int(portrait_size or default_portrait))
+        )
 
         portrait_path = plugin.random_image_path(rng) if plugin else None
-        self._portrait.set_portrait(str(portrait_path) if portrait_path else None, placeholder=combatant.name)
+        self._portrait.set_portrait(
+            str(portrait_path) if portrait_path else None, placeholder=combatant.name
+        )
 
         body = QVBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
@@ -239,7 +236,9 @@ class OffsiteStrip(QFrame):
             label = PortraitLabel(size=40)
             portrait_path = plugin.random_image_path(rng) if plugin else None
             display = plugin.display_name if plugin else char_id
-            label.set_portrait(str(portrait_path) if portrait_path else None, placeholder=display)
+            label.set_portrait(
+                str(portrait_path) if portrait_path else None, placeholder=display
+            )
             label.setToolTip(display)
             row.addWidget(label)
 
@@ -255,9 +254,13 @@ class LineOverlay(QWidget):
         self.setAutoFillBackground(False)
         self._pulses: list[LinePulse] = []
 
-    def add_pulse(self, source: QWidget, target: QWidget, color: QColor, *, crit: bool = False) -> None:
+    def add_pulse(
+        self, source: QWidget, target: QWidget, color: QColor, *, crit: bool = False
+    ) -> None:
         width = 6 if crit else 3
-        self._pulses.append(LinePulse(source=source, target=target, color=color, width=width, crit=crit))
+        self._pulses.append(
+            LinePulse(source=source, target=target, color=color, width=width, crit=crit)
+        )
         self.update()
 
     def tick(self, delta_ms: int) -> None:
@@ -370,7 +373,9 @@ class Arena(QFrame):
         timer.start()
         self._timer = timer
 
-    def add_pulse(self, source: QWidget, target: QWidget, color: QColor, *, crit: bool = False) -> None:
+    def add_pulse(
+        self, source: QWidget, target: QWidget, color: QColor, *, crit: bool = False
+    ) -> None:
         self._overlay.add_pulse(source, target, color, crit=crit)
         self._overlay.raise_()
 

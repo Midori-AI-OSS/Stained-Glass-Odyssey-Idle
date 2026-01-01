@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 
-from endless_idler.combat.damage_types import DamageTypeBase
-from endless_idler.combat.damage_types import Generic
+from endless_idler.combat.damage_types import DamageTypeBase, Generic
 from endless_idler.combat.stat_effect import StatEffect
-
 
 ANIMATION_OFFSET: float = 2.8
 DEFAULT_ANIMATION_DURATION: float = 0.045 * ANIMATION_OFFSET
@@ -78,7 +75,9 @@ class Stats:
     _aggro_passives: list[str] = field(default_factory=list, init=False)
     login_theme_stat_bonuses: dict[str, float] = field(default_factory=dict, init=False)
     login_theme_damage_bonus: dict[str, float] = field(default_factory=dict, init=False)
-    login_theme_damage_reduction: dict[str, float] = field(default_factory=dict, init=False)
+    login_theme_damage_reduction: dict[str, float] = field(
+        default_factory=dict, init=False
+    )
     login_theme_drop_scope: str = field(default="matching", init=False)
     login_theme_identifier: str = field(default="", init=False)
 
@@ -120,7 +119,9 @@ class Stats:
 
     @property
     def crit_rate(self) -> float:
-        return max(0.0, self._base_crit_rate + self._calculate_stat_modifier("crit_rate"))
+        return max(
+            0.0, self._base_crit_rate + self._calculate_stat_modifier("crit_rate")
+        )
 
     @crit_rate.setter
     def crit_rate(self, value: float) -> None:
@@ -128,7 +129,9 @@ class Stats:
 
     @property
     def crit_damage(self) -> float:
-        return max(1.0, self._base_crit_damage + self._calculate_stat_modifier("crit_damage"))
+        return max(
+            1.0, self._base_crit_damage + self._calculate_stat_modifier("crit_damage")
+        )
 
     @crit_damage.setter
     def crit_damage(self, value: float) -> None:
@@ -138,7 +141,8 @@ class Stats:
     def effect_hit_rate(self) -> float:
         return max(
             0.0,
-            self._base_effect_hit_rate + self._calculate_stat_modifier("effect_hit_rate"),
+            self._base_effect_hit_rate
+            + self._calculate_stat_modifier("effect_hit_rate"),
         )
 
     @effect_hit_rate.setter
@@ -147,7 +151,9 @@ class Stats:
 
     @property
     def mitigation(self) -> float:
-        return max(0.1, self._base_mitigation + self._calculate_stat_modifier("mitigation"))
+        return max(
+            0.1, self._base_mitigation + self._calculate_stat_modifier("mitigation")
+        )
 
     @mitigation.setter
     def mitigation(self, value: float) -> None:
@@ -174,7 +180,8 @@ class Stats:
     def effect_resistance(self) -> float:
         return max(
             0.0,
-            self._base_effect_resistance + self._calculate_stat_modifier("effect_resistance"),
+            self._base_effect_resistance
+            + self._calculate_stat_modifier("effect_resistance"),
         )
 
     @effect_resistance.setter
@@ -183,7 +190,9 @@ class Stats:
 
     @property
     def vitality(self) -> float:
-        return max(0.01, self._base_vitality + self._calculate_stat_modifier("vitality"))
+        return max(
+            0.01, self._base_vitality + self._calculate_stat_modifier("vitality")
+        )
 
     @vitality.setter
     def vitality(self, value: float) -> None:
@@ -201,7 +210,9 @@ class Stats:
     def aggro(self) -> float:
         defense_term = 0.0
         if self._base_defense > 0:
-            defense_term = (self.defense - self._base_defense) / float(self._base_defense)
+            defense_term = (self.defense - self._base_defense) / float(
+                self._base_defense
+            )
         modifier = self.aggro_modifier + self._calculate_stat_modifier("aggro_modifier")
         return self.base_aggro * (1 + modifier + defense_term)
 
@@ -219,7 +230,9 @@ class Stats:
 
     def remove_effect_by_name(self, effect_name: str) -> bool:
         before = len(self._active_effects)
-        self._active_effects = [e for e in self._active_effects if e.name != effect_name]
+        self._active_effects = [
+            e for e in self._active_effects if e.name != effect_name
+        ]
         return len(self._active_effects) < before
 
     def remove_effect_by_source(self, source: str) -> int:
@@ -286,4 +299,3 @@ def collect_stat_modifier_keys(effects: Iterable[StatEffect]) -> set[str]:
     for effect in effects:
         keys.update(effect.stat_modifiers.keys())
     return keys
-

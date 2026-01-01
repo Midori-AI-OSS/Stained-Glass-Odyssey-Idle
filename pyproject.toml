@@ -25,3 +25,8 @@ include-package-data = true
 endless_idler = [
     "assets/**/*",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.10",
+]

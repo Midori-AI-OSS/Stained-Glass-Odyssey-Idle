@@ -1,39 +1,36 @@
 from __future__ import annotations
 
-import time
 import random
+import time
 
-from PySide6.QtCore import QTimer
-from PySide6.QtCore import Qt
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QGridLayout
-from PySide6.QtWidgets import QHBoxLayout
-from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QPushButton
-from PySide6.QtWidgets import QVBoxLayout
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import (
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from endless_idler.characters.plugins import discover_character_plugins
-from endless_idler.run_rules import apply_battle_result
-from endless_idler.ui.battle.colors import color_for_damage_type_id
-from endless_idler.ui.battle.sim import Combatant
-from endless_idler.ui.battle.sim import apply_offsite_stat_share
-from endless_idler.ui.battle.sim import build_reserves
-from endless_idler.ui.battle.sim import build_foes
-from endless_idler.ui.battle.sim import build_party
-from endless_idler.ui.battle.sim import calculate_damage
-from endless_idler.ui.battle.sim import choose_weighted_attacker
-from endless_idler.ui.battle.stat_bars import CombatantStatBars
-from endless_idler.ui.battle.stat_bars import compute_stat_maxima
-from endless_idler.ui.battle.widgets import Arena
-from endless_idler.ui.battle.widgets import CombatantCard
-from endless_idler.ui.party_hp_bar import PartyHpHeader
-from endless_idler.save import RunSave
-from endless_idler.save import SaveManager
-from endless_idler.save import new_run_save
 from endless_idler.progression import record_character_death
-
+from endless_idler.run_rules import apply_battle_result
+from endless_idler.save import RunSave, SaveManager, new_run_save
+from endless_idler.ui.battle.colors import color_for_damage_type_id
+from endless_idler.ui.battle.sim import (
+    Combatant,
+    apply_offsite_stat_share,
+    build_foes,
+    build_party,
+    build_reserves,
+    calculate_damage,
+    choose_weighted_attacker,
+)
+from endless_idler.ui.battle.stat_bars import CombatantStatBars, compute_stat_maxima
+from endless_idler.ui.battle.widgets import Arena, CombatantCard
+from endless_idler.ui.party_hp_bar import PartyHpHeader
 
 DEATH_EXP_DEBUFF_DURATION_SECONDS = 60 * 60
 
@@ -157,8 +154,12 @@ class BattleScreenWidget(QWidget):
         self._status = QLabel("")
         self._status.setObjectName("battleStatus")
         self._status_char_limit = 10
-        self._status.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self._status.setFixedWidth(self._status.fontMetrics().horizontalAdvance("M" * 11) + 12)
+        self._status.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        self._status.setFixedWidth(
+            self._status.fontMetrics().horizontalAdvance("M" * 11) + 12
+        )
         header.addWidget(self._status, 0, Qt.AlignmentFlag.AlignRight)
 
         arena = Arena()
@@ -340,7 +341,9 @@ class BattleScreenWidget(QWidget):
         previous_hp = int(target.stats.hp)
         target.stats.hp = max(0, previous_hp - int(damage))
         self._arena.add_pulse(attacker_widget, target_widget, color, crit=crit)
-        self._set_status(f"{attacker.name} hits {target.name} for {damage}{' (CRIT)' if crit else ''}")
+        self._set_status(
+            f"{attacker.name} hits {target.name} for {damage}{' (CRIT)' if crit else ''}"
+        )
 
         target_widget.refresh()
         stat_bars = self._stat_bars_by_card.get(target_widget)
@@ -489,7 +492,9 @@ class BattleScreenWidget(QWidget):
             except (TypeError, ValueError):
                 stacks = 0
             try:
-                until = float(max(0.0, float(progress.get("death_exp_debuff_until", 0.0))))
+                until = float(
+                    max(0.0, float(progress.get("death_exp_debuff_until", 0.0)))
+                )
             except (TypeError, ValueError):
                 until = 0.0
 

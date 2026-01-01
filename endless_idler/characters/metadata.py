@@ -8,12 +8,10 @@ dependencies at runtime.
 from __future__ import annotations
 
 import ast
-
 from pathlib import Path
 
 from endless_idler.characters.ast_damage_type import extract_damage_type_id
 from endless_idler.combat.damage_types import normalize_damage_type_id
-
 
 DEFAULT_BASE_STATS: dict[str, float] = {
     "max_hp": 1000.0,
@@ -85,9 +83,15 @@ def extract_character_metadata(
     for node in tree.body:
         if not isinstance(node, ast.ClassDef):
             continue
-        found_id, found_name, found_stars, found_placement = _extract_from_classdef(node)
-        found_damage_type, found_damage_random = _extract_damage_type_from_classdef(node)
-        stat_overrides, found_base_aggro, found_damage_reduction_passes = _extract_stat_overrides_from_classdef(node)
+        found_id, found_name, found_stars, found_placement = _extract_from_classdef(
+            node
+        )
+        found_damage_type, found_damage_random = _extract_damage_type_from_classdef(
+            node
+        )
+        stat_overrides, found_base_aggro, found_damage_reduction_passes = (
+            _extract_stat_overrides_from_classdef(node)
+        )
         if found_id or found_name:
             found_character = True
         if found_id:
@@ -154,7 +158,9 @@ def _extract_from_module(tree: ast.Module) -> str | None:
     return None
 
 
-def _extract_from_classdef(node: ast.ClassDef) -> tuple[str | None, str | None, int | None, str | None]:
+def _extract_from_classdef(
+    node: ast.ClassDef,
+) -> tuple[str | None, str | None, int | None, str | None]:
     char_id: str | None = None
     display_name: str | None = None
     stars: int | None = None
@@ -220,7 +226,11 @@ def _extract_stat_overrides_from_classdef(
                 ):
                     stat_name = _const_str(call.args[0])
                     stat_value = _const_float(call.args[1])
-                    if stat_name and stat_name in _BASE_STAT_KEYS and stat_value is not None:
+                    if (
+                        stat_name
+                        and stat_name in _BASE_STAT_KEYS
+                        and stat_value is not None
+                    ):
                         base_stats[stat_name] = stat_value
                         continue
 

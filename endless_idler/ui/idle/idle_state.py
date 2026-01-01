@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import time
 import random
+import time
 
-from PySide6.QtCore import QObject
-from PySide6.QtCore import Signal
-
+from PySide6.QtCore import QObject, Signal
 
 LOSS_EXP_MULTIPLIER = 0.5
 WIN_EXP_MULTIPLIER = 4.0
@@ -37,7 +35,9 @@ class IdleGameState(QObject):
     ) -> None:
         super().__init__()
         self._char_ids = char_ids
-        self._offsite_ids: list[str] = [str(item) for item in (offsite_ids or []) if item]
+        self._offsite_ids: list[str] = [
+            str(item) for item in (offsite_ids or []) if item
+        ]
         self._party_level = party_level
         self._stacks = stacks
         self._plugins_by_id = plugins_by_id
@@ -62,7 +62,9 @@ class IdleGameState(QObject):
 
             stack = max(1, int(stacks.get(char_id, 1)))
             plugin_base_stats = getattr(plugin, "base_stats", None)
-            base_stats: dict[str, float] = dict(plugin_base_stats) if isinstance(plugin_base_stats, dict) else {}
+            base_stats: dict[str, float] = (
+                dict(plugin_base_stats) if isinstance(plugin_base_stats, dict) else {}
+            )
             saved_stats = self._stats_by_id.get(char_id)
             if isinstance(saved_stats, dict):
                 for key, raw in saved_stats.items():
@@ -72,7 +74,9 @@ class IdleGameState(QObject):
                         except (TypeError, ValueError):
                             continue
 
-            base_hp = int(base_stats.get("max_hp", 1000.0)) + (stack - 1) * STACK_HP_BONUS
+            base_hp = (
+                int(base_stats.get("max_hp", 1000.0)) + (stack - 1) * STACK_HP_BONUS
+            )
             saved = self._progress_by_id.get(char_id, {})
             level = 1
             exp = 0.0
@@ -93,11 +97,15 @@ class IdleGameState(QObject):
                 except (TypeError, ValueError):
                     next_exp = 30.0
                 try:
-                    death_exp_debuff_stacks = max(0, int(saved.get("death_exp_debuff_stacks", 0)))
+                    death_exp_debuff_stacks = max(
+                        0, int(saved.get("death_exp_debuff_stacks", 0))
+                    )
                 except (TypeError, ValueError):
                     death_exp_debuff_stacks = 0
                 try:
-                    death_exp_debuff_until = float(max(0.0, float(saved.get("death_exp_debuff_until", 0.0))))
+                    death_exp_debuff_until = float(
+                        max(0.0, float(saved.get("death_exp_debuff_until", 0.0)))
+                    )
                 except (TypeError, ValueError):
                     death_exp_debuff_until = 0.0
 
@@ -120,7 +128,9 @@ class IdleGameState(QObject):
                 "base_stats": base_stats,
                 "stack": stack,
                 "base_aggro": getattr(plugin, "base_aggro", None),
-                "damage_reduction_passes": getattr(plugin, "damage_reduction_passes", None),
+                "damage_reduction_passes": getattr(
+                    plugin, "damage_reduction_passes", None
+                ),
                 "exp_multiplier": 1.0,
                 "req_multiplier": 1.0,
                 "rebirths": 0,
@@ -162,7 +172,7 @@ class IdleGameState(QObject):
             gain = exp_mult
 
             if self._risk_reward_enabled:
-                gain *= (self._risk_reward_level + 1)
+                gain *= self._risk_reward_level + 1
 
             gain *= exp_multiplier
             gain *= self._death_exp_debuff_multiplier(data)
@@ -180,7 +190,11 @@ class IdleGameState(QObject):
                 self._level_up(char_id)
 
         if self._offsite_ids and total_onsite_gain_for_offsite > 0:
-            offsite_gain = float(total_onsite_gain_for_offsite) * float(self._offsite_exp_share) * offsite_shared_mult
+            offsite_gain = (
+                float(total_onsite_gain_for_offsite)
+                * float(self._offsite_exp_share)
+                * offsite_shared_mult
+            )
             for char_id in self._offsite_ids:
                 data = self._char_data.get(char_id)
                 if not data:
@@ -209,7 +223,7 @@ class IdleGameState(QObject):
             exp_mult = float(data.get("exp_multiplier", 1.0))
             gain = exp_mult
             if self._risk_reward_enabled:
-                gain *= (self._risk_reward_level + 1)
+                gain *= self._risk_reward_level + 1
             gain *= exp_multiplier
             gain *= self._death_exp_debuff_multiplier(data)
             return gain * onsite_shared_mult
@@ -223,12 +237,16 @@ class IdleGameState(QObject):
                 onsite_mult = float(onsite_data.get("exp_multiplier", 1.0))
                 onsite_gain = onsite_mult
                 if self._risk_reward_enabled:
-                    onsite_gain *= (self._risk_reward_level + 1)
+                    onsite_gain *= self._risk_reward_level + 1
                 onsite_gain *= exp_multiplier
                 onsite_gain *= self._death_exp_debuff_multiplier(onsite_data)
                 total_onsite_gain_for_offsite += onsite_gain
 
-            offsite_gain = float(total_onsite_gain_for_offsite) * float(self._offsite_exp_share) * offsite_shared_mult
+            offsite_gain = (
+                float(total_onsite_gain_for_offsite)
+                * float(self._offsite_exp_share)
+                * offsite_shared_mult
+            )
             return offsite_gain * self._death_exp_debuff_multiplier(data)
 
         return 0.0
@@ -274,7 +292,9 @@ class IdleGameState(QObject):
 
         base_stats = data.get("base_stats")
         if isinstance(base_stats, dict):
-            self._apply_weighted_stat_upgrades(char_id=char_id, base_stats=base_stats, level=int(data["level"]))
+            self._apply_weighted_stat_upgrades(
+                char_id=char_id, base_stats=base_stats, level=int(data["level"])
+            )
             self._apply_sparse_growth(char_id=char_id, base_stats=base_stats)
 
         stack = max(1, int(data.get("stack", 1)))
@@ -291,7 +311,9 @@ class IdleGameState(QObject):
         tax = 1.5 ** ((level - 50) // 5) if level >= 50 else 1.0
         data["next_exp"] = (level * 30 * req_mult * tax) * self._rng.uniform(0.95, 1.05)
 
-    def _apply_weighted_stat_upgrades(self, *, char_id: str, base_stats: dict[str, float], level: int) -> None:
+    def _apply_weighted_stat_upgrades(
+        self, *, char_id: str, base_stats: dict[str, float], level: int
+    ) -> None:
         points = 1 + (max(1, int(level)) // 10)
         stat_keys = (
             "atk",
@@ -334,7 +356,9 @@ class IdleGameState(QObject):
         if max(0, int(data.get("next_mitigation_gain_level", 0))) <= level:
             data["next_mitigation_gain_level"] = level + self._rng.randint(10, 15)
 
-    def _apply_sparse_growth(self, *, char_id: str, base_stats: dict[str, float]) -> None:
+    def _apply_sparse_growth(
+        self, *, char_id: str, base_stats: dict[str, float]
+    ) -> None:
         data = self._char_data.get(char_id)
         if not data:
             return
@@ -380,11 +404,15 @@ class IdleGameState(QObject):
             except (TypeError, ValueError):
                 next_exp = 30.0
             try:
-                death_exp_debuff_stacks = max(0, int(data.get("death_exp_debuff_stacks", 0)))
+                death_exp_debuff_stacks = max(
+                    0, int(data.get("death_exp_debuff_stacks", 0))
+                )
             except (TypeError, ValueError):
                 death_exp_debuff_stacks = 0
             try:
-                death_exp_debuff_until = float(max(0.0, float(data.get("death_exp_debuff_until", 0.0))))
+                death_exp_debuff_until = float(
+                    max(0.0, float(data.get("death_exp_debuff_until", 0.0)))
+                )
             except (TypeError, ValueError):
                 death_exp_debuff_until = 0.0
 
@@ -394,8 +422,12 @@ class IdleGameState(QObject):
                 "next_exp": next_exp,
                 "death_exp_debuff_stacks": death_exp_debuff_stacks,
                 "death_exp_debuff_until": death_exp_debuff_until,
-                "next_vitality_gain_level": max(0, int(data.get("next_vitality_gain_level", 0))),
-                "next_mitigation_gain_level": max(0, int(data.get("next_mitigation_gain_level", 0))),
+                "next_vitality_gain_level": max(
+                    0, int(data.get("next_vitality_gain_level", 0))
+                ),
+                "next_mitigation_gain_level": max(
+                    0, int(data.get("next_mitigation_gain_level", 0))
+                ),
             }
         return payload
 

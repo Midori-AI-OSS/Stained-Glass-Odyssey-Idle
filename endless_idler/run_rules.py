@@ -4,7 +4,6 @@ import time
 
 from endless_idler.save import RunSave
 
-
 PARTY_HP_LOSS_DAMAGE_PER_FIGHT = 15
 PARTY_HP_LOSS_HEAL = 2
 PARTY_HP_WIN_HEAL = 4
@@ -25,7 +24,9 @@ def apply_battle_result(save: RunSave, *, victory: bool) -> bool:
     fight_number = max(1, int(save.fight_number))
 
     if victory:
-        save.party_hp_current = min(save.party_hp_max, save.party_hp_current + PARTY_HP_WIN_HEAL)
+        save.party_hp_current = min(
+            save.party_hp_max, save.party_hp_current + PARTY_HP_WIN_HEAL
+        )
         save.fight_number = fight_number + 1
         return False
 
@@ -34,7 +35,9 @@ def apply_battle_result(save: RunSave, *, victory: bool) -> bool:
     if save.party_hp_current <= 0:
         return True
 
-    save.party_hp_current = min(save.party_hp_max, save.party_hp_current + PARTY_HP_LOSS_HEAL)
+    save.party_hp_current = min(
+        save.party_hp_max, save.party_hp_current + PARTY_HP_LOSS_HEAL
+    )
     return False
 
 

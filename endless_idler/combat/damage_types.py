@@ -58,7 +58,9 @@ _PROTOTYPE_TYPE_CHART: dict[str, dict[str, str]] = {
 def type_multiplier(attacker_type_id: str, defender_type_id: str) -> float:
     attacker = normalize_damage_type_id(attacker_type_id)
     defender = normalize_damage_type_id(defender_type_id)
-    defender_info = _PROTOTYPE_TYPE_CHART.get(defender, _PROTOTYPE_TYPE_CHART["generic"])
+    defender_info = _PROTOTYPE_TYPE_CHART.get(
+        defender, _PROTOTYPE_TYPE_CHART["generic"]
+    )
 
     if defender_info["weakness"] == attacker:
         return 1.25

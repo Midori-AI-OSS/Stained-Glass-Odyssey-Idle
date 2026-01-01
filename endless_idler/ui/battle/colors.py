@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from PySide6.QtGui import QColor
 
-
 _TYPE_COLORS: dict[str, tuple[int, int, int]] = {
     "fire": (255, 90, 40),
     "ice": (80, 200, 255),

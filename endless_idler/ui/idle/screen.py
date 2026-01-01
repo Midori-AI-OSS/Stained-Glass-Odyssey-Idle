@@ -2,31 +2,24 @@ from __future__ import annotations
 
 import random
 
-from PySide6.QtCore import QTimer
-from PySide6.QtCore import Qt
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QCheckBox
-from PySide6.QtWidgets import QGridLayout
-from PySide6.QtWidgets import QHBoxLayout
-from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QPushButton
-from PySide6.QtWidgets import QSpinBox
-from PySide6.QtWidgets import QVBoxLayout
-from PySide6.QtWidgets import QWidget
-from PySide6.QtWidgets import QFrame
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from endless_idler.characters.plugins import discover_character_plugins
-from endless_idler.run_rules import apply_idle_party_heal
-from endless_idler.run_rules import start_idle_heal_timer
-from endless_idler.save import OFFSITE_SLOTS
-from endless_idler.save import ONSITE_SLOTS
-from endless_idler.save import RunSave
-from endless_idler.save import SaveManager
-from endless_idler.ui.idle.widgets import IdleCharacterCard
-from endless_idler.ui.idle.widgets import IdleArena
-from endless_idler.ui.idle.widgets import IdleOffsiteCard
-from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
-from endless_idler.ui.idle.idle_state import IdleGameState
+from endless_idler.run_rules import apply_idle_party_heal, start_idle_heal_timer
+from endless_idler.save import OFFSITE_SLOTS, ONSITE_SLOTS, RunSave, SaveManager
+from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS, IdleGameState
+from endless_idler.ui.idle.widgets import IdleArena, IdleCharacterCard, IdleOffsiteCard
 from endless_idler.ui.party_hp_bar import PartyHpHeader
 
 
@@ -63,8 +56,14 @@ class IdleScreenWidget(QWidget):
         if self._save is None:
             self._save = RunSave(
                 party_level=self._party_level,
-                onsite=[str(item) if item else None for item in list(onsite_raw)[:ONSITE_SLOTS]],
-                offsite=[str(item) if item else None for item in list(offsite_raw)[:OFFSITE_SLOTS]],
+                onsite=[
+                    str(item) if item else None
+                    for item in list(onsite_raw)[:ONSITE_SLOTS]
+                ],
+                offsite=[
+                    str(item) if item else None
+                    for item in list(offsite_raw)[:OFFSITE_SLOTS]
+                ],
                 stacks=dict(self._stacks),
             )
             start_idle_heal_timer(self._save)

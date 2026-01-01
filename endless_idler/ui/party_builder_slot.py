@@ -2,31 +2,24 @@ from __future__ import annotations
 
 import json
 import random
-
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 
-from PySide6.QtCore import QByteArray
-from PySide6.QtCore import Qt
-from PySide6.QtCore import QMimeData
-from PySide6.QtGui import QDrag
-from PySide6.QtGui import QCursor
-from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame
-from PySide6.QtWidgets import QGridLayout
-from PySide6.QtWidgets import QVBoxLayout
-from PySide6.QtWidgets import QLabel
+from PySide6.QtCore import QByteArray, QMimeData, Qt
+from PySide6.QtGui import QDrag, QPixmap
+from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QVBoxLayout
 
 from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.ui.party_builder_bar import ShopItem
-from endless_idler.ui.party_builder_common import apply_star_rank_visuals
-from endless_idler.ui.party_builder_common import build_character_stats_tooltip
-from endless_idler.ui.party_builder_common import clear_star_rank_visuals
-from endless_idler.ui.party_builder_common import derive_display_name
-from endless_idler.ui.party_builder_common import MIME_TYPE
-from endless_idler.ui.party_builder_common import set_pixmap
-from endless_idler.ui.tooltip import hide_stained_tooltip
-from endless_idler.ui.tooltip import show_stained_tooltip
+from endless_idler.ui.party_builder_common import (
+    MIME_TYPE,
+    apply_star_rank_visuals,
+    build_character_stats_tooltip,
+    clear_star_rank_visuals,
+    derive_display_name,
+    set_pixmap,
+)
+from endless_idler.ui.tooltip import hide_stained_tooltip, show_stained_tooltip
 
 
 class DropSlot(QFrame):
@@ -103,12 +96,21 @@ class DropSlot(QFrame):
         self._stack_badge.setObjectName("stackBadge")
         self._stack_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._stack_badge.setMinimumSize(20, 18)
-        layout.addWidget(self._stack_badge, 0, 0, 1, 1, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(
+            self._stack_badge,
+            0,
+            0,
+            1,
+            1,
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
+        )
         self._stack_badge.hide()
 
         self._placement_badge = QFrame()
         self._placement_badge.setObjectName("placementBadge")
-        self._placement_badge.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self._placement_badge.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
         placement_layout = QVBoxLayout()
         placement_layout.setContentsMargins(3, 3, 3, 3)
         placement_layout.setSpacing(2)
@@ -124,9 +126,18 @@ class DropSlot(QFrame):
         self._placement_bottom.setObjectName("placementSquare")
         self._placement_bottom.setFixedSize(10, 10)
         self._placement_bottom.setProperty("filled", False)
-        placement_layout.addWidget(self._placement_bottom, 0, Qt.AlignmentFlag.AlignRight)
+        placement_layout.addWidget(
+            self._placement_bottom, 0, Qt.AlignmentFlag.AlignRight
+        )
 
-        layout.addWidget(self._placement_badge, 0, 0, 1, 1, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(
+            self._placement_badge,
+            0,
+            0,
+            1,
+            1,
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight,
+        )
         self._placement_badge.hide()
 
         self.setFixedSize(110, 130)
@@ -151,7 +162,9 @@ class DropSlot(QFrame):
                 return
 
             plugin = self._plugins_by_id.get(char_id)
-            display_name = plugin.display_name if plugin else derive_display_name(char_id)
+            display_name = (
+                plugin.display_name if plugin else derive_display_name(char_id)
+            )
             image_path = plugin.random_image_path(self._rng) if plugin else None
             stars = plugin.stars if plugin else 1
             self._set_character(char_id, display_name, image_path, stars)
@@ -229,7 +242,9 @@ class DropSlot(QFrame):
             if pixmap.isNull():
                 pixmap = self._image.pixmap() or QPixmap()
             if not pixmap.isNull():
-                drag.setPixmap(pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio))
+                drag.setPixmap(
+                    pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio)
+                )
 
             result = drag.exec(
                 Qt.DropAction.MoveAction | Qt.DropAction.CopyAction,
@@ -323,7 +338,9 @@ class DropSlot(QFrame):
         event.setDropAction(Qt.DropAction.MoveAction)
         event.accept()
 
-    def _set_character(self, char_id: str, display_name: str, image_path: Path | None, stars: int) -> None:
+    def _set_character(
+        self, char_id: str, display_name: str, image_path: Path | None, stars: int
+    ) -> None:
         self._char_id = char_id
         self._display_name = display_name
         self._image_path = image_path
@@ -353,7 +370,9 @@ class DropSlot(QFrame):
             return
 
         self._label.setText(self._display_name)
-        set_pixmap(self._image, self._image_path, size=72, placeholder=self._display_name)
+        set_pixmap(
+            self._image, self._image_path, size=72, placeholder=self._display_name
+        )
         apply_star_rank_visuals(self._inner, self._stars or 1)
 
         stacks = self._get_stack_count(self._char_id)
@@ -374,12 +393,10 @@ class DropSlot(QFrame):
         self._placement_bottom.style().polish(self._placement_bottom)
         self._placement_badge.show()
 
-        self._tooltip_html = (
-            build_character_stats_tooltip(
-                name=self._display_name,
-                stars=self._stars or 1,
-                stacks=stacks if (self._show_stack_badge and primary_stack) else None,
-            )
+        self._tooltip_html = build_character_stats_tooltip(
+            name=self._display_name,
+            stars=self._stars or 1,
+            stacks=stacks if (self._show_stack_badge and primary_stack) else None,
         )
         self.setToolTip("")
 

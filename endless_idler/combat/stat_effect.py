@@ -18,4 +18,3 @@ class StatEffect:
     def tick(self) -> None:
         if self.duration > 0:
             self.duration -= 1
-

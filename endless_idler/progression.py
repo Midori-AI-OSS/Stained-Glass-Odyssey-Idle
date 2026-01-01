@@ -3,7 +3,6 @@ from __future__ import annotations
 from endless_idler.characters.metadata import DEFAULT_BASE_STATS
 from endless_idler.save import RunSave
 
-
 DEATH_STAT_BONUS_RATE = 0.0001  # 0.01%
 DEATH_STAT_EXCLUDED_KEYS = frozenset(
     {
@@ -34,7 +33,11 @@ def record_character_death(
         save.character_deaths = deaths
     deaths[char_id] = max(0, int(deaths.get(char_id, 0))) + 1
 
-    template = base_stats_template if isinstance(base_stats_template, dict) else DEFAULT_BASE_STATS
+    template = (
+        base_stats_template
+        if isinstance(base_stats_template, dict)
+        else DEFAULT_BASE_STATS
+    )
     stats = save.character_stats.get(char_id)
     if not isinstance(stats, dict):
         stats = dict(template)
@@ -57,4 +60,3 @@ def apply_death_stat_bonus(stats: dict[str, float]) -> None:
         if not isinstance(value, (int, float)):
             continue
         stats[key] = float(value) * multiplier
-

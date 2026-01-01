@@ -9,7 +9,11 @@ def extract_damage_type_id(node: ast.AST | None) -> tuple[str | None, bool]:
     if node is None:
         return None, False
 
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "field":
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "field"
+    ):
         default_factory = _keyword_value(node, "default_factory")
         if default_factory is not None:
             return _damage_type_from_factory(default_factory)
@@ -90,4 +94,3 @@ def _keyword_value(call: ast.Call, key: str) -> ast.AST | None:
         if keyword.arg == key:
             return keyword.value
     return None
-

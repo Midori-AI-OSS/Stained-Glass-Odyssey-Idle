@@ -4,12 +4,14 @@ import random
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame
-from PySide6.QtWidgets import QHBoxLayout
-from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QProgressBar
-from PySide6.QtWidgets import QVBoxLayout
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class IdleArena(QFrame):
@@ -114,7 +116,9 @@ class IdleCharacterCard(QFrame):
     def _hp_format(self, *, hp: float, max_hp: float) -> str:
         return f"{max(0, int(hp))} / {max(1, int(max_hp))}"
 
-    def _exp_format(self, *, exp: float, next_exp: float, gain_per_second: float) -> str:
+    def _exp_format(
+        self, *, exp: float, next_exp: float, gain_per_second: float
+    ) -> str:
         rate = float(gain_per_second)
         if rate <= 0:
             return f"EXP {max(0, int(exp))} / {max(1, int(next_exp))}"
@@ -143,7 +147,11 @@ class IdleCharacterCard(QFrame):
 
         self._exp_bar.setRange(0, max(1, int(next_exp)))
         self._exp_bar.setValue(int(exp))
-        self._exp_bar.setFormat(self._exp_format(exp=exp, next_exp=next_exp, gain_per_second=gain_per_second))
+        self._exp_bar.setFormat(
+            self._exp_format(
+                exp=exp, next_exp=next_exp, gain_per_second=gain_per_second
+            )
+        )
 
         self._hp_bar.setRange(0, max(1, int(max_hp)))
         self._hp_bar.setValue(int(hp))
@@ -262,7 +270,9 @@ class IdleOffsiteCard(QFrame):
         self._exp_bar.setRange(0, max(1, int(next_exp)))
         self._exp_bar.setValue(int(exp))
         if gain_per_second > 0:
-            self._exp_bar.setFormat(f"EXP {max(0, int(exp))} / {max(1, int(next_exp))} +{gain_per_second:.2f}/s")
+            self._exp_bar.setFormat(
+                f"EXP {max(0, int(exp))} / {max(1, int(next_exp))} +{gain_per_second:.2f}/s"
+            )
         else:
             self._exp_bar.setFormat(f"EXP {max(0, int(exp))} / {max(1, int(next_exp))}")
 

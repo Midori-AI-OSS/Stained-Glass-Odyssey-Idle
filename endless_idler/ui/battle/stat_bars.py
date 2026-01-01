@@ -3,12 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame
-from PySide6.QtWidgets import QHBoxLayout
-from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QProgressBar
-from PySide6.QtWidgets import QVBoxLayout
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 from endless_idler.ui.battle.sim import Combatant
 
@@ -78,7 +80,9 @@ class CombatantStatBars(QFrame):
 
             label = QLabel(spec.label)
             label.setObjectName("battleStatLabel")
-            label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            label.setAlignment(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
             label.setFixedWidth(82)
             row_layout.addWidget(label, 0)
 
@@ -102,10 +106,19 @@ class CombatantStatBars(QFrame):
             "atk": (float(stats.atk), f"Attack {stats.atk}"),
             "defense": (float(stats.defense), f"Defense {stats.defense}"),
             "spd": (float(stats.spd), f"Speed {stats.spd}"),
-            "crit_rate": (float(stats.crit_rate), f"Crit Rate {stats.crit_rate * 100:.1f}%"),
-            "dodge_odds": (float(stats.dodge_odds), f"Dodge {stats.dodge_odds * 100:.1f}%"),
+            "crit_rate": (
+                float(stats.crit_rate),
+                f"Crit Rate {stats.crit_rate * 100:.1f}%",
+            ),
+            "dodge_odds": (
+                float(stats.dodge_odds),
+                f"Dodge {stats.dodge_odds * 100:.1f}%",
+            ),
             "regain": (float(stats.regain), f"Regain {stats.regain}"),
-            "mitigation": (float(stats.mitigation), f"Mitigation {stats.mitigation:.2f}"),
+            "mitigation": (
+                float(stats.mitigation),
+                f"Mitigation {stats.mitigation:.2f}",
+            ),
         }
 
         for key, bar in self._bars.items():

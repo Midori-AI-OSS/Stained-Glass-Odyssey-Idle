@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass
-from dataclasses import field
-from dataclasses import fields
 import logging
+from dataclasses import dataclass, field, fields
 
 from autofighter.character import CharacterType
 from autofighter.stat_effect import StatEffect
-from autofighter.stats import BUS
-from autofighter.stats import Stats
+from autofighter.stats import BUS, Stats
 from plugins.damage_types import random_damage_type
 from plugins.damage_types._base import DamageTypeBase
 
@@ -163,9 +160,7 @@ class FoeBase(Stats):
             self.lrm_memory = SimpleConversationMemory()
             return
 
-        self.lrm_memory = VectorStoreRetrieverMemory(
-            retriever=store.as_retriever()
-        )
+        self.lrm_memory = VectorStoreRetrieverMemory(retriever=store.as_retriever())
 
     def __deepcopy__(self, memo):  # type: ignore[override]
         """Custom deepcopy that skips copying non-serializable memory bindings."""
@@ -189,7 +184,6 @@ class FoeBase(Stats):
         self.ultimate_ready = False
         await BUS.emit_async("ultimate_used", self)
         return True
-
 
     async def send_lrm_message(self, message: str) -> dict[str, object]:
         import asyncio
@@ -242,9 +236,7 @@ class FoeBase(Stats):
         response = "".join(chunks)
 
         voice_path: str | None = None
-        audio = await asyncio.to_thread(
-            generate_voice, response, self.voice_sample
-        )
+        audio = await asyncio.to_thread(generate_voice, response, self.voice_sample)
         if audio:
             voices = Path("assets/voices")
             voices.mkdir(parents=True, exist_ok=True)

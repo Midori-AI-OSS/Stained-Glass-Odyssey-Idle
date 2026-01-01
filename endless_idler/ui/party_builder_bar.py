@@ -2,36 +2,33 @@ from __future__ import annotations
 
 import json
 import random
-
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray
-from PySide6.QtCore import Qt
-from PySide6.QtCore import QMimeData
-from PySide6.QtGui import QDrag
-from PySide6.QtGui import QCursor
-from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QLayout
-from PySide6.QtWidgets import QFrame
-from PySide6.QtWidgets import QHBoxLayout
-from PySide6.QtWidgets import QGridLayout
-from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QPushButton
-from PySide6.QtWidgets import QSizePolicy
-from PySide6.QtWidgets import QVBoxLayout
-
+from PySide6.QtCore import QByteArray, QMimeData, Qt
+from PySide6.QtGui import QDrag, QPixmap
+from PySide6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLayout,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+)
 from shiboken6 import isValid
 
 from endless_idler.characters.plugins import CharacterPlugin
-from endless_idler.ui.party_builder_common import apply_star_rank_visuals
-from endless_idler.ui.party_builder_common import build_character_stats_tooltip
-from endless_idler.ui.party_builder_common import derive_display_name
-from endless_idler.ui.party_builder_common import MIME_TYPE
-from endless_idler.ui.party_builder_common import sanitize_stars
-from endless_idler.ui.party_builder_common import set_pixmap
-from endless_idler.ui.tooltip import hide_stained_tooltip
-from endless_idler.ui.tooltip import show_stained_tooltip
+from endless_idler.ui.party_builder_common import (
+    MIME_TYPE,
+    apply_star_rank_visuals,
+    build_character_stats_tooltip,
+    derive_display_name,
+    sanitize_stars,
+    set_pixmap,
+)
+from endless_idler.ui.tooltip import hide_stained_tooltip, show_stained_tooltip
 
 
 class CharacterBar(QFrame):
@@ -100,7 +97,9 @@ class CharacterBar(QFrame):
                 continue
 
             plugin = self._plugins_by_id.get(char_id)
-            display_name = plugin.display_name if plugin else derive_display_name(char_id)
+            display_name = (
+                plugin.display_name if plugin else derive_display_name(char_id)
+            )
             image_path = plugin.random_image_path(self._rng) if plugin else None
             stars = sanitize_stars(plugin.stars if plugin else 1)
             placement = (plugin.placement if plugin else "both").strip().lower()
@@ -256,18 +255,29 @@ class ShopItem(QFrame):
         self._image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._image.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self._image.setFixedSize(72, 72)
-        set_pixmap(self._image, self._image_path, size=72, placeholder=self._display_name)
+        set_pixmap(
+            self._image, self._image_path, size=72, placeholder=self._display_name
+        )
         layout.addWidget(self._image, 0, 0, 1, 1, Qt.AlignmentFlag.AlignCenter)
 
         self._stack_badge = QLabel()
         self._stack_badge.setObjectName("shopStackableBadge")
         self._stack_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._stack_badge.setMinimumSize(20, 18)
-        layout.addWidget(self._stack_badge, 0, 0, 1, 1, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(
+            self._stack_badge,
+            0,
+            0,
+            1,
+            1,
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
+        )
 
         placement_badge = QFrame()
         placement_badge.setObjectName("placementBadge")
-        placement_badge.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        placement_badge.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
         placement_layout = QVBoxLayout()
         placement_layout.setContentsMargins(3, 3, 3, 3)
         placement_layout.setSpacing(2)
@@ -283,9 +293,18 @@ class ShopItem(QFrame):
         self._placement_bottom.setObjectName("placementSquare")
         self._placement_bottom.setFixedSize(10, 10)
         self._placement_bottom.setProperty("filled", False)
-        placement_layout.addWidget(self._placement_bottom, 0, Qt.AlignmentFlag.AlignRight)
+        placement_layout.addWidget(
+            self._placement_bottom, 0, Qt.AlignmentFlag.AlignRight
+        )
 
-        layout.addWidget(placement_badge, 0, 0, 1, 1, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(
+            placement_badge,
+            0,
+            0,
+            1,
+            1,
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight,
+        )
 
         name = QLabel(display_name)
         name.setObjectName("characterTileName")
@@ -323,12 +342,10 @@ class ShopItem(QFrame):
         self._stack_badge.show()
 
     def _refresh_tooltip(self) -> None:
-        self._tooltip_html = (
-            build_character_stats_tooltip(
-                name=self._display_name,
-                stars=self._stars,
-                stackable=self._stack_count > 0,
-            )
+        self._tooltip_html = build_character_stats_tooltip(
+            name=self._display_name,
+            stars=self._stars,
+            stackable=self._stack_count > 0,
         )
         self.setToolTip("")
 

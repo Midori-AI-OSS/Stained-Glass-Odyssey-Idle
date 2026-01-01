@@ -93,18 +93,27 @@ class PartyBuilderWidget(QWidget):
         back.setObjectName("partyBackButton")
         back.setCursor(Qt.CursorShape.PointingHandCursor)
         back.clicked.connect(self.back_requested.emit)
-        header.addWidget(back, 0, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        header.addWidget(
+            back, 0, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
 
         party_hp = PartyHpHeader()
         self._party_hp_header = party_hp
-        header.addWidget(party_hp, 0, 1, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
+        header.addWidget(
+            party_hp,
+            0,
+            1,
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+        )
         header.setColumnStretch(1, 1)
 
         reset = QPushButton("Reset")
         reset.setObjectName("partyResetButton")
         reset.setCursor(Qt.CursorShape.PointingHandCursor)
         reset.clicked.connect(self._reset_run)
-        header.addWidget(reset, 0, 2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        header.addWidget(
+            reset, 0, 2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
 
         self._char_bar: CharacterBar | None = None
         self._token_label: QLabel | None = None
@@ -155,7 +164,9 @@ class PartyBuilderWidget(QWidget):
 
         bar.destroyed.connect(self._on_char_bar_destroyed)
         self._char_bar = bar
-        self._overlay_layout.addWidget(bar, 0, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        self._overlay_layout.addWidget(
+            bar, 0, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter
+        )
         self._set_shop_clearance_for_bar()
 
     def _on_char_bar_destroyed(self) -> None:
@@ -307,7 +318,11 @@ class PartyBuilderWidget(QWidget):
         top_row.setSpacing(18)
         top_row.addStretch(1)
 
-        top_row.addWidget(PulsingPlane(object_name="groupFxPlane", tone="light"), 0, Qt.AlignmentFlag.AlignTop)
+        top_row.addWidget(
+            PulsingPlane(object_name="groupFxPlane", tone="light"),
+            0,
+            Qt.AlignmentFlag.AlignTop,
+        )
 
         party = QWidget()
         party.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
@@ -316,14 +331,22 @@ class PartyBuilderWidget(QWidget):
         party_layout.setSpacing(12)
         party.setLayout(party_layout)
         party_layout.addLayout(self._make_onsite_row())
-        party_layout.addLayout(self._make_row("Offsite", count=OFFSITE_SLOTS, center=True))
+        party_layout.addLayout(
+            self._make_row("Offsite", count=OFFSITE_SLOTS, center=True)
+        )
         top_row.addWidget(party, 0, Qt.AlignmentFlag.AlignTop)
 
-        top_row.addWidget(PulsingPlane(object_name="rewardsPlane", tone="dark"), 0, Qt.AlignmentFlag.AlignTop)
+        top_row.addWidget(
+            PulsingPlane(object_name="rewardsPlane", tone="dark"),
+            0,
+            Qt.AlignmentFlag.AlignTop,
+        )
         top_row.addStretch(1)
 
         block_layout.addLayout(top_row)
-        block_layout.addWidget(self._make_fight_and_standby_area(), 0, Qt.AlignmentFlag.AlignHCenter)
+        block_layout.addWidget(
+            self._make_fight_and_standby_area(), 0, Qt.AlignmentFlag.AlignHCenter
+        )
 
         layout.addWidget(block)
         return wrapper
@@ -387,7 +410,9 @@ class PartyBuilderWidget(QWidget):
             self._slots_by_id[slot_id] = slot
             row.addWidget(slot)
 
-        self._shop_tile = StandbyShopTile(tokens=self._save.tokens, open_=self._shop_open)
+        self._shop_tile = StandbyShopTile(
+            tokens=self._save.tokens, open_=self._shop_open
+        )
         self._shop_tile.toggled.connect(self._set_shop_open)
         self._token_label = self._shop_tile.token_label
         row.addWidget(self._shop_tile)
@@ -398,7 +423,9 @@ class PartyBuilderWidget(QWidget):
         return self._save.tokens >= cost
 
     def _is_char_in_party(self, char_id: str) -> bool:
-        return char_id in {item for item in (self._save.onsite + self._save.offsite) if item}
+        return char_id in {
+            item for item in (self._save.onsite + self._save.offsite) if item
+        }
 
     def _is_primary_stack_slot(self, slot_id: str, char_id: str) -> bool:
         prefix, index_raw = slot_id.split("_", 1)
@@ -441,20 +468,26 @@ class PartyBuilderWidget(QWidget):
         self._refresh_party_level()
         self._save_manager.save(self._save)
 
-    def _purchase_character(self, char_id: str, destination: str, target_char_id: str | None) -> bool:
+    def _purchase_character(
+        self, char_id: str, destination: str, target_char_id: str | None
+    ) -> bool:
         if self._save.tokens < DEFAULT_CHARACTER_COST:
             return False
         if char_id not in self._save.bar:
             return False
 
-        in_party = char_id in {item for item in (self._save.onsite + self._save.offsite) if item}
+        in_party = char_id in {
+            item for item in (self._save.onsite + self._save.offsite) if item
+        }
         destination = destination.strip().lower()
 
         if destination in {"onsite", "offsite"}:
             if target_char_id is None:
                 if in_party:
                     return False
-                self._save.stacks[char_id] = max(1, int(self._save.stacks.get(char_id, 1)))
+                self._save.stacks[char_id] = max(
+                    1, int(self._save.stacks.get(char_id, 1))
+                )
             else:
                 if target_char_id != char_id:
                     return False
@@ -489,14 +522,20 @@ class PartyBuilderWidget(QWidget):
         return True
 
     def _add_copy_or_merge(self, char_id: str) -> bool:
-        indices = [index for index in self._iter_standby_indices() if self._save.standby[index] == char_id]
+        indices = [
+            index
+            for index in self._iter_standby_indices()
+            if self._save.standby[index] == char_id
+        ]
         if indices:
             first = indices[0]
             self._save.standby[first] = None
             slot = self._slots_by_id.get(f"standby_{first}")
             if slot:
                 slot.load_char_id(None)
-            self._save.stacks[char_id] = max(1, int(self._save.stacks.get(char_id, 1))) + 2
+            self._save.stacks[char_id] = (
+                max(1, int(self._save.stacks.get(char_id, 1))) + 2
+            )
             self._refresh_party_slot(char_id)
             return True
 
@@ -518,7 +557,11 @@ class PartyBuilderWidget(QWidget):
     def _apply_auto_merges(self) -> None:
         party = [item for item in (self._save.onsite + self._save.offsite) if item]
         for char_id in sorted(set(party)):
-            indices = [index for index in self._iter_standby_indices() if self._save.standby[index] == char_id]
+            indices = [
+                index
+                for index in self._iter_standby_indices()
+                if self._save.standby[index] == char_id
+            ]
             while len(indices) >= 2:
                 first, second = indices[:2]
                 self._save.standby[first] = None
@@ -527,9 +570,15 @@ class PartyBuilderWidget(QWidget):
                     slot = self._slots_by_id.get(f"standby_{idx}")
                     if slot:
                         slot.load_char_id(None)
-                self._save.stacks[char_id] = max(1, int(self._save.stacks.get(char_id, 1))) + 2
+                self._save.stacks[char_id] = (
+                    max(1, int(self._save.stacks.get(char_id, 1))) + 2
+                )
                 self._refresh_party_slot(char_id)
-                indices = [index for index in self._iter_standby_indices() if self._save.standby[index] == char_id]
+                indices = [
+                    index
+                    for index in self._iter_standby_indices()
+                    if self._save.standby[index] == char_id
+                ]
 
         self._refresh_standby_slots()
 
@@ -602,7 +651,9 @@ class PartyBuilderWidget(QWidget):
         preserved_bonus = float(self._save.idle_exp_bonus_until)
         preserved_penalty = float(self._save.idle_exp_penalty_until)
 
-        for char_id in sorted({item for item in (self._save.onsite + self._save.offsite) if item}):
+        for char_id in sorted(
+            {item for item in (self._save.onsite + self._save.offsite) if item}
+        ):
             plugin = self._plugin_by_id.get(char_id)
             record_character_death(
                 self._save,
@@ -642,7 +693,9 @@ class PartyBuilderWidget(QWidget):
         offers: list[str | None] = []
         offered_counts: dict[str, int] = {}
         for index in range(1, BAR_SLOTS + 1):
-            offer = self._roll_shop_offer(index, fill_ratio, party_unique, non_party, offered_counts)
+            offer = self._roll_shop_offer(
+                index, fill_ratio, party_unique, non_party, offered_counts
+            )
             offers.append(offer)
             if offer:
                 offered_counts[offer] = offered_counts.get(offer, 0) + 1
@@ -678,7 +731,9 @@ class PartyBuilderWidget(QWidget):
 
         pool = [char_id for char_id in primary if offered_counts.get(char_id, 0) <= 0]
         if not pool:
-            pool = [char_id for char_id in secondary if offered_counts.get(char_id, 0) <= 0]
+            pool = [
+                char_id for char_id in secondary if offered_counts.get(char_id, 0) <= 0
+            ]
         if not pool:
             pool = primary if primary else secondary
 
@@ -728,7 +783,9 @@ class PartyBuilderWidget(QWidget):
                 standby_index = int(index_raw)
             except ValueError:
                 return
-            if standby_index <= 0 or standby_index >= max(1, len(self._save.standby) - 1):
+            if standby_index <= 0 or standby_index >= max(
+                1, len(self._save.standby) - 1
+            ):
                 return
             self._save.standby[standby_index] = char_id
         else:

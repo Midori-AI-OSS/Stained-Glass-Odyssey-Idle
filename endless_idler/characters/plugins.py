@@ -11,14 +11,13 @@ image is selected on each fresh app load.
 from __future__ import annotations
 
 import random
-
-from dataclasses import field
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from endless_idler.characters.metadata import DEFAULT_BASE_STATS
-from endless_idler.characters.metadata import extract_character_metadata
-
+from endless_idler.characters.metadata import (
+    DEFAULT_BASE_STATS,
+    extract_character_metadata,
+)
 
 _IMAGE_EXTENSIONS = (
     ".png",
@@ -39,7 +38,9 @@ class CharacterPlugin:
     placement: str = "both"
     damage_type_id: str = "generic"
     damage_type_random: bool = False
-    base_stats: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_BASE_STATS))
+    base_stats: dict[str, float] = field(
+        default_factory=lambda: dict(DEFAULT_BASE_STATS)
+    )
     base_aggro: float | None = None
     damage_reduction_passes: int | None = None
 

@@ -1,13 +1,12 @@
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 
 from autofighter.character import CharacterType
 from plugins.characters._base import PlayerBase
 from plugins.damage_types import load_damage_type
 from plugins.damage_types._base import DamageTypeBase
 
-
 placement = "both"
+
 
 @dataclass
 class Ryne(PlayerBase):
@@ -56,6 +55,8 @@ class Ryne(PlayerBase):
     """
     char_type: CharacterType = CharacterType.B
     gacha_rarity = 6
-    damage_type: DamageTypeBase = field(default_factory=lambda: load_damage_type("Light"))
+    damage_type: DamageTypeBase = field(
+        default_factory=lambda: load_damage_type("Light")
+    )
     passives: list[str] = field(default_factory=lambda: ["ryne_oracle_of_balance"])
     actions_display: str = "number"

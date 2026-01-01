@@ -1,25 +1,23 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from dataclasses import field
 import random
-from typing import TYPE_CHECKING
-from typing import ClassVar
-from typing import Collection
-from typing import Mapping
 import weakref
+from collections.abc import Collection, Mapping
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, ClassVar
 
 from autofighter.character import CharacterType
 from autofighter.mapgen import MapNode
 from autofighter.stats import ANIMATION_OFFSET as _GLOBAL_ANIMATION_OFFSET
-from autofighter.stats import BUS
-from autofighter.stats import DEFAULT_ANIMATION_DURATION
-from autofighter.stats import DEFAULT_ANIMATION_PER_TARGET
+from autofighter.stats import (
+    BUS,
+    DEFAULT_ANIMATION_DURATION,
+    DEFAULT_ANIMATION_PER_TARGET,
+)
 from autofighter.summons.base import Summon
 from autofighter.summons.manager import SummonManager
 from plugins.characters._base import PlayerBase
-from plugins.damage_types import ALL_DAMAGE_TYPES
-from plugins.damage_types import load_damage_type
+from plugins.damage_types import ALL_DAMAGE_TYPES, load_damage_type
 from plugins.damage_types._base import DamageTypeBase
 
 if TYPE_CHECKING:
@@ -27,14 +25,14 @@ if TYPE_CHECKING:
     from plugins.passives.normal.luna_lunar_reservoir import LunaLunarReservoir
 
 
-_LUNA_PASSIVE: "type[LunaLunarReservoir] | None" = None
+_LUNA_PASSIVE: type[LunaLunarReservoir] | None = None
 
 ANIMATION_OFFSET = _GLOBAL_ANIMATION_OFFSET
 _DEFAULT_ANIMATION_DURATION = DEFAULT_ANIMATION_DURATION
 _DEFAULT_ANIMATION_PER_TARGET = DEFAULT_ANIMATION_PER_TARGET
 
 
-def _get_luna_passive() -> "type[LunaLunarReservoir]":
+def _get_luna_passive() -> type[LunaLunarReservoir]:
     """Import Luna's passive lazily to avoid circular dependencies."""
 
     global _LUNA_PASSIVE
@@ -45,7 +43,7 @@ def _get_luna_passive() -> "type[LunaLunarReservoir]":
     return _LUNA_PASSIVE
 
 
-def _register_luna_sword(owner: "Luna", sword: Summon, label: str) -> None:
+def _register_luna_sword(owner: Luna, sword: Summon, label: str) -> None:
     """Register a sword with Luna's passive without leaking import cycles."""
 
     passive = _get_luna_passive()
@@ -62,7 +60,7 @@ class _LunaSwordCoordinator:
 
     EVENT_NAME = "luna_sword_hit"
 
-    def __init__(self, owner: "Luna", _registry: "PassiveRegistry") -> None:
+    def __init__(self, owner: Luna, _registry: PassiveRegistry) -> None:
         self._owner_ref: weakref.ReferenceType[Luna] = weakref.ref(owner)
         self._sword_refs: dict[int, weakref.ReferenceType[Summon]] = {}
         self._hit_listener = self._handle_hit
@@ -179,8 +177,8 @@ class _LunaSwordCoordinator:
         BUS.unsubscribe("summon_removed", self._removal_listener)
 
 
-
 placement = "onsite"
+
 
 @dataclass
 class Luna(PlayerBase):
@@ -246,6 +244,7 @@ class Luna(PlayerBase):
             if isinstance(tracker, Mapping):
                 history = tracker.get(cls.id)
                 if isinstance(history, Mapping):
+
                     def _safe_int(value: object) -> int | None:
                         try:
                             if value is None:
@@ -264,20 +263,33 @@ class Luna(PlayerBase):
                     last_loop = _safe_int(history.get("loop"))
                     last_floor = _safe_int(history.get("floor"))
                     current_floor_value = max(_safe_int(floor) or 0, 0)
-                    floors_before_current_loop = max(current_order - current_floor_value, 0)
+                    floors_before_current_loop = max(
+                        current_order - current_floor_value, 0
+                    )
 
                     if last_order is None and last_floor is not None:
                         if last_loop is None or current_loop is None:
-                            last_order = floors_before_current_loop + last_floor if floors_before_current_loop else last_floor
+                            last_order = (
+                                floors_before_current_loop + last_floor
+                                if floors_before_current_loop
+                                else last_floor
+                            )
                         elif last_loop == current_loop:
                             last_order = floors_before_current_loop + last_floor
                         else:
-                            loops_completed_before_current = max((current_loop or 1) - 1, 0)
+                            loops_completed_before_current = max(
+                                (current_loop or 1) - 1, 0
+                            )
                             floors_per_loop = 0
                             if loops_completed_before_current > 0:
-                                floors_per_loop = floors_before_current_loop // loops_completed_before_current
+                                floors_per_loop = (
+                                    floors_before_current_loop
+                                    // loops_completed_before_current
+                                )
                             if floors_per_loop > 0:
-                                last_order = max((last_loop - 1) * floors_per_loop + last_floor, 0)
+                                last_order = max(
+                                    (last_loop - 1) * floors_per_loop + last_floor, 0
+                                )
 
                     if last_order is not None and current_order >= last_order:
                         missed = max(current_order - last_order - 1, 0)
@@ -291,7 +303,7 @@ class Luna(PlayerBase):
     async def prepare_for_battle(
         self,
         node: MapNode,
-        registry: "PassiveRegistry",
+        registry: PassiveRegistry,
     ) -> None:
         previous_helper = getattr(self, "_luna_sword_helper", None)
         if isinstance(previous_helper, _LunaSwordCoordinator):
@@ -331,7 +343,9 @@ class Luna(PlayerBase):
             count = label_counts.get(key, 0) + 1
             label_counts[key] = count
             summon_type_base = f"luna_sword_{key}"
-            summon_type = summon_type_base if count == 1 else f"{summon_type_base}_{count}"
+            summon_type = (
+                summon_type_base if count == 1 else f"{summon_type_base}_{count}"
+            )
             summon = await SummonManager.create_summon(
                 self,
                 summon_type=summon_type,

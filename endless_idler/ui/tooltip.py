@@ -17,8 +17,7 @@ from PySide6.QtWidgets import (
 
 from endless_idler.ui.assets import asset_path
 
-
-_TOOLTIP: "StainedGlassTooltip | None" = None
+_TOOLTIP: StainedGlassTooltip | None = None
 
 
 def show_stained_tooltip(owner: QWidget, html: str) -> None:

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve
-from PySide6.QtCore import QPropertyAnimation
-from PySide6.QtWidgets import QFrame
-from PySide6.QtWidgets import QGraphicsOpacityEffect
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation
+from PySide6.QtWidgets import QFrame, QGraphicsOpacityEffect
 
 
 class PulsingPlane(QFrame):

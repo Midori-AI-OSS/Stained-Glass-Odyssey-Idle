@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import html
-
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -9,7 +8,6 @@ from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import QGraphicsDropShadowEffect, QLabel, QWidget
 
 from endless_idler.combat.stats import Stats
-
 
 MIME_TYPE = "application/x-endless-idler-character"
 

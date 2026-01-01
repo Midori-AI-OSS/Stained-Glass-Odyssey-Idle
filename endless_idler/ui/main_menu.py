@@ -41,7 +41,9 @@ class MainMenuWidget(QWidget):
         menu_panel.setObjectName("mainMenuPanel")
         menu_panel.setFrameShape(QFrame.Shape.NoFrame)
         menu_panel.setFixedWidth(220)
-        root.addWidget(menu_panel, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+        root.addWidget(
+            menu_panel, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop
+        )
 
         glow = QGraphicsDropShadowEffect(menu_panel)
         glow.setBlurRadius(44)
@@ -56,10 +58,18 @@ class MainMenuWidget(QWidget):
 
         menu_layout.addWidget(self._make_button("Run", self.play_requested.emit))
         menu_layout.addWidget(self._make_button("Warp", self.warp_requested.emit))
-        menu_layout.addWidget(self._make_button("Inventory", self.inventory_requested.emit))
-        menu_layout.addWidget(self._make_button("Guidebook", self.guidebook_requested.emit))
-        menu_layout.addWidget(self._make_button("Settings", self.settings_requested.emit))
-        menu_layout.addWidget(self._make_button("Feedback", self.feedback_requested.emit))
+        menu_layout.addWidget(
+            self._make_button("Inventory", self.inventory_requested.emit)
+        )
+        menu_layout.addWidget(
+            self._make_button("Guidebook", self.guidebook_requested.emit)
+        )
+        menu_layout.addWidget(
+            self._make_button("Settings", self.settings_requested.emit)
+        )
+        menu_layout.addWidget(
+            self._make_button("Feedback", self.feedback_requested.emit)
+        )
         menu_layout.addStretch(1)
 
     def _make_button(self, label: str, on_click: Callable[[], None]) -> QPushButton:
