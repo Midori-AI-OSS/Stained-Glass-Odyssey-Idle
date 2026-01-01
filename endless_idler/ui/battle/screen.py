@@ -96,6 +96,7 @@ class BattleScreenWidget(QWidget):
         self._stat_bars_by_card: dict[CombatantCard, CombatantStatBars] = {}
         self._turn_side = "party"
         self._battle_over = False
+        self._foe_kills = 0
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 16, 16, 16)
@@ -300,7 +301,8 @@ class BattleScreenWidget(QWidget):
         if damage <= 0:
             return
 
-        target.stats.hp = max(0, int(target.stats.hp) - int(damage))
+        previous_hp = int(target.stats.hp)
+        target.stats.hp = max(0, previous_hp - int(damage))
         self._arena.add_pulse(attacker_widget, target_widget, color, crit=crit)
         self._set_status(f"{attacker.name} hits {target.name} for {damage}{' (CRIT)' if crit else ''}")
 
@@ -308,10 +310,12 @@ class BattleScreenWidget(QWidget):
         stat_bars = self._stat_bars_by_card.get(target_widget)
         if stat_bars is not None:
             stat_bars.refresh()
-        if target.stats.hp <= 0:
+        if previous_hp > 0 and target.stats.hp <= 0:
             self._set_status(f"{target.name} fell!")
             if target in self._party:
                 self._apply_death_exp_debuff(target.char_id)
+            elif target in self._foes:
+                self._foe_kills += 1
 
         if self._is_over():
             self._on_battle_over()
@@ -338,6 +342,7 @@ class BattleScreenWidget(QWidget):
         party_alive = any(c.stats.hp > 0 for c in self._party)
         foes_alive = any(c.stats.hp > 0 for c in self._foes)
         if party_alive and not foes_alive:
+            self._award_gold(self._foe_kills)
             self._set_status("Victory")
             self._apply_idle_exp_bonus()
         elif foes_alive and not party_alive:
@@ -356,6 +361,19 @@ class BattleScreenWidget(QWidget):
 
     def _apply_idle_exp_penalty(self) -> None:
         self._extend_idle_exp_timer(key="idle_exp_penalty_until", seconds=15 * 60)
+
+    def _award_gold(self, kills: int) -> None:
+        gold = max(0, int(kills))
+        if gold <= 0:
+            return
+
+        try:
+            manager = SaveManager()
+            save = manager.load() or RunSave()
+            save.tokens = max(0, int(save.tokens)) + gold
+            manager.save(save)
+        except Exception:
+            return
 
     def _extend_idle_exp_timer(self, *, key: str, seconds: int) -> None:
         try:
