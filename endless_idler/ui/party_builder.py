@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import random
 
-from PySide6.QtCore import QPropertyAnimation, Qt, Signal
-from PySide6.QtWidgets import (
-    QFrame,
-    QGraphicsOpacityEffect,
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QMessageBox,
-    QPushButton,
-    QSizePolicy,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtCore import QPropertyAnimation
+from PySide6.QtCore import Qt
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QFrame
+from PySide6.QtWidgets import QGraphicsOpacityEffect
+from PySide6.QtWidgets import QGridLayout
+from PySide6.QtWidgets import QHBoxLayout
+from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QMainWindow
+from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QPushButton
+from PySide6.QtWidgets import QSizePolicy
+from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtWidgets import QWidget
 
 from endless_idler.characters.plugins import discover_character_plugins
 from endless_idler.progression import record_character_death
@@ -34,8 +34,10 @@ from endless_idler.save import (
 from endless_idler.ui.party_builder_bar import CharacterBar
 from endless_idler.ui.party_builder_fight_bar import FightBar
 from endless_idler.ui.party_builder_idle_bar import IdleBar
+from endless_idler.ui.party_builder_merge_fx import MergeFxOverlay
 from endless_idler.ui.party_builder_party_level_tile import StandbyPartyLevelTile
 from endless_idler.ui.party_builder_planes import PulsingPlane
+from endless_idler.ui.party_builder_rewards_plane import RewardsPlane
 from endless_idler.ui.party_builder_sell import SellZone
 from endless_idler.ui.party_builder_shop_tile import StandbyShopTile
 from endless_idler.ui.party_builder_slot import DropSlot
@@ -77,11 +79,13 @@ class PartyBuilderWidget(QWidget):
         self._sell_zones: list[SellZone] = []
         self._shop_tile: StandbyShopTile | None = None
         self._party_level_tile: StandbyPartyLevelTile | None = None
+        self._rewards_plane: RewardsPlane | None = None
         self._overlay_layout: QGridLayout | None = None
         self._shop_clearance: QWidget | None = None
         self._fight_bar: FightBar | None = None
         self._idle_bar: IdleBar | None = None
         self._party_hp_header: PartyHpHeader | None = None
+        self._merge_fx: MergeFxOverlay | None = None
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 16, 16, 16)
@@ -131,12 +135,28 @@ class PartyBuilderWidget(QWidget):
         overlay.addWidget(self._make_main_area(), 0, 0)
         root.addWidget(overlay_host, 1)
 
+        merge_fx = MergeFxOverlay(self)
+        merge_fx.setGeometry(self.rect())
+        merge_fx.hide()
+        merge_fx.raise_()
+        self._merge_fx = merge_fx
+
         self._maybe_build_char_bar()
 
         self._refresh_tokens()
         self._load_slots_from_save()
         self._refresh_party_hp()
+        self._refresh_rewards_plane()
         self._refresh_action_bars_state()
+
+    def resizeEvent(self, event: object) -> None:
+        if self._merge_fx is not None:
+            self._merge_fx.setGeometry(self.rect())
+            self._merge_fx.raise_()
+        try:
+            super().resizeEvent(event)  # type: ignore[misc]
+        except Exception:
+            return
 
     def _maybe_build_char_bar(self) -> None:
         if not self._shop_open:
@@ -161,6 +181,8 @@ class PartyBuilderWidget(QWidget):
         bar.destroyed.connect(self._on_char_bar_destroyed)
         self._char_bar = bar
         self._overlay_layout.addWidget(bar, 0, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        if self._merge_fx is not None:
+            self._merge_fx.raise_()
         self._set_shop_clearance_for_bar()
 
     def _on_char_bar_destroyed(self) -> None:
@@ -324,7 +346,9 @@ class PartyBuilderWidget(QWidget):
         party_layout.addLayout(self._make_row("Offsite", count=OFFSITE_SLOTS, center=True))
         top_row.addWidget(party, 0, Qt.AlignmentFlag.AlignTop)
 
-        top_row.addWidget(PulsingPlane(object_name="rewardsPlane", tone="dark"), 0, Qt.AlignmentFlag.AlignTop)
+        rewards = RewardsPlane()
+        self._rewards_plane = rewards
+        top_row.addWidget(rewards, 0, Qt.AlignmentFlag.AlignTop)
         top_row.addStretch(1)
 
         block_layout.addLayout(top_row)
@@ -497,6 +521,7 @@ class PartyBuilderWidget(QWidget):
         indices = [index for index in self._iter_standby_indices() if self._save.standby[index] == char_id]
         if indices:
             first = indices[0]
+            self._play_merge_fx(char_id=char_id, standby_indices=[first])
             self._save.standby[first] = None
             slot = self._slots_by_id.get(f"standby_{first}")
             if slot:
@@ -526,6 +551,7 @@ class PartyBuilderWidget(QWidget):
             indices = [index for index in self._iter_standby_indices() if self._save.standby[index] == char_id]
             while len(indices) >= 2:
                 first, second = indices[:2]
+                self._play_merge_fx(char_id=char_id, standby_indices=[first, second])
                 self._save.standby[first] = None
                 self._save.standby[second] = None
                 for idx in (first, second):
@@ -557,6 +583,32 @@ class PartyBuilderWidget(QWidget):
             slot = self._slots_by_id.get(f"offsite_{index + 1}")
             if slot:
                 slot.refresh_view()
+
+    def _party_slot_for_char(self, char_id: str) -> DropSlot | None:
+        if char_id in self._save.onsite:
+            index = self._save.onsite.index(char_id)
+            return self._slots_by_id.get(f"onsite_{index + 1}")
+        if char_id in self._save.offsite:
+            index = self._save.offsite.index(char_id)
+            return self._slots_by_id.get(f"offsite_{index + 1}")
+        return None
+
+    def _play_merge_fx(self, *, char_id: str, standby_indices: list[int]) -> None:
+        if self._merge_fx is None:
+            return
+        destination = self._party_slot_for_char(char_id)
+        if destination is None:
+            return
+
+        sources: list[QWidget] = []
+        for idx in standby_indices:
+            slot = self._slots_by_id.get(f"standby_{idx}")
+            if slot is not None:
+                sources.append(slot)
+        if not sources:
+            return
+
+        self._merge_fx.play_merge(sources=sources, destination=destination)
 
     def _sell_character(self, char_id: str) -> None:
         stacks = self._save.stacks.get(char_id, 1)
@@ -634,6 +686,7 @@ class PartyBuilderWidget(QWidget):
         self._load_slots_from_save()
         self._refresh_action_bars_state()
         self._refresh_party_hp()
+        self._refresh_rewards_plane()
         if self._char_bar is not None:
             self._char_bar.set_char_ids(self._save.bar)
 
@@ -795,6 +848,14 @@ class PartyBuilderWidget(QWidget):
             max_hp=int(getattr(self._save, "party_hp_max", 0)),
         )
 
+    def _refresh_rewards_plane(self) -> None:
+        if self._rewards_plane is None:
+            return
+        self._rewards_plane.set_idle_exp_timers(
+            bonus_until=float(getattr(self._save, "idle_exp_bonus_until", 0.0)),
+            penalty_until=float(getattr(self._save, "idle_exp_penalty_until", 0.0)),
+        )
+
     def _refresh_action_bars_state(self) -> None:
         has_onsite = any(item for item in self._save.onsite if item)
         if self._fight_bar is not None:
@@ -843,3 +904,4 @@ class PartyBuilderWidget(QWidget):
         self._refresh_party_level()
         self._refresh_action_bars_state()
         self._refresh_party_hp()
+        self._refresh_rewards_plane()

@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import random
 
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 
 from PySide6.QtCore import QByteArray
 from PySide6.QtCore import Qt
@@ -176,6 +176,8 @@ class DropSlot(QFrame):
             return
 
         source = event.source() if hasattr(event, "source") else None
+        if source is self:
+            return
         if isinstance(source, DropSlot):
             if self._slot_kind in {"onsite", "offsite"} and self._is_in_party(incoming):
                 if source._slot_kind not in {"onsite", "offsite"}:  # noqa: SLF001
@@ -247,6 +249,10 @@ class DropSlot(QFrame):
             return
 
         source = event.source() if hasattr(event, "source") else None
+        if source is self:
+            if hasattr(event, "ignore"):
+                event.ignore()
+            return
         if (
             not isinstance(source, DropSlot)
             and not isinstance(source, ShopItem)
