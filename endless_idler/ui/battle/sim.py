@@ -5,6 +5,10 @@ import random
 from dataclasses import dataclass
 
 from endless_idler.characters.plugins import CharacterPlugin
+from endless_idler.combat.damage_types import load_damage_type
+from endless_idler.combat.damage_types import normalize_damage_type_id
+from endless_idler.combat.damage_types import resolve_damage_type_for_battle
+from endless_idler.combat.damage_types import type_multiplier
 from endless_idler.combat.stats import Stats
 
 
@@ -12,14 +16,13 @@ KNOWN_DAMAGE_TYPE_IDS = (
     "fire",
     "ice",
     "lightning",
-    "water",
-    "nature",
-    "arcane",
     "dark",
     "light",
-    "physical",
+    "wind",
     "generic",
 )
+
+RANDOM_DAMAGE_TYPE_IDS = tuple(item for item in KNOWN_DAMAGE_TYPE_IDS if item != "generic")
 
 
 @dataclass(slots=True)
@@ -47,8 +50,10 @@ def build_party(
 
         stats = Stats()
         scale = party_scaling(party_level=party_level, stars=stars, stacks=stack_count)
-        apply_scaled_bases(stats, scale=scale, spd=2 + stars)
-        stats.damage_type = resolve_damage_type_id(plugin, rng)
+        apply_scaled_bases(stats, base_stats=getattr(plugin, "base_stats", None), scale=scale, spd=2 + stars)
+        stats.damage_type = load_damage_type(resolve_damage_type_id(plugin, rng))
+        if plugin:
+            _apply_plugin_overrides(stats, plugin=plugin)
         stats.level = party_level
         stats.hp = stats.max_hp
         party.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
@@ -83,8 +88,10 @@ def build_foes(
         stats = Stats()
         base = party_scaling(party_level=party_level, stars=stars, stacks=1)
         scale = base * rng.uniform(0.85, 1.1)
-        apply_scaled_bases(stats, scale=scale, spd=2 + max(0, stars - 1))
-        stats.damage_type = resolve_damage_type_id(plugin, rng)
+        apply_scaled_bases(stats, base_stats=getattr(plugin, "base_stats", None), scale=scale, spd=2 + max(0, stars - 1))
+        stats.damage_type = load_damage_type(resolve_damage_type_id(plugin, rng))
+        if plugin:
+            _apply_plugin_overrides(stats, plugin=plugin)
         stats.level = party_level
         stats.hp = stats.max_hp
         foes.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
@@ -118,8 +125,10 @@ def build_reserves(
 
         stats = Stats()
         scale = party_scaling(party_level=party_level, stars=stars, stacks=stack_count)
-        apply_scaled_bases(stats, scale=scale, spd=2 + stars)
-        stats.damage_type = resolve_damage_type_id(plugin, rng)
+        apply_scaled_bases(stats, base_stats=getattr(plugin, "base_stats", None), scale=scale, spd=2 + stars)
+        stats.damage_type = load_damage_type(resolve_damage_type_id(plugin, rng))
+        if plugin:
+            _apply_plugin_overrides(stats, plugin=plugin)
         stats.level = party_level
         stats.hp = stats.max_hp
         reserves.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
@@ -128,11 +137,20 @@ def build_reserves(
 
 def resolve_damage_type_id(plugin: CharacterPlugin | None, rng: random.Random) -> str:
     if plugin and plugin.damage_type_random:
-        return rng.choice(KNOWN_DAMAGE_TYPE_IDS)
-    if plugin and plugin.damage_type_id:
-        normalized = str(plugin.damage_type_id).strip().lower().replace(" ", "_").replace("-", "_")
-        return normalized or "generic"
-    return rng.choice(KNOWN_DAMAGE_TYPE_IDS)
+        return rng.choice(RANDOM_DAMAGE_TYPE_IDS)
+
+    if not plugin:
+        return "generic"
+
+    raw = normalize_damage_type_id(plugin.damage_type_id)
+    resolved = resolve_damage_type_for_battle(
+        char_id=plugin.char_id,
+        raw_damage_type_id=raw,
+        rng=rng,
+    )
+    if resolved in KNOWN_DAMAGE_TYPE_IDS:
+        return resolved
+    return "generic"
 
 
 def party_scaling(*, party_level: int, stars: int, stacks: int) -> float:
@@ -146,12 +164,46 @@ def party_scaling(*, party_level: int, stars: int, stacks: int) -> float:
     return level_mult * star_mult * stack_mult
 
 
-def apply_scaled_bases(stats: Stats, *, scale: float, spd: int) -> None:
-    stats.set_base_stat("max_hp", int(1000 * scale))
-    stats.set_base_stat("atk", int(200 * scale))
-    stats.set_base_stat("defense", int(150 * scale))
-    stats.set_base_stat("regain", int(90 * scale))
+def apply_scaled_bases(
+    stats: Stats,
+    *,
+    base_stats: dict[str, float] | None,
+    scale: float,
+    spd: int,
+) -> None:
+    template = base_stats if isinstance(base_stats, dict) else {}
+
+    max_hp = float(template.get("max_hp", 1000.0))
+    atk = float(template.get("atk", 200.0))
+    defense = float(template.get("defense", 200.0))
+    regain = float(template.get("regain", 100.0))
+
+    stats.set_base_stat("max_hp", int(max_hp * scale))
+    stats.set_base_stat("atk", int(atk * scale))
+    stats.set_base_stat("defense", int(defense * scale))
+    stats.set_base_stat("regain", int(regain * scale))
+
+    for key in (
+        "crit_rate",
+        "crit_damage",
+        "effect_hit_rate",
+        "mitigation",
+        "dodge_odds",
+        "effect_resistance",
+        "vitality",
+    ):
+        if key in template:
+            stats.set_base_stat(key, float(template[key]))
     stats.set_base_stat("spd", int(max(1, spd)))
+
+
+def _apply_plugin_overrides(stats: Stats, *, plugin: CharacterPlugin) -> None:
+    base_aggro = getattr(plugin, "base_aggro", None)
+    if isinstance(base_aggro, (int, float)):
+        stats.base_aggro = float(base_aggro)
+    passes = getattr(plugin, "damage_reduction_passes", None)
+    if isinstance(passes, int):
+        stats.damage_reduction_passes = int(passes)
 
 
 def choose_weighted_attacker(
@@ -183,8 +235,10 @@ def calculate_damage(
     multiplier = 100.0 / (100.0 + float(defense))
     base = float(atk) * multiplier
 
-    base *= float(target.mitigation)
-    base *= float(target.vitality)
+    base *= type_multiplier(attacker.element_id, target.element_id)
+    base *= float(max(0.01, attacker.vitality))
+    base /= float(max(0.01, target.vitality))
+    base /= float(max(0.1, target.mitigation))
 
     crit_rate = float(max(0.0, min(1.0, attacker.crit_rate)))
     crit = rng.random() < crit_rate
