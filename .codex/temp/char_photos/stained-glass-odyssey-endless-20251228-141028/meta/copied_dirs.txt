@@ -1,5 +1,4 @@
 Experimentation/Python-idle-game/idle_game/assets/characters/ixia
-Experimentation/Python-idle-game/idle_game/assets/characters/kboshi
 Experimentation/Python-idle-game/idle_game/assets/characters/lady_echo
 Experimentation/Python-idle-game/idle_game/assets/characters/lady_storm
 Experimentation/Python-idle-game/idle_game/assets/characters/lady_wind
@@ -7,7 +6,6 @@ Experimentation/Python-idle-game/idle_game/assets/characters/luna
 Experimentation/Python-idle-game/idle_game/assets/characters/player
 Experimentation/Python-idle-game/idle_game/assets/characters/ryne
 frontend/src/lib/assets/characters/ixia
-frontend/src/lib/assets/characters/kboshi
 frontend/src/lib/assets/characters/lady_storm
 frontend/src/lib/assets/characters/lady_wind
 frontend/src/lib/assets/characters/luna

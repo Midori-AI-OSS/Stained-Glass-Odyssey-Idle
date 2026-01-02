@@ -308,3 +308,40 @@ def new_run_save(*, available_char_ids: list[str], rng: random.Random) -> RunSav
         bar[: len(chosen)] = chosen
 
     return RunSave(tokens=DEFAULT_RUN_TOKENS, bar=bar)
+
+
+def sanitize_save_characters(*, save: RunSave, allowed_char_ids: set[str]) -> RunSave:
+    allowed = {str(char_id).strip() for char_id in allowed_char_ids if str(char_id).strip()}
+    if not allowed:
+        return _normalized_save(save)
+
+    def sanitize_slots(values: list[str | None]) -> list[str | None]:
+        updated: list[str | None] = []
+        for item in values:
+            if not item:
+                updated.append(None)
+                continue
+            cleaned = str(item).strip()
+            if not cleaned or cleaned not in allowed:
+                updated.append(None)
+                continue
+            updated.append(cleaned)
+        return updated
+
+    save.bar = sanitize_slots(list(save.bar))
+
+    save.onsite = sanitize_slots(list(save.onsite))
+
+    save.offsite = sanitize_slots(list(save.offsite))
+
+    save.standby = sanitize_slots(list(save.standby))
+
+    save.stacks = {key: value for key, value in save.stacks.items() if key in allowed}
+    save.character_progress = {key: value for key, value in save.character_progress.items() if key in allowed}
+    save.character_stats = {key: value for key, value in save.character_stats.items() if key in allowed}
+    save.character_initial_stats = {
+        key: value for key, value in save.character_initial_stats.items() if key in allowed
+    }
+    save.character_deaths = {key: value for key, value in save.character_deaths.items() if key in allowed}
+
+    return _normalized_save(save)
