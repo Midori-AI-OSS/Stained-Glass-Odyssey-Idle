@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect,
     QHBoxLayout,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QStackedWidget,
     QVBoxLayout,
@@ -140,10 +141,7 @@ class MainMenuWindow(QMainWindow):
 
     def _open_battle_screen(self, payload: object) -> None:
         if self._battle_screen is not None:
-            try:
-                self._battle_screen.deleteLater()
-            except Exception:
-                pass
+            self._cleanup_widget(self._battle_screen)
             self._battle_screen = None
 
         battle = BattleScreenWidget(payload=payload)
@@ -163,10 +161,7 @@ class MainMenuWindow(QMainWindow):
 
     def _open_idle_screen(self, payload: object) -> None:
         if self._idle_screen is not None:
-            try:
-                self._idle_screen.deleteLater()
-            except Exception:
-                pass
+            self._cleanup_widget(self._idle_screen)
             self._idle_screen = None
 
         idle = IdleScreenWidget(payload=payload)
@@ -196,21 +191,20 @@ class MainMenuWindow(QMainWindow):
             pass
 
     def _stub_settings(self) -> None:
-        """Placeholder for Settings feature."""
-        pass
+        self._show_not_implemented("Settings")
 
     def _stub_warp(self) -> None:
-        """Placeholder for Warp feature."""
-        pass
+        self._show_not_implemented("Warp")
 
     def _stub_inventory(self) -> None:
-        """Placeholder for Inventory feature."""
-        pass
+        self._show_not_implemented("Inventory")
 
     def _stub_guidebook(self) -> None:
-        """Placeholder for Guidebook feature."""
-        pass
+        self._show_not_implemented("Guidebook")
 
     def _stub_feedback(self) -> None:
-        """Placeholder for Feedback feature."""
-        pass
+        self._show_not_implemented("Feedback")
+
+    def _show_not_implemented(self, feature: str) -> None:
+        feature = str(feature).strip() or "Feature"
+        QMessageBox.information(self, feature, f"{feature} is not implemented yet.")
