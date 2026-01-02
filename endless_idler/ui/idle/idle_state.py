@@ -6,11 +6,15 @@ import random
 from PySide6.QtCore import QObject
 from PySide6.QtCore import Signal
 
+from endless_idler.combat.party_stats import apply_offsite_stat_share as apply_offsite_stat_share_to_stats
+from endless_idler.combat.party_stats import build_scaled_character_stats
+from endless_idler.combat.party_stats import party_scaling
+from endless_idler.combat.stats import Stats
+
 
 LOSS_EXP_MULTIPLIER = 0.5
 WIN_EXP_MULTIPLIER = 4.0
 OFFSITE_EXP_SHARE_PER_CHAR = 0.01
-STACK_HP_BONUS = 100
 DEATH_EXP_DEBUFF_DURATION_SECONDS = 60 * 60
 DEATH_EXP_DEBUFF_PER_STACK = 0.05
 SHARED_EXP_ONSITE_MULTIPLIER = 0.75
@@ -67,6 +71,7 @@ class IdleGameState(QObject):
                 continue
 
             stack = max(1, int(stacks.get(char_id, 1)))
+            stars = max(1, int(getattr(plugin, "stars", 1) or 1))
             plugin_base_stats = getattr(plugin, "base_stats", None)
             base_stats: dict[str, float] = dict(plugin_base_stats) if isinstance(plugin_base_stats, dict) else {}
             saved_stats = self._stats_by_id.get(char_id)
@@ -85,7 +90,6 @@ class IdleGameState(QObject):
             else:
                 initial_base_stats = dict(base_stats)
 
-            base_hp = int(base_stats.get("max_hp", 1000.0)) + (stack - 1) * STACK_HP_BONUS
             saved = self._progress_by_id.get(char_id, {})
             level = 1
             exp = 0.0
@@ -95,6 +99,7 @@ class IdleGameState(QObject):
             rebirths = 0
             death_exp_debuff_stacks = 0
             death_exp_debuff_until = 0.0
+            max_hp_level_bonus_version = 0
             if isinstance(saved, dict):
                 try:
                     level = max(1, int(saved.get("level", 1)))
@@ -128,13 +133,23 @@ class IdleGameState(QObject):
                     death_exp_debuff_until = float(max(0.0, float(saved.get("death_exp_debuff_until", 0.0))))
                 except (TypeError, ValueError):
                     death_exp_debuff_until = 0.0
+                try:
+                    max_hp_level_bonus_version = max(0, int(saved.get("max_hp_level_bonus_version", 0)))
+                except (TypeError, ValueError):
+                    max_hp_level_bonus_version = 0
 
             now = float(self._time())
             if death_exp_debuff_until and now >= death_exp_debuff_until:
                 death_exp_debuff_stacks = 0
                 death_exp_debuff_until = 0.0
 
-            max_hp = base_hp + max(0, level - 1) * 10
+            if max_hp_level_bonus_version < 1:
+                intrinsic_hp = float(base_stats.get("max_hp", 1000.0))
+                base_stats["max_hp"] = intrinsic_hp + max(0, level - 1) * 10.0
+                max_hp_level_bonus_version = 1
+
+            scale = party_scaling(party_level=self._party_level, stars=stars, stacks=stack)
+            max_hp = max(1, int(float(base_stats.get("max_hp", 1000.0)) * scale))
             self._char_data[char_id] = {
                 "level": level,
                 "exp": exp,
@@ -145,6 +160,7 @@ class IdleGameState(QObject):
                 "next_mitigation_gain_level": 0,
                 "hp": max_hp,
                 "max_hp": max_hp,
+                "combat_scale": scale,
                 "base_stats": base_stats,
                 "initial_base_stats": initial_base_stats,
                 "stack": stack,
@@ -153,6 +169,7 @@ class IdleGameState(QObject):
                 "exp_multiplier": exp_multiplier,
                 "req_multiplier": req_multiplier,
                 "rebirths": rebirths,
+                "max_hp_level_bonus_version": max_hp_level_bonus_version,
             }
 
             if isinstance(saved, dict):
@@ -172,6 +189,105 @@ class IdleGameState(QObject):
                     self._char_data[char_id]["next_mitigation_gain_level"] = 0
 
             self._ensure_sparse_growth_schedule(char_id)
+
+        self._apply_offsite_stat_share_to_onsite_hp()
+
+    def _apply_offsite_stat_share_to_onsite_hp(self) -> None:
+        if not self._char_ids:
+            return
+        if not self._offsite_ids:
+            return
+
+        reserves: list[Stats] = []
+        for char_id in self._offsite_ids:
+            data = self._char_data.get(char_id)
+            plugin = self._plugins_by_id.get(char_id)
+            if not data or plugin is None:
+                continue
+            base_stats = data.get("base_stats")
+            if not isinstance(base_stats, dict):
+                continue
+
+            try:
+                stack = max(1, int(data.get("stack", 1)))
+            except (TypeError, ValueError):
+                stack = 1
+            stars = max(1, int(getattr(plugin, "stars", 1) or 1))
+            progress: dict[str, float | int] = {
+                "level": max(1, int(data.get("level", 1))),
+                "exp": float(max(0.0, float(data.get("exp", 0.0)))),
+                "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
+                "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
+            }
+            reserves.append(
+                build_scaled_character_stats(
+                    plugin=plugin,
+                    party_level=self._party_level,
+                    stars=stars,
+                    stacks=stack,
+                    progress=progress,
+                    saved_base_stats=base_stats,
+                )
+            )
+
+        if not reserves:
+            return
+
+        party_stats: list[Stats] = []
+        party_ids: list[str] = []
+        for char_id in self._char_ids:
+            data = self._char_data.get(char_id)
+            plugin = self._plugins_by_id.get(char_id)
+            if not data or plugin is None:
+                continue
+            base_stats = data.get("base_stats")
+            if not isinstance(base_stats, dict):
+                continue
+
+            try:
+                stack = max(1, int(data.get("stack", 1)))
+            except (TypeError, ValueError):
+                stack = 1
+            stars = max(1, int(getattr(plugin, "stars", 1) or 1))
+            progress = {
+                "level": max(1, int(data.get("level", 1))),
+                "exp": float(max(0.0, float(data.get("exp", 0.0)))),
+                "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
+                "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
+            }
+            party_stats.append(
+                build_scaled_character_stats(
+                    plugin=plugin,
+                    party_level=self._party_level,
+                    stars=stars,
+                    stacks=stack,
+                    progress=progress,
+                    saved_base_stats=base_stats,
+                )
+            )
+            party_ids.append(char_id)
+
+        if not party_stats:
+            return
+
+        apply_offsite_stat_share_to_stats(party=party_stats, reserves=reserves, share=0.10)
+
+        for char_id, stats in zip(party_ids, party_stats, strict=False):
+            data = self._char_data.get(char_id)
+            if not data:
+                continue
+            try:
+                old_max_hp = float(max(1.0, float(data.get("max_hp", 1.0))))
+            except (TypeError, ValueError):
+                old_max_hp = 1.0
+            try:
+                old_hp = float(max(0.0, float(data.get("hp", 0.0))))
+            except (TypeError, ValueError):
+                old_hp = 0.0
+
+            ratio = old_hp / old_max_hp if old_max_hp > 0 else 1.0
+            data["max_hp"] = max(1, int(stats.max_hp))
+            data["hp"] = max(0.0, min(float(data["max_hp"]), ratio * float(data["max_hp"])))
 
     def rebirth_character(self, char_id: str) -> bool:
         data = self._char_data.get(char_id)
@@ -193,13 +309,13 @@ class IdleGameState(QObject):
             data["base_stats"] = dict(initial_base_stats)
 
         base_stats = data.get("base_stats")
-        stack = max(1, int(data.get("stack", 1)))
-        intrinsic_hp = 1000
+        scale = float(max(0.0, float(data.get("combat_scale", 1.0))))
+        intrinsic_hp = 1000.0
         if isinstance(base_stats, dict):
-            intrinsic_hp = int(float(base_stats.get("max_hp", 1000.0)))
-        base_hp = intrinsic_hp + (stack - 1) * STACK_HP_BONUS
-        data["max_hp"] = base_hp
-        data["hp"] = base_hp
+            intrinsic_hp = float(base_stats.get("max_hp", 1000.0))
+        max_hp = max(1, int(intrinsic_hp * scale))
+        data["max_hp"] = max_hp
+        data["hp"] = max_hp
         self._ensure_sparse_growth_schedule(char_id)
 
         bonus = 0.25 * (1 + 0.01 * (old_level - 50))
@@ -209,6 +325,7 @@ class IdleGameState(QObject):
 
         req_mult = float(data.get("req_multiplier", 1.0))
         data["next_exp"] = (1 * 30 * req_mult) * self._rng.uniform(0.95, 1.05)
+        self._apply_offsite_stat_share_to_onsite_hp()
         return True
 
     def process_tick(self) -> None:
@@ -353,20 +470,20 @@ class IdleGameState(QObject):
         if isinstance(base_stats, dict):
             self._apply_weighted_stat_upgrades(char_id=char_id, base_stats=base_stats, level=int(data["level"]))
             self._apply_sparse_growth(char_id=char_id, base_stats=base_stats)
+            base_stats["max_hp"] = float(base_stats.get("max_hp", 1000.0)) + 10.0
 
-        stack = max(1, int(data.get("stack", 1)))
+        scale = float(max(0.0, float(data.get("combat_scale", 1.0))))
+        intrinsic_hp = 1000.0
         if isinstance(base_stats, dict):
-            intrinsic_hp = int(float(base_stats.get("max_hp", 1000.0)))
-        else:
-            intrinsic_hp = 1000
-        base_hp = intrinsic_hp + (stack - 1) * STACK_HP_BONUS
-        data["max_hp"] = base_hp + max(0, int(data["level"]) - 1) * 10
+            intrinsic_hp = float(base_stats.get("max_hp", 1000.0))
+        data["max_hp"] = max(1, int(intrinsic_hp * scale))
         data["hp"] = data["max_hp"]
 
         level = data["level"]
         req_mult = data["req_multiplier"]
         tax = 1.5 ** ((level - 50) // 5) if level >= 50 else 1.0
         data["next_exp"] = (level * 30 * req_mult * tax) * self._rng.uniform(0.95, 1.05)
+        self._apply_offsite_stat_share_to_onsite_hp()
 
     def _apply_weighted_stat_upgrades(self, *, char_id: str, base_stats: dict[str, float], level: int) -> None:
         points = 1 + (max(1, int(level)) // 10)
@@ -441,6 +558,9 @@ class IdleGameState(QObject):
     def get_char_data(self, char_id: str) -> dict | None:
         return self._char_data.get(char_id)
 
+    def get_party_level(self) -> int:
+        return max(1, int(self._party_level))
+
     def export_progress(self) -> dict[str, dict[str, float | int]]:
         payload: dict[str, dict[str, float | int]] = {}
         for char_id, data in self._char_data.items():
@@ -488,6 +608,7 @@ class IdleGameState(QObject):
                 "death_exp_debuff_until": death_exp_debuff_until,
                 "next_vitality_gain_level": max(0, int(data.get("next_vitality_gain_level", 0))),
                 "next_mitigation_gain_level": max(0, int(data.get("next_mitigation_gain_level", 0))),
+                "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
             }
         return payload
 

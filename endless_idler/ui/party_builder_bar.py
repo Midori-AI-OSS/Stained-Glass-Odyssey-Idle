@@ -23,6 +23,7 @@ from PySide6.QtWidgets import QVBoxLayout
 from shiboken6 import isValid
 
 from endless_idler.characters.plugins import CharacterPlugin
+from endless_idler.combat.stats import Stats
 from endless_idler.ui.party_builder_common import apply_star_rank_visuals
 from endless_idler.ui.party_builder_common import build_character_stats_tooltip
 from endless_idler.ui.party_builder_common import derive_display_name
@@ -46,6 +47,7 @@ class CharacterBar(QFrame):
         character_cost: int,
         can_afford: Callable[[int], bool],
         on_insufficient_funds: Callable[[], None],
+        get_tooltip_stats: Callable[[str, str], Stats | None] | None = None,
     ) -> None:
         super().__init__()
         self.setObjectName("characterBar")
@@ -57,6 +59,7 @@ class CharacterBar(QFrame):
         self._reroll_cost = max(0, int(reroll_cost))
         self._can_afford = can_afford
         self._on_insufficient_funds = on_insufficient_funds
+        self._get_tooltip_stats = get_tooltip_stats
 
         layout = QVBoxLayout()
         layout.setContentsMargins(12, 12, 12, 12)
@@ -118,6 +121,7 @@ class CharacterBar(QFrame):
                 character_cost=self._character_cost,
                 can_afford=self._can_afford,
                 on_insufficient_funds=self._on_insufficient_funds,
+                get_tooltip_stats=self._get_tooltip_stats,
             )
 
     def clear_char_id(self, char_id: str) -> None:
@@ -194,6 +198,7 @@ class ShopSlot(QFrame):
         character_cost: int,
         can_afford: Callable[[int], bool],
         on_insufficient_funds: Callable[[], None],
+        get_tooltip_stats: Callable[[str, str], Stats | None] | None = None,
     ) -> None:
         self.clear()
 
@@ -208,6 +213,7 @@ class ShopSlot(QFrame):
             character_cost=character_cost,
             can_afford=can_afford,
             on_insufficient_funds=on_insufficient_funds,
+            get_tooltip_stats=get_tooltip_stats,
         )
         item.destroyed.connect(self._on_item_destroyed)
         self._item = item
@@ -234,6 +240,7 @@ class ShopItem(QFrame):
         character_cost: int,
         can_afford: Callable[[int], bool],
         on_insufficient_funds: Callable[[], None],
+        get_tooltip_stats: Callable[[str, str], Stats | None] | None = None,
     ) -> None:
         super().__init__()
         self.setObjectName("characterTileInner")
@@ -246,6 +253,7 @@ class ShopItem(QFrame):
         self._character_cost = max(0, int(character_cost))
         self._can_afford = can_afford
         self._on_insufficient_funds = on_insufficient_funds
+        self._get_tooltip_stats = get_tooltip_stats
         self._tooltip_html = ""
 
         apply_star_rank_visuals(self, self._stars)
@@ -326,11 +334,19 @@ class ShopItem(QFrame):
         self._stack_badge.show()
 
     def _refresh_tooltip(self) -> None:
+        stats: Stats | None = None
+        if self._get_tooltip_stats is not None:
+            try:
+                stats = self._get_tooltip_stats(self._char_id, "shop")
+            except Exception:
+                stats = None
         self._tooltip_html = (
             build_character_stats_tooltip(
                 name=self._display_name,
                 stars=self._stars,
-                stackable=self._stack_count > 0,
+                stacks=self._stack_count if self._stack_count > 1 else None,
+                stackable=self._stack_count > 1,
+                stats=stats,
             )
         )
         self.setToolTip("")

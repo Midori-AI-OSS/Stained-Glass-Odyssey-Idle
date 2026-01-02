@@ -5,6 +5,11 @@ import random
 from dataclasses import dataclass
 
 from endless_idler.characters.plugins import CharacterPlugin
+from endless_idler.combat.party_stats import apply_offsite_stat_share as apply_offsite_stat_share_to_stats
+from endless_idler.combat.party_stats import apply_scaled_bases
+from endless_idler.combat.party_stats import apply_plugin_overrides
+from endless_idler.combat.party_stats import build_scaled_character_stats
+from endless_idler.combat.party_stats import party_scaling
 from endless_idler.combat.damage_types import load_damage_type
 from endless_idler.combat.damage_types import normalize_damage_type_id
 from endless_idler.combat.damage_types import resolve_damage_type_for_battle
@@ -36,56 +41,19 @@ class Combatant:
     ice_charge_ready: bool = False
 
 
-STAT_SHARE_KEYS: tuple[str, ...] = (
-    "max_hp",
-    "atk",
-    "defense",
-    "regain",
-    "crit_rate",
-    "crit_damage",
-    "effect_hit_rate",
-    "mitigation",
-    "dodge_odds",
-    "effect_resistance",
-    "vitality",
-    "spd",
-)
-
-
 def apply_offsite_stat_share(
     *,
     party: list[Combatant],
     reserves: list[Combatant],
     share: float = 0.10,
 ) -> None:
-    share = float(share)
-    if share <= 0:
-        return
-    if not party or not reserves:
-        return
-
-    totals: dict[str, float] = {}
-    for reserve in reserves:
-        stats = reserve.stats
-        for stat_name in STAT_SHARE_KEYS:
-            base = stats.get_base_stat(stat_name)
-            if isinstance(base, (int, float)):
-                totals[stat_name] = totals.get(stat_name, 0.0) + float(base) * share
-
-    if not totals:
-        return
-
-    int_stats = {"max_hp", "atk", "defense", "regain", "spd"}
+    apply_offsite_stat_share_to_stats(
+        party=[combatant.stats for combatant in party],
+        reserves=[combatant.stats for combatant in reserves],
+        share=share,
+    )
     for combatant in party:
-        stats = combatant.stats
-        for stat_name, amount in totals.items():
-            if stat_name in int_stats:
-                stats.modify_base_stat(stat_name, int(round(amount)))
-            else:
-                stats.modify_base_stat(stat_name, float(amount))
-
-        combatant.max_hp = stats.max_hp
-        stats.hp = stats.max_hp
+        combatant.max_hp = combatant.stats.max_hp
 
 
 def build_party(
@@ -107,27 +75,18 @@ def build_party(
         stars = plugin.stars if plugin else 1
         stack_count = max(1, int(stacks.get(char_id, 1)))
 
-        stats = Stats()
-        stats.passive_modifier = 1.5 ** max(0, stack_count - 1)
-        scale = party_scaling(party_level=party_level, stars=stars, stacks=stack_count)
-        apply_scaled_bases(
-            stats,
-            base_stats=_merged_base_stats(
-                plugin_base_stats=getattr(plugin, "base_stats", None),
-                saved_base_stats=stats_by_id.get(char_id),
-            ),
-            scale=scale,
-            spd=2 + stars,
+        stats = build_scaled_character_stats(
+            plugin=plugin,
+            party_level=party_level,
+            stars=stars,
+            stacks=stack_count,
+            progress=progress_by_id.get(char_id),
+            saved_base_stats=stats_by_id.get(char_id),
         )
         stats.damage_type = load_damage_type(resolve_damage_type_id(plugin, rng))
-        if plugin:
-            _apply_plugin_overrides(stats, plugin=plugin)
+        apply_plugin_overrides(stats, plugin=plugin)
         if stats.element_id == "ice" and (plugin is None or plugin.damage_reduction_passes is None):
             stats.damage_reduction_passes = max(2, int(stats.damage_reduction_passes))
-        char_level, char_exp = _progress_level_and_exp(progress_by_id.get(char_id))
-        stats.level = char_level
-        stats.exp = char_exp
-        stats.hp = stats.max_hp
         party.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
     return party
 
@@ -161,10 +120,14 @@ def build_foes(
         stats.passive_modifier = 1.0
         base = party_scaling(party_level=party_level, stars=stars, stacks=1)
         scale = base * rng.uniform(0.85, 1.1)
-        apply_scaled_bases(stats, base_stats=getattr(plugin, "base_stats", None), scale=scale, spd=2 + max(0, stars - 1))
+        apply_scaled_bases(
+            stats,
+            base_stats=getattr(plugin, "base_stats", None),
+            scale=scale,
+            spd=2 + max(0, stars - 1),
+        )
         stats.damage_type = load_damage_type(resolve_damage_type_id(plugin, rng))
-        if plugin:
-            _apply_plugin_overrides(stats, plugin=plugin)
+        apply_plugin_overrides(stats, plugin=plugin)
         if stats.element_id == "ice" and (plugin is None or plugin.damage_reduction_passes is None):
             stats.damage_reduction_passes = max(2, int(stats.damage_reduction_passes))
         stats.level = party_level
@@ -202,27 +165,18 @@ def build_reserves(
         stars = plugin.stars if plugin else 1
         stack_count = max(1, int(stacks.get(char_id, 1)))
 
-        stats = Stats()
-        stats.passive_modifier = 1.5 ** max(0, stack_count - 1)
-        scale = party_scaling(party_level=party_level, stars=stars, stacks=stack_count)
-        apply_scaled_bases(
-            stats,
-            base_stats=_merged_base_stats(
-                plugin_base_stats=getattr(plugin, "base_stats", None),
-                saved_base_stats=stats_by_id.get(char_id),
-            ),
-            scale=scale,
-            spd=2 + stars,
+        stats = build_scaled_character_stats(
+            plugin=plugin,
+            party_level=party_level,
+            stars=stars,
+            stacks=stack_count,
+            progress=progress_by_id.get(char_id),
+            saved_base_stats=stats_by_id.get(char_id),
         )
         stats.damage_type = load_damage_type(resolve_damage_type_id(plugin, rng))
-        if plugin:
-            _apply_plugin_overrides(stats, plugin=plugin)
+        apply_plugin_overrides(stats, plugin=plugin)
         if stats.element_id == "ice" and (plugin is None or plugin.damage_reduction_passes is None):
             stats.damage_reduction_passes = max(2, int(stats.damage_reduction_passes))
-        char_level, char_exp = _progress_level_and_exp(progress_by_id.get(char_id))
-        stats.level = char_level
-        stats.exp = char_exp
-        stats.hp = stats.max_hp
         reserves.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
     return reserves
 
@@ -243,85 +197,6 @@ def resolve_damage_type_id(plugin: CharacterPlugin | None, rng: random.Random) -
     if resolved in KNOWN_DAMAGE_TYPE_IDS:
         return resolved
     return "generic"
-
-
-def party_scaling(*, party_level: int, stars: int, stacks: int) -> float:
-    stars = max(1, min(7, int(stars)))
-    stacks = max(1, int(stacks))
-    party_level = max(1, int(party_level))
-
-    level_mult = 1.0 + 0.05 * max(0, party_level - 1)
-    star_mult = 0.75 + 0.18 * stars
-    stack_mult = 1.0 + 0.12 * max(0, stacks - 1)
-    return level_mult * star_mult * stack_mult
-
-
-def apply_scaled_bases(
-    stats: Stats,
-    *,
-    base_stats: dict[str, float] | None,
-    scale: float,
-    spd: int,
-) -> None:
-    template = base_stats if isinstance(base_stats, dict) else {}
-
-    max_hp = float(template.get("max_hp", 1000.0))
-    atk = float(template.get("atk", 200.0))
-    defense = float(template.get("defense", 200.0))
-    regain = float(template.get("regain", 100.0))
-
-    stats.set_base_stat("max_hp", int(max_hp * scale))
-    stats.set_base_stat("atk", int(atk * scale))
-    stats.set_base_stat("defense", int(defense * scale))
-    stats.set_base_stat("regain", int(regain * scale))
-
-    for key in (
-        "crit_rate",
-        "crit_damage",
-        "effect_hit_rate",
-        "mitigation",
-        "dodge_odds",
-        "effect_resistance",
-        "vitality",
-    ):
-        if key in template:
-            stats.set_base_stat(key, float(template[key]))
-    stats.set_base_stat("spd", int(max(1, spd)))
-
-
-def _apply_plugin_overrides(stats: Stats, *, plugin: CharacterPlugin) -> None:
-    base_aggro = getattr(plugin, "base_aggro", None)
-    if isinstance(base_aggro, (int, float)):
-        stats.base_aggro = float(base_aggro)
-    passes = getattr(plugin, "damage_reduction_passes", None)
-    if isinstance(passes, int):
-        stats.damage_reduction_passes = int(passes)
-
-
-def _merged_base_stats(*, plugin_base_stats: dict[str, float] | None, saved_base_stats: dict[str, float] | None) -> dict[str, float]:
-    base_stats: dict[str, float] = dict(plugin_base_stats) if isinstance(plugin_base_stats, dict) else {}
-    if isinstance(saved_base_stats, dict):
-        for key, raw in saved_base_stats.items():
-            if key in base_stats:
-                try:
-                    base_stats[key] = float(raw)  # type: ignore[arg-type]
-                except (TypeError, ValueError):
-                    continue
-    return base_stats
-
-
-def _progress_level_and_exp(progress: dict[str, float | int] | None) -> tuple[int, int]:
-    if not isinstance(progress, dict):
-        return 1, 0
-    try:
-        level = max(1, int(progress.get("level", 1)))
-    except (TypeError, ValueError):
-        level = 1
-    try:
-        exp = max(0, int(float(progress.get("exp", 0.0))))
-    except (TypeError, ValueError):
-        exp = 0
-    return level, exp
 
 
 def choose_weighted_attacker(

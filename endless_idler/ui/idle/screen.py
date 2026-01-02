@@ -16,6 +16,9 @@ from PySide6.QtWidgets import QWidget
 from PySide6.QtWidgets import QFrame
 
 from endless_idler.characters.plugins import discover_character_plugins
+from endless_idler.combat.party_stats import apply_offsite_stat_share
+from endless_idler.combat.party_stats import build_scaled_character_stats
+from endless_idler.combat.stats import Stats
 from endless_idler.run_rules import apply_idle_party_heal
 from endless_idler.run_rules import start_idle_heal_timer
 from endless_idler.save import OFFSITE_SLOTS
@@ -59,6 +62,8 @@ class IdleScreenWidget(QWidget):
         self._rng = random.Random()
         self._party_level = max(1, party_level)
         self._stacks = stacks
+        self._onsite_ids = list(onsite)
+        self._offsite_ids = list(offsite)
         self._save_manager = SaveManager()
         self._save = self._save_manager.load()
         if self._save is None:
@@ -291,18 +296,67 @@ class IdleScreenWidget(QWidget):
         self._rr_level.setValue(self._idle_state.get_risk_reward_level())
 
     def _refresh_character_cards(self) -> None:
-        snapshots: list[tuple[IdleOnsiteCharacterCard, dict, object]] = []
-        stats_list = []
+        snapshots: list[tuple[IdleOnsiteCharacterCard, dict, Stats, float]] = []
+        party_stats: list[Stats] = []
         for card in self._onsite_cards:
             snapshot = card.snapshot()
             if snapshot is None:
                 continue
             data, stats = snapshot
-            snapshots.append((card, data, stats))
-            stats_list.append(stats)
+            try:
+                max_hp = float(max(1.0, float(data.get("max_hp", 1.0))))
+            except (TypeError, ValueError):
+                max_hp = 1.0
+            try:
+                hp = float(max(0.0, float(data.get("hp", 0.0))))
+            except (TypeError, ValueError):
+                hp = 0.0
+            ratio = min(1.0, hp / max_hp) if max_hp > 0 else 1.0
+            snapshots.append((card, data, stats, ratio))
+            party_stats.append(stats)
 
-        maxima = compute_stat_maxima(stats_list)
-        for card, data, stats in snapshots:
+        reserves: list[Stats] = []
+        seen: set[str] = set()
+        for char_id in [str(item) for item in getattr(self, "_offsite_ids", []) if item]:
+            if len(reserves) >= 6:
+                break
+            if char_id in seen:
+                continue
+            seen.add(char_id)
+
+            plugin = self._plugin_by_id.get(char_id)
+            data = self._idle_state.get_char_data(char_id)
+            if plugin is None or not isinstance(data, dict):
+                continue
+            base_stats = data.get("base_stats")
+            if not isinstance(base_stats, dict):
+                continue
+            stacks = max(1, int(data.get("stack", 1)))
+            stars = max(1, int(getattr(plugin, "stars", 1) or 1))
+            progress: dict[str, float | int] = {
+                "level": max(1, int(data.get("level", 1))),
+                "exp": float(max(0.0, float(data.get("exp", 0.0)))),
+                "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
+                "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
+            }
+            reserves.append(
+                build_scaled_character_stats(
+                    plugin=plugin,
+                    party_level=self._party_level,
+                    stars=stars,
+                    stacks=stacks,
+                    progress=progress,
+                    saved_base_stats=base_stats,
+                )
+            )
+
+        apply_offsite_stat_share(party=party_stats, reserves=reserves, share=0.10)
+
+        for (_card, _data, stats, ratio) in snapshots:
+            stats.hp = max(0, min(stats.max_hp, int(round(float(stats.max_hp) * ratio))))
+
+        maxima = compute_stat_maxima(party_stats)
+        for card, data, stats, _ratio in snapshots:
             card.apply_snapshot(data, stats, maxima=maxima)
 
         for card in self._offsite_cards:

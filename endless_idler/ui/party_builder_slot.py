@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QLabel
 
 from endless_idler.characters.plugins import CharacterPlugin
+from endless_idler.combat.stats import Stats
 from endless_idler.ui.party_builder_bar import ShopItem
 from endless_idler.ui.party_builder_common import apply_star_rank_visuals
 from endless_idler.ui.party_builder_common import build_character_stats_tooltip
@@ -44,6 +45,7 @@ class DropSlot(QFrame):
         on_slot_changed: Callable[[str, str | None], None],
         on_drag_active_changed: Callable[[bool], None],
         get_stack_count: Callable[[str], int],
+        get_tooltip_stats: Callable[[str, str], Stats | None] | None = None,
         allow_stacking: bool = True,
         show_stack_badge: bool = True,
     ) -> None:
@@ -64,6 +66,7 @@ class DropSlot(QFrame):
         self._on_slot_changed = on_slot_changed
         self._on_drag_active_changed = on_drag_active_changed
         self._get_stack_count = get_stack_count
+        self._get_tooltip_stats = get_tooltip_stats
         self._allow_stacking = bool(allow_stacking)
         self._show_stack_badge = bool(show_stack_badge)
 
@@ -379,11 +382,20 @@ class DropSlot(QFrame):
         self._placement_bottom.style().polish(self._placement_bottom)
         self._placement_badge.show()
 
+        stats: Stats | None = None
+        if self._get_tooltip_stats is not None:
+            try:
+                stats = self._get_tooltip_stats(self._char_id, self._slot_kind)
+            except Exception:
+                stats = None
+
         self._tooltip_html = (
             build_character_stats_tooltip(
                 name=self._display_name,
                 stars=self._stars or 1,
                 stacks=stacks if (self._show_stack_badge and primary_stack) else None,
+                stackable=stacks > 1,
+                stats=stats,
             )
         )
         self.setToolTip("")
