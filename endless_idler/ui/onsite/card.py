@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QProgressBar
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
+from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.combat.stats import Stats
 from endless_idler.ui.onsite.stat_bars import StatBarsPanel
 from endless_idler.ui.party_builder_common import build_character_stats_tooltip
@@ -396,66 +397,50 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         if not isinstance(data, dict) or not data:
             return None
 
-        stats = Stats()
+        party_level = 1
+        party_level_getter = getattr(self._idle_state, "get_party_level", None)
+        if callable(party_level_getter):
+            try:
+                party_level = max(1, int(party_level_getter()))
+            except Exception:
+                party_level = 1
 
         base_stats = data.get("base_stats")
-        if isinstance(base_stats, dict):
-            for key, value in base_stats.items():
-                if key in {"max_hp", "atk", "defense", "regain", "spd"}:
-                    try:
-                        stats.set_base_stat(key, int(float(value)))
-                    except (TypeError, ValueError):
-                        continue
-                else:
-                    try:
-                        stats.set_base_stat(key, float(value))
-                    except (TypeError, ValueError):
-                        continue
-
-        base_aggro = data.get("base_aggro")
-        if isinstance(base_aggro, (int, float)):
-            stats.base_aggro = float(base_aggro)
+        saved_base_stats = dict(base_stats) if isinstance(base_stats, dict) else {}
 
         try:
-            passes = int(data.get("damage_reduction_passes", 1))
+            stack_count = max(1, int(data.get("stack", 1)))
         except (TypeError, ValueError):
-            passes = 1
-        stats.damage_reduction_passes = max(1, passes)
+            stack_count = 1
 
-        try:
-            level = int(data.get("level", 1))
-        except (TypeError, ValueError):
-            level = 1
-        stats.level = max(1, level)
+        stars = max(1, int(getattr(self._plugin, "stars", 1) or 1)) if self._plugin else 1
 
-        try:
-            exp = int(float(data.get("exp", 0.0)))
-        except (TypeError, ValueError):
-            exp = 0
-        stats.exp = max(0, exp)
+        progress: dict[str, float | int] = {
+            "level": max(1, int(data.get("level", 1))),
+            "exp": float(max(0.0, float(data.get("exp", 0.0)))),
+            "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
+            "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
+        }
 
-        try:
-            max_hp = int(float(data.get("max_hp", 1000.0)))
-        except (TypeError, ValueError):
-            max_hp = 1000
-        stats.max_hp = max(1, max_hp)
-
-        try:
-            hp = int(float(data.get("hp", 0.0)))
-        except (TypeError, ValueError):
-            hp = stats.max_hp
-        stats.hp = max(0, min(hp, stats.max_hp))
+        stats = build_scaled_character_stats(
+            plugin=self._plugin,
+            party_level=party_level,
+            stars=stars,
+            stacks=stack_count,
+            progress=progress,
+            saved_base_stats=saved_base_stats,
+        )
         return data, stats
 
     def apply_snapshot(self, data: dict, stats: Stats, *, maxima: dict[str, float]) -> None:
         stack_count = max(1, int(data.get("stack", 1)))
         self.set_stack_count(stack_count)
 
-        level = int(data.get("level", 1))
+        level = int(getattr(stats, "level", int(data.get("level", 1))))
         exp = float(data.get("exp", 0.0))
         next_exp = float(data.get("next_exp", 30.0))
-        hp = float(data.get("hp", 0.0))
-        max_hp = float(data.get("max_hp", 1000.0))
+        hp = float(getattr(stats, "hp", float(data.get("hp", 0.0))))
+        max_hp = float(getattr(stats, "max_hp", float(data.get("max_hp", 1000.0))))
 
         gain_per_second = 0.0
         getter = getattr(self._idle_state, "get_exp_gain_per_second", None)

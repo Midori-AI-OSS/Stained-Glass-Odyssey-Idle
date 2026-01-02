@@ -19,6 +19,9 @@ from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
 from endless_idler.characters.plugins import discover_character_plugins
+from endless_idler.combat.party_stats import apply_offsite_stat_share
+from endless_idler.combat.party_stats import build_scaled_character_stats
+from endless_idler.combat.stats import Stats
 from endless_idler.progression import record_character_death
 from endless_idler.save import (
     BAR_SLOTS,
@@ -218,6 +221,7 @@ class PartyBuilderWidget(QWidget):
             character_cost=DEFAULT_CHARACTER_COST,
             can_afford=self._can_afford,
             on_insufficient_funds=self._pulse_tokens,
+            get_tooltip_stats=self._tooltip_stats_for_character,
         )
 
         bar.destroyed.connect(self._on_char_bar_destroyed)
@@ -303,6 +307,7 @@ class PartyBuilderWidget(QWidget):
                 on_slot_changed=self._on_slot_changed,
                 on_drag_active_changed=self._set_sell_zones_active,
                 get_stack_count=self._get_stack_count,
+                get_tooltip_stats=self._tooltip_stats_for_character,
                 allow_stacking=True,
                 show_stack_badge=True,
             )
@@ -345,6 +350,7 @@ class PartyBuilderWidget(QWidget):
                 on_slot_changed=self._on_slot_changed,
                 on_drag_active_changed=self._set_sell_zones_active,
                 get_stack_count=self._get_stack_count,
+                get_tooltip_stats=self._tooltip_stats_for_character,
                 allow_stacking=allow_stacking,
                 show_stack_badge=show_stack_badge,
             )
@@ -452,6 +458,7 @@ class PartyBuilderWidget(QWidget):
                 on_slot_changed=self._on_slot_changed,
                 on_drag_active_changed=self._set_sell_zones_active,
                 get_stack_count=self._get_stack_count,
+                get_tooltip_stats=self._tooltip_stats_for_character,
                 allow_stacking=False,
                 show_stack_badge=True,
             )
@@ -830,6 +837,64 @@ class PartyBuilderWidget(QWidget):
 
     def _get_stack_count(self, char_id: str) -> int:
         return max(0, int(self._save.stacks.get(char_id, 0)))
+
+    def _tooltip_stats_for_character(self, char_id: str, context: str) -> Stats | None:
+        char_id = str(char_id or "").strip()
+        if not char_id:
+            return None
+
+        plugin = self._plugin_by_id.get(char_id)
+        if plugin is None:
+            return None
+
+        party_level = max(1, int(getattr(self._save, "party_level", 1) or 1))
+        stacks = max(1, int(self._save.stacks.get(char_id, 1)))
+        stars = max(1, int(getattr(plugin, "stars", 1) or 1))
+
+        stats = build_scaled_character_stats(
+            plugin=plugin,
+            party_level=party_level,
+            stars=stars,
+            stacks=stacks,
+            progress=self._save.character_progress.get(char_id),
+            saved_base_stats=self._save.character_stats.get(char_id),
+        )
+
+        if (context or "").strip().lower() != "onsite":
+            return stats
+
+        reserves = self._build_offsite_reserve_stats(party_level=party_level)
+        apply_offsite_stat_share(party=[stats], reserves=reserves, share=0.10)
+        return stats
+
+    def _build_offsite_reserve_stats(self, *, party_level: int) -> list[Stats]:
+        reserves: list[Stats] = []
+        party_level = max(1, int(party_level))
+        seen: set[str] = set()
+        for char_id in [str(item) for item in self._save.offsite if item]:
+            if len(reserves) >= 6:
+                break
+            if char_id in seen:
+                continue
+            seen.add(char_id)
+
+            plugin = self._plugin_by_id.get(char_id)
+            if plugin is None:
+                continue
+
+            stacks = max(1, int(self._save.stacks.get(char_id, 1)))
+            stars = max(1, int(getattr(plugin, "stars", 1) or 1))
+            reserves.append(
+                build_scaled_character_stats(
+                    plugin=plugin,
+                    party_level=party_level,
+                    stars=stars,
+                    stacks=stacks,
+                    progress=self._save.character_progress.get(char_id),
+                    saved_base_stats=self._save.character_stats.get(char_id),
+                )
+            )
+        return reserves
 
     def _on_slot_changed(self, slot_id: str, char_id: str | None) -> None:
         prefix, index_raw = slot_id.split("_", 1)
