@@ -30,6 +30,7 @@ from endless_idler.save import (
     RunSave,
     SaveManager,
     new_run_save,
+    sanitize_save_characters,
     next_party_level_up_cost,
 )
 from endless_idler.ui.party_builder_bar import CharacterBar
@@ -76,7 +77,10 @@ class PartyBuilderWidget(QWidget):
         self._plugins = discover_character_plugins()
         self._plugin_by_id = {plugin.char_id: plugin for plugin in self._plugins}
         self._save_manager = SaveManager()
-        self._save = self._save_manager.load() or self._new_run_save()
+        self._save = sanitize_save_characters(
+            save=self._save_manager.load() or self._new_run_save(),
+            allowed_char_ids=set(self._plugin_by_id),
+        )
         self._save_manager.save(self._save)
         self._slots_by_id: dict[str, DropSlot] = {}
         self._shop_open = False
@@ -1034,6 +1038,9 @@ class PartyBuilderWidget(QWidget):
             latest.character_initial_stats = initial_stats
 
             self._save_manager.save(latest)
+
+        latest = sanitize_save_characters(save=latest, allowed_char_ids=set(self._plugin_by_id))
+        self._save_manager.save(latest)
 
         self._save = latest
         self._shop_exp_state = None
