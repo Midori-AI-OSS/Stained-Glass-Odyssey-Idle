@@ -31,6 +31,9 @@ class Combatant:
     name: str
     stats: Stats
     max_hp: int
+    turns_taken: int = 0
+    pending_damage_multiplier: float = 1.0
+    ice_charge_ready: bool = False
 
 
 STAT_SHARE_KEYS: tuple[str, ...] = (
@@ -119,6 +122,8 @@ def build_party(
         stats.damage_type = load_damage_type(resolve_damage_type_id(plugin, rng))
         if plugin:
             _apply_plugin_overrides(stats, plugin=plugin)
+        if stats.element_id == "ice" and (plugin is None or plugin.damage_reduction_passes is None):
+            stats.damage_reduction_passes = max(2, int(stats.damage_reduction_passes))
         char_level, char_exp = _progress_level_and_exp(progress_by_id.get(char_id))
         stats.level = char_level
         stats.exp = char_exp
@@ -160,6 +165,8 @@ def build_foes(
         stats.damage_type = load_damage_type(resolve_damage_type_id(plugin, rng))
         if plugin:
             _apply_plugin_overrides(stats, plugin=plugin)
+        if stats.element_id == "ice" and (plugin is None or plugin.damage_reduction_passes is None):
+            stats.damage_reduction_passes = max(2, int(stats.damage_reduction_passes))
         stats.level = party_level
         stats.hp = stats.max_hp
         foes.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
@@ -210,6 +217,8 @@ def build_reserves(
         stats.damage_type = load_damage_type(resolve_damage_type_id(plugin, rng))
         if plugin:
             _apply_plugin_overrides(stats, plugin=plugin)
+        if stats.element_id == "ice" and (plugin is None or plugin.damage_reduction_passes is None):
+            stats.damage_reduction_passes = max(2, int(stats.damage_reduction_passes))
         char_level, char_exp = _progress_level_and_exp(progress_by_id.get(char_id))
         stats.level = char_level
         stats.exp = char_exp
@@ -352,6 +361,8 @@ def calculate_damage(
     attacker: Stats,
     target: Stats,
     rng: random.Random,
+    *,
+    damage_multiplier: float = 1.0,
 ) -> tuple[int, bool, bool]:
     dodge_odds = float(max(0.0, min(1.0, target.dodge_odds)))
     if rng.random() < dodge_odds:
@@ -359,13 +370,16 @@ def calculate_damage(
 
     atk = attacker.atk
     defense = max(0, target.defense)
-    multiplier = 100.0 / (100.0 + float(defense))
-    base = float(atk) * multiplier
+    mitigation_passes = max(1, int(getattr(target, "damage_reduction_passes", 1) or 1))
+    mitigation_multiplier = 100.0 / (100.0 + float(defense))
+    mitigation_multiplier **= float(mitigation_passes)
+    base = float(atk) * mitigation_multiplier
 
     base *= type_multiplier(attacker.element_id, target.element_id)
     base *= float(max(0.01, attacker.vitality))
     base /= float(max(0.01, target.vitality))
     base /= float(max(0.1, target.mitigation))
+    base *= float(max(0.0, damage_multiplier))
 
     crit_rate = float(max(0.0, min(1.0, attacker.crit_rate)))
     crit = rng.random() < crit_rate

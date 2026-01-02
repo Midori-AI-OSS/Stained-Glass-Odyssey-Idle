@@ -17,6 +17,11 @@ from PySide6.QtWidgets import QWidget
 from endless_idler.characters.plugins import discover_character_plugins
 from endless_idler.run_rules import apply_battle_result
 from endless_idler.ui.battle.colors import color_for_damage_type_id
+from endless_idler.ui.battle.mechanics import apply_dark_sacrifice
+from endless_idler.ui.battle.mechanics import apply_fire_self_bleed
+from endless_idler.ui.battle.mechanics import dark_damage_multiplier_from_removed_hp
+from endless_idler.ui.battle.mechanics import fire_damage_multiplier_from_removed_hp
+from endless_idler.ui.battle.mechanics import resolve_light_heal
 from endless_idler.ui.battle.sim import Combatant
 from endless_idler.ui.battle.sim import apply_offsite_stat_share
 from endless_idler.ui.battle.sim import build_reserves
@@ -108,6 +113,7 @@ class BattleScreenWidget(QWidget):
         )
 
         self._party_cards: list[QWidget] = []
+        self._reserve_cards: list[CombatantCard] = []
         self._foe_cards: list[CombatantCard] = []
         self._turn_side = "party"
         self._battle_over = False
@@ -205,18 +211,18 @@ class BattleScreenWidget(QWidget):
         reserves_layout.addStretch(1)
 
         for combatant in self._reserves:
-            reserves_layout.addWidget(
-                CombatantCard(
-                    combatant=combatant,
-                    plugin=self._plugin_by_id.get(combatant.char_id),
-                    rng=self._rng,
-                    team_side="left",
-                    stack_count=int(self._stacks.get(combatant.char_id, 1)),
-                    portrait_size=48,
-                    card_width=220,
-                    variant="offsite",
-                )
+            card = CombatantCard(
+                combatant=combatant,
+                plugin=self._plugin_by_id.get(combatant.char_id),
+                rng=self._rng,
+                team_side="left",
+                stack_count=int(self._stacks.get(combatant.char_id, 1)),
+                portrait_size=48,
+                card_width=220,
+                variant="offsite",
             )
+            self._reserve_cards.append(card)
+            reserves_layout.addWidget(card)
         reserves_layout.addStretch(1)
 
         left_side = QWidget()
@@ -297,15 +303,160 @@ class BattleScreenWidget(QWidget):
 
         if self._turn_side == "party":
             attacker, attacker_widget = choose_weighted_attacker(party_alive, self._rng)
-            target, target_widget = self._rng.choice(foes_alive)
             self._turn_side = "foes"
+            attacker_side = "party"
         else:
             attacker, attacker_widget = choose_weighted_attacker(foes_alive, self._rng)
-            target, target_widget = choose_weighted_target_by_aggro(party_alive, self._rng)
             self._turn_side = "party"
+            attacker_side = "foes"
 
-        color = color_for_damage_type_id(attacker.stats.element_id)
-        damage, crit, dodged = calculate_damage(attacker.stats, target.stats, self._rng)
+        attacker.turns_taken += 1
+        element_id = attacker.stats.element_id
+        color = color_for_damage_type_id(element_id)
+
+        party_onsite = [c for c, _ in party_alive]
+        foes_onsite = [c for c, _ in foes_alive]
+        party_widgets = {c: w for c, w in party_alive}
+        foe_widgets = {c: w for c, w in foes_alive}
+        reserve_widgets = {c: w for c, w in zip(self._reserves, self._reserve_cards, strict=False)}
+
+        if attacker_side == "party":
+            allies_onsite = party_onsite
+            allies_offsite = [c for c in self._reserves if c.stats.hp > 0]
+            enemies = foes_alive
+        else:
+            allies_onsite = foes_onsite
+            allies_offsite = []
+            enemies = party_alive
+
+        if element_id == "ice":
+            if not attacker.ice_charge_ready:
+                attacker.ice_charge_ready = True
+                self._set_status(f"{attacker.name} is charging…")
+                return
+            attacker.ice_charge_ready = False
+
+        if element_id == "light":
+            healed = resolve_light_heal(
+                attacker=attacker,
+                onsite_allies=allies_onsite,
+                offsite_allies=allies_offsite,
+            )
+            if healed:
+                self._set_status(f"{attacker.name} heals!")
+                for target, _ in healed:
+                    widget = party_widgets.get(target) or foe_widgets.get(target) or reserve_widgets.get(target)
+                    if widget is not None:
+                        widget.refresh()
+                        self._arena.add_pulse(attacker_widget, widget, color)
+                return
+
+        if element_id == "dark":
+            removed = apply_dark_sacrifice(onsite_allies=allies_onsite, offsite_allies=allies_offsite)
+            attacker.pending_damage_multiplier *= dark_damage_multiplier_from_removed_hp(removed)
+            if removed:
+                self._set_status(f"{attacker.name} sacrifices {removed} HP!")
+                for target in allies_onsite:
+                    widget = party_widgets.get(target) or foe_widgets.get(target)
+                    if widget is not None:
+                        widget.refresh()
+                for target in allies_offsite:
+                    widget = reserve_widgets.get(target)
+                    if widget is not None:
+                        widget.refresh()
+
+        if element_id == "fire":
+            removed = apply_fire_self_bleed(combatant=attacker, turns_taken=attacker.turns_taken)
+            attacker.pending_damage_multiplier *= fire_damage_multiplier_from_removed_hp(removed)
+            if removed:
+                attacker_widget.refresh()
+
+        damage_multiplier = float(max(0.0, attacker.pending_damage_multiplier))
+        attacker.pending_damage_multiplier = 1.0
+
+        if not enemies:
+            return
+
+        if element_id == "wind":
+            target_count = len(enemies)
+            total_damage = 0
+            any_crit = False
+            for target, target_widget in enemies:
+                damage, crit, dodged = calculate_damage(
+                    attacker.stats,
+                    target.stats,
+                    self._rng,
+                    damage_multiplier=damage_multiplier,
+                )
+                if dodged:
+                    continue
+                damage = int(damage // max(1, target_count))
+                if damage <= 0:
+                    continue
+                previous_hp = int(target.stats.hp)
+                target.stats.hp = max(0, previous_hp - int(damage))
+                total_damage += damage
+                any_crit = any_crit or crit
+                self._arena.add_pulse(attacker_widget, target_widget, color, crit=crit)
+                target_widget.refresh()
+                if previous_hp > 0 and target.stats.hp <= 0:
+                    self._handle_combatant_fell(target)
+            if total_damage > 0:
+                self._set_status(f"{attacker.name} gusts for {total_damage}{' (CRIT)' if any_crit else ''}")
+            if self._is_over():
+                self._on_battle_over()
+            return
+
+        if element_id == "lightning":
+            target, target_widget = (
+                self._rng.choice(enemies)
+                if attacker_side == "party"
+                else choose_weighted_target_by_aggro(enemies, self._rng)
+            )
+            total_damage = 0
+            any_crit = False
+            landed = 0
+            for _ in range(5):
+                if target.stats.hp <= 0:
+                    break
+                damage, crit, dodged = calculate_damage(
+                    attacker.stats,
+                    target.stats,
+                    self._rng,
+                    damage_multiplier=damage_multiplier,
+                )
+                if dodged:
+                    continue
+                if damage <= 0:
+                    continue
+                landed += 1
+                any_crit = any_crit or crit
+                previous_hp = int(target.stats.hp)
+                target.stats.hp = max(0, previous_hp - int(damage))
+                total_damage += damage
+                self._arena.add_pulse(attacker_widget, target_widget, color, crit=crit)
+                target_widget.refresh()
+                if previous_hp > 0 and target.stats.hp <= 0:
+                    self._handle_combatant_fell(target)
+                    break
+            if landed:
+                self._set_status(f"{attacker.name} zaps {target.name} {landed}x for {total_damage}{' (CRIT)' if any_crit else ''}")
+            if self._is_over():
+                self._on_battle_over()
+            return
+
+        target, target_widget = (
+            self._rng.choice(enemies)
+            if attacker_side == "party"
+            else choose_weighted_target_by_aggro(enemies, self._rng)
+        )
+
+        damage, crit, dodged = calculate_damage(
+            attacker.stats,
+            target.stats,
+            self._rng,
+            damage_multiplier=damage_multiplier,
+        )
         if dodged:
             self._set_status(f"{target.name} dodged!")
             self._arena.add_pulse(attacker_widget, target_widget, QColor(240, 240, 240))
@@ -321,14 +472,17 @@ class BattleScreenWidget(QWidget):
 
         target_widget.refresh()
         if previous_hp > 0 and target.stats.hp <= 0:
-            self._set_status(f"{target.name} fell!")
-            if target in self._party:
-                self._apply_death_exp_debuff(target.char_id)
-            elif target in self._foes:
-                self._foe_kills += 1
+            self._handle_combatant_fell(target)
 
         if self._is_over():
             self._on_battle_over()
+
+    def _handle_combatant_fell(self, target: Combatant) -> None:
+        self._set_status(f"{target.name} fell!")
+        if target in self._party:
+            self._apply_death_exp_debuff(target.char_id)
+        elif target in self._foes:
+            self._foe_kills += 1
 
     def _set_status(self, message: str) -> None:
         message = str(message or "").replace("\n", " ").strip()
