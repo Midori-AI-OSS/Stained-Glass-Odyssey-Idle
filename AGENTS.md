@@ -15,6 +15,8 @@ This document summarizes common development practices for the Stained Glass Odys
   - `tasks/`: Organized task folders (wip, review, taskmaster) for work items.
   - Other subfolders: For planning, notes, and prototyping.
 - **Never edit files in `.codex/audit/` unless you are in Auditor mode.**
+- **Docs:** Do not update the readme / Add docs unless asked to
+- **Test:** Do not build tests unless asked to; place tests under `tests/` (create it if missing)
 - **`.github/`**: Workflow guidelines, agent configurations, and automation scripts.
 - When entering any folder, check for a `AGENTS.md` file in that folder and read it before starting any work there.
 
