@@ -252,8 +252,8 @@ class OnsiteCharacterCardBase(QFrame):
         element_id = getattr(stats, "element_id", "generic")
         color = color_for_damage_type_id(element_id)
         
-        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 20)"
-        self.setStyleSheet(f"#onsiteCharacterCard {{ background-color: {tint_color}; }}")
+        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 60)"
+        self.setStyleSheet(f"QFrame#onsiteCharacterCard {{ background-color: {tint_color} !important; }}")
 
     def pulse_anchor_global(self) -> QPointF:
         rect = self.rect()

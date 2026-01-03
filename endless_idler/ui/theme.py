@@ -422,7 +422,6 @@ QFrame#battleArena {
 }
 
 QFrame#onsiteCharacterCard {
-    background-color: rgba(255, 255, 255, 10);
     border: 1px solid rgba(255, 255, 255, 18);
 }
 
@@ -710,7 +709,6 @@ QFrame#idleCharacterCard {
 }
 
 QFrame#idleOffsiteCard {
-    background-color: rgba(255, 255, 255, 10);
     border: 1px solid rgba(255, 255, 255, 18);
 }
 

@@ -172,5 +172,5 @@ class StainedGlassTooltip(QFrame):
         from endless_idler.ui.battle.colors import color_for_damage_type_id
         color = color_for_damage_type_id(self._element_id)
         
-        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 30)"
-        self._panel.setStyleSheet(f"#stainedTooltipPanel {{ background-color: {tint_color}; }}")
+        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 60)"
+        self._panel.setStyleSheet(f"QFrame#stainedTooltipPanel {{ background-color: {tint_color} !important; }}")
