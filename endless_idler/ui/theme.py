@@ -772,7 +772,9 @@ QFrame#idleModsPanel {
 }
 
 QLabel#idleModsTitle,
-QLabel#idleRRTitle {
+QLabel#idleRRTitle,
+QLabel#idleSharedExpLabel,
+QLabel#idleRRLabel {
     color: rgba(255, 255, 255, 235);
     font-size: 14px;
     font-weight: 700;
@@ -783,35 +785,42 @@ QLabel#idleModsHelp {
     font-size: 10px;
 }
 
-QPushButton#idleSharedExpButton {
-    background-color: rgba(255, 255, 255, 20);
-    border: 1px solid rgba(255, 255, 255, 28);
-    border-radius: 0px;
-    padding: 8px 12px;
-    color: rgba(255, 255, 255, 235);
-    font-size: 12px;
+QSlider#idleSharedExpSlider,
+QSlider#idleRRSlider {
+    height: 20px;
 }
 
-QPushButton#idleSharedExpButton:hover {
-    background-color: rgba(120, 180, 255, 56);
+QSlider#idleSharedExpSlider::groove:horizontal,
+QSlider#idleRRSlider::groove:horizontal {
+    background-color: rgba(0, 0, 0, 35);
+    border: 1px solid rgba(255, 255, 255, 20);
+    height: 6px;
+    border-radius: 3px;
 }
 
-QPushButton#idleSharedExpButton:checked {
-    background-color: rgba(46, 204, 113, 90);
-    border: 1px solid rgba(46, 204, 113, 140);
+QSlider#idleSharedExpSlider::handle:horizontal,
+QSlider#idleRRSlider::handle:horizontal {
+    background-color: rgba(120, 180, 255, 200);
+    border: 1px solid rgba(255, 255, 255, 100);
+    width: 16px;
+    height: 16px;
+    margin: -6px 0;
+    border-radius: 8px;
 }
 
-QCheckBox#idleRRToggle {
-    color: rgba(255, 255, 255, 220);
-    font-size: 11px;
+QSlider#idleSharedExpSlider::handle:horizontal:hover,
+QSlider#idleRRSlider::handle:horizontal:hover {
+    background-color: rgba(140, 200, 255, 220);
 }
 
-QSpinBox#idleRRLevel {
-    background-color: rgba(255, 255, 255, 16);
-    border: 1px solid rgba(255, 255, 255, 22);
-    color: rgba(255, 255, 255, 235);
-    font-size: 11px;
-    padding: 4px;
+QSlider#idleSharedExpSlider::sub-page:horizontal {
+    background-color: rgba(46, 204, 113, 140);
+    border-radius: 3px;
+}
+
+QSlider#idleRRSlider::sub-page:horizontal {
+    background-color: rgba(231, 76, 60, 140);
+    border-radius: 3px;
 }
 """.strip()
 

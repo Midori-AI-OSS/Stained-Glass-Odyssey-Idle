@@ -60,9 +60,8 @@ class IdleGameState(QObject):
         self._offsite_exp_share = OFFSITE_EXP_SHARE_PER_CHAR
 
         self._tick_count = 0
-        self._shared_exp = False
-        self._risk_reward_enabled = False
-        self._risk_reward_level = 1
+        self._shared_exp_percentage = 0
+        self._risk_reward_level = 0
 
         self._char_data: dict[str, dict] = {}
         for char_id in list(dict.fromkeys([*char_ids, *self._offsite_ids])):
@@ -332,45 +331,63 @@ class IdleGameState(QObject):
         self._tick_count += 1
         self.tick_update.emit(self._tick_count)
 
-        onsite_shared_mult = SHARED_EXP_ONSITE_MULTIPLIER if self._shared_exp else 1.0
-        offsite_shared_mult = SHARED_EXP_OFFSITE_MULTIPLIER if self._shared_exp else 1.0
+        shared_exp_pct = self._shared_exp_percentage / 100.0
+        onsite_reduction = shared_exp_pct if shared_exp_pct > 0 else 0.0
+        onsite_mult = 1.0 - onsite_reduction
 
         exp_multiplier = self._current_exp_multiplier()
-        total_onsite_gain_for_offsite = 0.0
+        total_onsite_base_gain = 0.0
+        total_onsite_shared_gain = 0.0
+        
         for char_id in self._char_ids:
             data = self._char_data.get(char_id)
             if not data:
                 continue
 
             exp_mult = data["exp_multiplier"]
-            gain = exp_mult
+            base_gain = exp_mult
 
-            if self._risk_reward_enabled:
-                gain *= (self._risk_reward_level + 1)
+            if self._risk_reward_level > 0:
+                base_gain *= (self._risk_reward_level + 1)
 
-            gain *= exp_multiplier
-            gain *= self._death_exp_debuff_multiplier(data)
-            gain *= self._exp_gain_scale
-            total_onsite_gain_for_offsite += gain
-            data["exp"] += gain * onsite_shared_mult
+            base_gain *= exp_multiplier
+            base_gain *= self._death_exp_debuff_multiplier(data)
+            base_gain *= self._exp_gain_scale
+            
+            total_onsite_base_gain += base_gain
+            onsite_gain = base_gain * onsite_mult
+            data["exp"] += onsite_gain
+            total_onsite_shared_gain += (base_gain - onsite_gain)
 
-            regain = 0.1 if not self._shared_exp else 0.5
+            regain = 0.1 if self._shared_exp_percentage == 0 else 0.5
             data["hp"] = min(data["max_hp"], data["hp"] + regain)
 
-            if self._risk_reward_enabled and self._tick_count % 5 == 0:
-                drain = 1.5 * self._risk_reward_level
-                data["hp"] = max(0.0, data["hp"] - drain)
+            if self._risk_reward_level > 0:
+                char_level = max(1, int(data.get("level", 1)))
+                speed_modifier = 0.5 * (1 - (0.00001 * (char_level * self._risk_reward_level)))
+                speed_modifier = max(0.1, speed_modifier)
+                ticks_per_drain = max(1, int(speed_modifier / IDLE_TICK_INTERVAL_SECONDS))
+                
+                if self._tick_count % ticks_per_drain == 0:
+                    drain = 1.5 * self._risk_reward_level
+                    data["hp"] = max(0.0, data["hp"] - drain)
 
             if data["exp"] >= data["next_exp"]:
                 self._level_up(char_id)
 
-        if self._offsite_ids and total_onsite_gain_for_offsite > 0:
-            offsite_gain = float(total_onsite_gain_for_offsite) * float(self._offsite_exp_share) * offsite_shared_mult
+        if self._offsite_ids and total_onsite_shared_gain > 0:
+            num_offsite = len(self._offsite_ids)
+            offsite_gain_per_char = total_onsite_shared_gain / num_offsite
+            
             for char_id in self._offsite_ids:
                 data = self._char_data.get(char_id)
                 if not data:
                     continue
-                data["exp"] += offsite_gain * self._death_exp_debuff_multiplier(data)
+                
+                normal_offsite_gain = total_onsite_base_gain * self._offsite_exp_share
+                total_gain = offsite_gain_per_char + normal_offsite_gain
+                
+                data["exp"] += total_gain * self._death_exp_debuff_multiplier(data)
                 data["hp"] = min(data["max_hp"], data["hp"] + 0.5)
                 if data["exp"] >= data["next_exp"]:
                     self._level_up(char_id)
@@ -392,36 +409,47 @@ class IdleGameState(QObject):
         if not data:
             return 0.0
 
-        onsite_shared_mult = SHARED_EXP_ONSITE_MULTIPLIER if self._shared_exp else 1.0
-        offsite_shared_mult = SHARED_EXP_OFFSITE_MULTIPLIER if self._shared_exp else 1.0
+        shared_exp_pct = self._shared_exp_percentage / 100.0
+        onsite_reduction = shared_exp_pct if shared_exp_pct > 0 else 0.0
+        onsite_mult = 1.0 - onsite_reduction
+        
         exp_multiplier = self._current_exp_multiplier()
 
         if char_id in self._char_ids:
             exp_mult = float(data.get("exp_multiplier", 1.0))
             gain = exp_mult
-            if self._risk_reward_enabled:
+            if self._risk_reward_level > 0:
                 gain *= (self._risk_reward_level + 1)
             gain *= exp_multiplier
             gain *= self._death_exp_debuff_multiplier(data)
-            return gain * onsite_shared_mult * self._exp_gain_scale
+            gain *= self._exp_gain_scale
+            return gain * onsite_mult
 
         if char_id in self._offsite_ids:
-            total_onsite_gain_for_offsite = 0.0
+            total_onsite_base_gain = 0.0
+            total_onsite_shared_gain = 0.0
+            
             for onsite_id in self._char_ids:
                 onsite_data = self._char_data.get(onsite_id)
                 if not onsite_data:
                     continue
-                onsite_mult = float(onsite_data.get("exp_multiplier", 1.0))
-                onsite_gain = onsite_mult
-                if self._risk_reward_enabled:
+                onsite_mult_val = float(onsite_data.get("exp_multiplier", 1.0))
+                onsite_gain = onsite_mult_val
+                if self._risk_reward_level > 0:
                     onsite_gain *= (self._risk_reward_level + 1)
                 onsite_gain *= exp_multiplier
                 onsite_gain *= self._death_exp_debuff_multiplier(onsite_data)
                 onsite_gain *= self._exp_gain_scale
-                total_onsite_gain_for_offsite += onsite_gain
+                total_onsite_base_gain += onsite_gain
+                shared_reduction = onsite_gain * onsite_reduction
+                total_onsite_shared_gain += shared_reduction
 
-            offsite_gain = float(total_onsite_gain_for_offsite) * float(self._offsite_exp_share) * offsite_shared_mult
-            return offsite_gain * self._death_exp_debuff_multiplier(data)
+            num_offsite = len(self._offsite_ids)
+            if num_offsite > 0:
+                offsite_gain_per_char = total_onsite_shared_gain / num_offsite
+                normal_offsite_gain = total_onsite_base_gain * self._offsite_exp_share
+                total_gain = offsite_gain_per_char + normal_offsite_gain
+                return total_gain * self._death_exp_debuff_multiplier(data)
 
         return 0.0
 
@@ -652,20 +680,14 @@ class IdleGameState(QObject):
             payload[char_id] = sanitized
         return payload
 
-    def set_shared_exp(self, enabled: bool) -> None:
-        self._shared_exp = bool(enabled)
+    def set_shared_exp_percentage(self, percentage: int) -> None:
+        self._shared_exp_percentage = max(0, min(95, int(percentage)))
 
-    def is_shared_exp_enabled(self) -> bool:
-        return self._shared_exp
-
-    def set_risk_reward_enabled(self, enabled: bool) -> None:
-        self._risk_reward_enabled = bool(enabled)
-
-    def is_risk_reward_enabled(self) -> bool:
-        return self._risk_reward_enabled
+    def get_shared_exp_percentage(self) -> int:
+        return self._shared_exp_percentage
 
     def set_risk_reward_level(self, level: int) -> None:
-        self._risk_reward_level = max(1, int(level))
+        self._risk_reward_level = max(0, min(150, int(level)))
 
     def get_risk_reward_level(self) -> int:
         return self._risk_reward_level

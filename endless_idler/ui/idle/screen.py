@@ -5,12 +5,11 @@ import random
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import Qt
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QCheckBox
 from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QPushButton
-from PySide6.QtWidgets import QSpinBox
+from PySide6.QtWidgets import QSlider
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 from PySide6.QtWidgets import QFrame
@@ -238,37 +237,44 @@ class IdleScreenWidget(QWidget):
         mods_title.setObjectName("idleModsTitle")
         layout.addWidget(mods_title)
 
-        self._shared_exp_btn = QPushButton("Shared EXP: OFF")
-        self._shared_exp_btn.setObjectName("idleSharedExpButton")
-        self._shared_exp_btn.setCheckable(True)
-        self._shared_exp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._shared_exp_btn.clicked.connect(self._toggle_shared_exp)
-        layout.addWidget(self._shared_exp_btn)
+        shared_exp_label = QLabel("Shared EXP: 0%")
+        shared_exp_label.setObjectName("idleSharedExpLabel")
+        layout.addWidget(shared_exp_label)
+        self._shared_exp_label = shared_exp_label
 
-        shared_help = QLabel("Gain: 1% Potential / viewed char")
+        self._shared_exp_slider = QSlider(Qt.Orientation.Horizontal)
+        self._shared_exp_slider.setObjectName("idleSharedExpSlider")
+        self._shared_exp_slider.setMinimum(0)
+        self._shared_exp_slider.setMaximum(95)
+        self._shared_exp_slider.setValue(0)
+        self._shared_exp_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self._shared_exp_slider.setTickInterval(10)
+        self._shared_exp_slider.valueChanged.connect(self._on_shared_exp_changed)
+        layout.addWidget(self._shared_exp_slider)
+
+        shared_help = QLabel("Onsite chars lose X%, offsite gain that + 1% per onsite")
         shared_help.setObjectName("idleModsHelp")
         shared_help.setWordWrap(True)
         layout.addWidget(shared_help)
 
-        rr_title = QLabel("Risk & Reward")
-        rr_title.setObjectName("idleRRTitle")
-        layout.addWidget(rr_title)
+        layout.addSpacing(8)
 
-        self._rr_toggle = QCheckBox("Enabled")
-        self._rr_toggle.setObjectName("idleRRToggle")
-        self._rr_toggle.clicked.connect(self._toggle_risk_reward)
-        layout.addWidget(self._rr_toggle)
+        rr_label = QLabel("Risk & Reward: 0")
+        rr_label.setObjectName("idleRRLabel")
+        layout.addWidget(rr_label)
+        self._rr_label = rr_label
 
-        level_row = QHBoxLayout()
-        level_row.addWidget(QLabel("Lvl:"))
-        self._rr_level = QSpinBox()
-        self._rr_level.setObjectName("idleRRLevel")
-        self._rr_level.setRange(1, 100)
-        self._rr_level.valueChanged.connect(self._update_risk_reward_level)
-        level_row.addWidget(self._rr_level)
-        layout.addLayout(level_row)
+        self._rr_slider = QSlider(Qt.Orientation.Horizontal)
+        self._rr_slider.setObjectName("idleRRSlider")
+        self._rr_slider.setMinimum(0)
+        self._rr_slider.setMaximum(150)
+        self._rr_slider.setValue(0)
+        self._rr_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self._rr_slider.setTickInterval(25)
+        self._rr_slider.valueChanged.connect(self._on_risk_reward_changed)
+        layout.addWidget(self._rr_slider)
 
-        rr_help = QLabel("Boost: (Lvl+1)x EXP\nDrain: (1.5x Lvl) HP / 0.5s")
+        rr_help = QLabel("Boost: (Lvl+1)x EXP\nDrain: (1.5x Lvl) HP\nSpeed scales with level")
         rr_help.setObjectName("idleModsHelp")
         rr_help.setWordWrap(True)
         layout.addWidget(rr_help)
@@ -277,23 +283,22 @@ class IdleScreenWidget(QWidget):
 
         return panel
 
-    def _toggle_shared_exp(self, checked: bool) -> None:
-        self._idle_state.set_shared_exp(checked)
+    def _on_shared_exp_changed(self, value: int) -> None:
+        self._idle_state.set_shared_exp_percentage(value)
         self._update_mods_ui()
 
-    def _toggle_risk_reward(self, checked: bool) -> None:
-        self._idle_state.set_risk_reward_enabled(checked)
-
-    def _update_risk_reward_level(self, level: int) -> None:
-        self._idle_state.set_risk_reward_level(level)
+    def _on_risk_reward_changed(self, value: int) -> None:
+        self._idle_state.set_risk_reward_level(value)
+        self._update_mods_ui()
 
     def _update_mods_ui(self) -> None:
-        shared = self._idle_state.is_shared_exp_enabled()
-        self._shared_exp_btn.setChecked(shared)
-        self._shared_exp_btn.setText(f"Shared EXP: {'ON' if shared else 'OFF'}")
+        shared_pct = self._idle_state.get_shared_exp_percentage()
+        self._shared_exp_label.setText(f"Shared EXP: {shared_pct}%")
+        self._shared_exp_slider.setValue(shared_pct)
 
-        self._rr_toggle.setChecked(self._idle_state.is_risk_reward_enabled())
-        self._rr_level.setValue(self._idle_state.get_risk_reward_level())
+        rr_level = self._idle_state.get_risk_reward_level()
+        self._rr_label.setText(f"Risk & Reward: {rr_level}")
+        self._rr_slider.setValue(rr_level)
 
     def _refresh_character_cards(self) -> None:
         snapshots: list[tuple[IdleOnsiteCharacterCard, dict, Stats, float]] = []
