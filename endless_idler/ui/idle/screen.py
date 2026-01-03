@@ -214,6 +214,10 @@ class IdleScreenWidget(QWidget):
         self._idle_timer.timeout.connect(self._idle_state.process_tick)
         self._idle_timer.start(int(max(1, IDLE_TICK_INTERVAL_SECONDS * 1000)))
 
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.timeout.connect(self._autosave)
+        self._autosave_timer.start(5000)  # Auto-save every 5 seconds
+
     def _refresh_party_hp(self) -> None:
         if getattr(self, "_party_hp_header", None) is None:
             return
@@ -403,9 +407,31 @@ class IdleScreenWidget(QWidget):
 
         self._refresh_character_cards()
 
+    def _autosave(self) -> None:
+        try:
+            save = self._save_manager.load() or self._save or RunSave()
+            progress = save.character_progress
+            progress.update(self._idle_state.export_progress())
+            save.character_progress = progress
+            stats = save.character_stats
+            stats.update(self._idle_state.export_character_stats())
+            save.character_stats = stats
+            initial_stats = getattr(save, "character_initial_stats", {}) or {}
+            initial_stats.update(self._idle_state.export_initial_stats())
+            save.character_initial_stats = initial_stats
+            bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
+            save.idle_exp_bonus_seconds = bonus_seconds
+            save.idle_exp_penalty_seconds = penalty_seconds
+            self._save_manager.save(save)
+            self._save = save
+        except Exception:
+            pass
+
     def _finish(self) -> None:
         if self._idle_timer:
             self._idle_timer.stop()
+        if self._autosave_timer:
+            self._autosave_timer.stop()
         try:
             save = self._save_manager.load() or self._save or RunSave()
             progress = save.character_progress
