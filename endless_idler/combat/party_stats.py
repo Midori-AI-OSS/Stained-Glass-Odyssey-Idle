@@ -87,6 +87,10 @@ def apply_plugin_overrides(stats: Stats, *, plugin: object | None) -> None:
     if plugin is None:
         return
 
+    damage_type = getattr(plugin, "damage_type", None)
+    if damage_type is not None:
+        stats.damage_type = damage_type
+
     base_aggro = getattr(plugin, "base_aggro", None)
     if isinstance(base_aggro, (int, float)):
         stats.base_aggro = float(base_aggro)
