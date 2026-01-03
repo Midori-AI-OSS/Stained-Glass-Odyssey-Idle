@@ -389,14 +389,14 @@ class IdleScreenWidget(QWidget):
             return
 
         try:
-            save = self._save_manager.load() or self._save or RunSave()
-            progress = save.character_progress
+            save = self._save
+            progress = dict(save.character_progress)
             progress.update(self._idle_state.export_progress())
             save.character_progress = progress
-            stats = save.character_stats
+            stats = dict(save.character_stats)
             stats.update(self._idle_state.export_character_stats())
             save.character_stats = stats
-            initial_stats = getattr(save, "character_initial_stats", {}) or {}
+            initial_stats = dict(getattr(save, "character_initial_stats", {}) or {})
             initial_stats.update(self._idle_state.export_initial_stats())
             save.character_initial_stats = initial_stats
             bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
@@ -405,7 +405,6 @@ class IdleScreenWidget(QWidget):
             save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
             save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
             self._save_manager.save(save)
-            self._save = save
         except Exception:
             return
 
@@ -413,14 +412,14 @@ class IdleScreenWidget(QWidget):
 
     def _autosave(self) -> None:
         try:
-            save = self._save_manager.load() or self._save or RunSave()
-            progress = save.character_progress
+            save = self._save
+            progress = dict(save.character_progress)
             progress.update(self._idle_state.export_progress())
             save.character_progress = progress
-            stats = save.character_stats
+            stats = dict(save.character_stats)
             stats.update(self._idle_state.export_character_stats())
             save.character_stats = stats
-            initial_stats = getattr(save, "character_initial_stats", {}) or {}
+            initial_stats = dict(getattr(save, "character_initial_stats", {}) or {})
             initial_stats.update(self._idle_state.export_initial_stats())
             save.character_initial_stats = initial_stats
             bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
@@ -429,7 +428,6 @@ class IdleScreenWidget(QWidget):
             save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
             save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
             self._save_manager.save(save)
-            self._save = save
         except Exception:
             pass
 
@@ -439,14 +437,14 @@ class IdleScreenWidget(QWidget):
         if self._autosave_timer:
             self._autosave_timer.stop()
         try:
-            save = self._save_manager.load() or self._save or RunSave()
-            progress = save.character_progress
+            save = self._save
+            progress = dict(save.character_progress)
             progress.update(self._idle_state.export_progress())
             save.character_progress = progress
-            stats = save.character_stats
+            stats = dict(save.character_stats)
             stats.update(self._idle_state.export_character_stats())
             save.character_stats = stats
-            initial_stats = getattr(save, "character_initial_stats", {}) or {}
+            initial_stats = dict(getattr(save, "character_initial_stats", {}) or {})
             initial_stats.update(self._idle_state.export_initial_stats())
             save.character_initial_stats = initial_stats
             bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
