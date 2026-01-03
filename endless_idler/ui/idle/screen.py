@@ -93,6 +93,8 @@ class IdleScreenWidget(QWidget):
             initial_stats_by_id=dict(getattr(self._save, "character_initial_stats", {}) or {}),
             exp_bonus_seconds=float(self._save.idle_exp_bonus_seconds),
             exp_penalty_seconds=float(self._save.idle_exp_penalty_seconds),
+            shared_exp_percentage=int(getattr(self._save, "idle_shared_exp_percentage", 0)),
+            risk_reward_level=int(getattr(self._save, "idle_risk_reward_level", 0)),
         )
 
         self._onsite_cards: list[IdleOnsiteCharacterCard] = []
@@ -400,6 +402,8 @@ class IdleScreenWidget(QWidget):
             bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
             save.idle_exp_bonus_seconds = bonus_seconds
             save.idle_exp_penalty_seconds = penalty_seconds
+            save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
+            save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
             self._save_manager.save(save)
             self._save = save
         except Exception:
@@ -422,6 +426,8 @@ class IdleScreenWidget(QWidget):
             bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
             save.idle_exp_bonus_seconds = bonus_seconds
             save.idle_exp_penalty_seconds = penalty_seconds
+            save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
+            save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
             self._save_manager.save(save)
             self._save = save
         except Exception:
@@ -446,6 +452,8 @@ class IdleScreenWidget(QWidget):
             bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
             save.idle_exp_bonus_seconds = bonus_seconds
             save.idle_exp_penalty_seconds = penalty_seconds
+            save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
+            save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
             self._save_manager.save(save)
         except Exception:
             pass

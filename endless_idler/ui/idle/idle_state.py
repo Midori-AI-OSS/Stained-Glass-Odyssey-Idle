@@ -41,6 +41,8 @@ class IdleGameState(QObject):
         exp_penalty_seconds: float = 0.0,
         exp_gain_scale: float = 1.0,
         advance_run_buffs: bool = True,
+        shared_exp_percentage: int = 0,
+        risk_reward_level: int = 0,
     ) -> None:
         super().__init__()
         self._char_ids = char_ids
@@ -60,8 +62,8 @@ class IdleGameState(QObject):
         self._offsite_exp_share = OFFSITE_EXP_SHARE_PER_CHAR
 
         self._tick_count = 0
-        self._shared_exp_percentage = 0
-        self._risk_reward_level = 0
+        self._shared_exp_percentage = max(0, min(95, int(shared_exp_percentage)))
+        self._risk_reward_level = max(0, min(150, int(risk_reward_level)))
 
         self._char_data: dict[str, dict] = {}
         for char_id in list(dict.fromkeys([*char_ids, *self._offsite_ids])):

@@ -30,7 +30,7 @@ KNOWN_DAMAGE_TYPE_IDS = (
 RANDOM_DAMAGE_TYPE_IDS = tuple(item for item in KNOWN_DAMAGE_TYPE_IDS if item != "generic")
 
 
-@dataclass(slots=True, unsafe_hash=True)
+@dataclass(slots=True)
 class Combatant:
     char_id: str
     name: str
@@ -39,6 +39,14 @@ class Combatant:
     turns_taken: int = 0
     pending_damage_multiplier: float = 1.0
     ice_charge_ready: bool = False
+
+    def __hash__(self) -> int:
+        return hash(self.char_id)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Combatant):
+            return NotImplemented
+        return self.char_id == other.char_id
 
 
 def apply_offsite_stat_share(
