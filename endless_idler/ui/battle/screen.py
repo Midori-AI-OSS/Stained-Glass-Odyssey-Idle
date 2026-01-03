@@ -119,6 +119,12 @@ class BattleScreenWidget(QWidget):
         self._turn_side = "party"
         self._battle_over = False
         self._foe_kills = 0
+        
+        # Stalemate detection
+        self._stalemate_hp_ratio: float | None = None
+        self._stalemate_last_check_time: float = time.time()
+        self._stalemate_stacks: int = 0
+        self._stalemate_tick_counter: int = 0
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 16, 16, 16)
@@ -281,12 +287,79 @@ class BattleScreenWidget(QWidget):
             max_hp=int(getattr(save, "party_hp_max", 0)),
         )
 
+    def _calculate_hp_ratio(self) -> float:
+        """Calculate combined HP ratio: (party_max/party_current + reserves_max/reserves_current) vs (foes_max/foes_current)"""
+        party_ratio = sum(
+            c.max_hp / max(1, c.stats.hp) 
+            for c in self._party 
+            if c.stats.hp > 0
+        )
+        reserve_ratio = sum(
+            c.max_hp / max(1, c.stats.hp) 
+            for c in self._reserves 
+            if c.stats.hp > 0
+        )
+        foe_ratio = sum(
+            c.max_hp / max(1, c.stats.hp) 
+            for c in self._foes 
+            if c.stats.hp > 0
+        )
+        
+        allies_total = party_ratio + reserve_ratio
+        return allies_total / max(0.01, foe_ratio)
+    
+    def _check_stalemate(self) -> None:
+        """Detect stalemate and apply bleed if HP ratios haven't changed significantly in 15 seconds"""
+        current_time = time.time()
+        current_ratio = self._calculate_hp_ratio()
+        
+        if self._stalemate_hp_ratio is None:
+            self._stalemate_hp_ratio = current_ratio
+            self._stalemate_last_check_time = current_time
+            return
+        
+        time_elapsed = current_time - self._stalemate_last_check_time
+        
+        if time_elapsed >= 15.0:
+            ratio_change = abs(current_ratio - self._stalemate_hp_ratio) / max(0.01, abs(self._stalemate_hp_ratio))
+            
+            if ratio_change < 0.10:
+                self._stalemate_stacks += 1
+                self._set_status(f"Stalemate! Bleed x{self._stalemate_stacks}")
+            
+            self._stalemate_hp_ratio = current_ratio
+            self._stalemate_last_check_time = current_time
+    
+    def _apply_stalemate_bleed(self) -> None:
+        """Apply 1% current HP true damage per stack to all combatants every 10 ticks"""
+        if self._stalemate_stacks <= 0:
+            return
+        
+        self._stalemate_tick_counter += 1
+        
+        if self._stalemate_tick_counter >= 10:
+            self._stalemate_tick_counter = 0
+            damage_percent = 0.01 * self._stalemate_stacks
+            
+            for combatant in self._party + self._reserves + self._foes:
+                if combatant.stats.hp > 0:
+                    damage = max(1, int(combatant.stats.hp * damage_percent))
+                    combatant.stats.hp = max(0, combatant.stats.hp - damage)
+            
+            for card in self._party_cards + self._reserve_cards + self._foe_cards:
+                if hasattr(card, 'refresh'):
+                    card.refresh()
+
     def _step_battle(self) -> None:
         if self._battle_over:
             return
         if self._is_over():
             self._on_battle_over()
             return
+        
+        # Check for stalemate and apply bleed
+        self._check_stalemate()
+        self._apply_stalemate_bleed()
 
         party_alive = [
             (c, w)
@@ -499,6 +572,11 @@ class BattleScreenWidget(QWidget):
         if self._battle_over:
             return
         self._battle_over = True
+        
+        # Reset stalemate tracking
+        self._stalemate_stacks = 0
+        self._stalemate_hp_ratio = None
+        self._stalemate_tick_counter = 0
 
         party_alive = any(c.stats.hp > 0 for c in self._party)
         foes_alive = any(c.stats.hp > 0 for c in self._foes)

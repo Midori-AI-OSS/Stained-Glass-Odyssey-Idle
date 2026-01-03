@@ -36,6 +36,7 @@ class LinePulse:
     width: int = 3
     crit: bool = False
     same_team: bool = False
+    show_target_pulse: bool = False
 
 
 class PortraitLabel(QLabel):
@@ -267,7 +268,8 @@ class LineOverlay(QWidget):
 
     def add_pulse(self, source: QWidget, target: QWidget, color: QColor, *, crit: bool = False, same_team: bool = False) -> None:
         width = 6 if crit else 3
-        self._pulses.append(LinePulse(source=source, target=target, color=color, width=width, crit=crit, same_team=same_team))
+        show_target_pulse = same_team
+        self._pulses.append(LinePulse(source=source, target=target, color=color, width=width, crit=crit, same_team=same_team, show_target_pulse=show_target_pulse))
         self.update()
 
     def tick(self, delta_ms: int) -> None:
@@ -309,21 +311,46 @@ class LineOverlay(QWidget):
             painter.setPen(pen)
             
             if pulse.same_team:
-                mid_x = (start.x() + end.x()) / 2.0
-                mid_y = min(start.y(), end.y()) - 50.0
-                
                 from PySide6.QtGui import QPainterPath
+                
+                # Calculate waypoint: 50% towards the opposite side (horizontally)
+                waypoint_x = start.x() + (end.x() - start.x()) * 0.5
+                waypoint_y = min(start.y(), end.y()) - 80.0
+                
+                # First arc: from attacker to waypoint
+                first_mid_x = (start.x() + waypoint_x) / 2.0
+                first_mid_y = (start.y() + waypoint_y) / 2.0 - 30.0
+                
+                # Second arc: from waypoint to target
+                second_mid_x = (waypoint_x + end.x()) / 2.0
+                second_mid_y = (waypoint_y + end.y()) / 2.0 - 30.0
+                
+                # Draw double-curved path
                 path = QPainterPath()
                 path.moveTo(start)
-                path.quadTo(QPointF(mid_x, mid_y), end)
+                path.quadTo(QPointF(first_mid_x, first_mid_y), QPointF(waypoint_x, waypoint_y))
+                path.quadTo(QPointF(second_mid_x, second_mid_y), end)
                 painter.drawPath(path)
                 
-                t = 0.75
+                # Draw arrow at the end
+                t = 0.85
                 curve_end = QPointF(
-                    (1 - t) * (1 - t) * start.x() + 2 * (1 - t) * t * mid_x + t * t * end.x(),
-                    (1 - t) * (1 - t) * start.y() + 2 * (1 - t) * t * mid_y + t * t * end.y()
+                    (1 - t) * (1 - t) * waypoint_x + 2 * (1 - t) * t * second_mid_x + t * t * end.x(),
+                    (1 - t) * (1 - t) * waypoint_y + 2 * (1 - t) * t * second_mid_y + t * t * end.y()
                 )
-                self._draw_arrow_head(painter, QPointF(mid_x, mid_y), end, color, width=pulse.width)
+                self._draw_arrow_head(painter, curve_end, end, color, width=pulse.width)
+                
+                # Draw pulse effect at target when show_target_pulse is True
+                if pulse.show_target_pulse:
+                    progress = 1.0 - (pulse.remaining_ms / 220.0)
+                    if progress > 0.7:
+                        pulse_alpha = int(alpha * (1.0 - (progress - 0.7) / 0.3))
+                        pulse_color = QColor(color)
+                        pulse_color.setAlpha(pulse_alpha)
+                        painter.setPen(Qt.PenStyle.NoPen)
+                        painter.setBrush(QBrush(pulse_color))
+                        radius = 8.0 + 12.0 * (progress - 0.7) / 0.3
+                        painter.drawEllipse(end, radius, radius)
             else:
                 dx = float(end.x() - start.x())
                 dy = float(end.y() - start.y())
