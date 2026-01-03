@@ -81,6 +81,7 @@ from rich.console import Console
 - Balance resource generation and consumption
 - Test progression pacing carefully
 - Document all game mechanics in `.codex/implementation/`
+- DO NOT Document in the root of the repo, do not make documents with out being asked to.
 
 ### Asset Management
 - Follow project art guidelines for all visual assets
