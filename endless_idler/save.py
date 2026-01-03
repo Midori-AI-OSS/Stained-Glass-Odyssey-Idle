@@ -58,6 +58,8 @@ class RunSave:
     character_deaths: dict[str, int] = field(default_factory=dict)
     idle_exp_bonus_seconds: float = 0.0
     idle_exp_penalty_seconds: float = 0.0
+    idle_shared_exp_percentage: int = 0
+    idle_risk_reward_level: int = 0
 
 
 class SaveManager:
@@ -86,6 +88,8 @@ class SaveManager:
 
         bonus_seconds = as_float(data.get("idle_exp_bonus_seconds", 0.0), default=0.0)
         penalty_seconds = as_float(data.get("idle_exp_penalty_seconds", 0.0), default=0.0)
+        shared_exp_percentage = as_int(data.get("idle_shared_exp_percentage", 0), default=0)
+        risk_reward_level = as_int(data.get("idle_risk_reward_level", 0), default=0)
         if "idle_exp_bonus_seconds" not in data:
             legacy_bonus = as_float(data.get("idle_exp_bonus_until", 0.0), default=0.0)
             if legacy_bonus > 1_000_000_000:
@@ -128,6 +132,8 @@ class SaveManager:
             character_deaths=as_int_dict(data.get("character_deaths", {})),
             idle_exp_bonus_seconds=bonus_seconds,
             idle_exp_penalty_seconds=penalty_seconds,
+            idle_shared_exp_percentage=shared_exp_percentage,
+            idle_risk_reward_level=risk_reward_level,
         )
         return _normalized_save(save)
 
@@ -153,6 +159,8 @@ class SaveManager:
             "character_deaths": save.character_deaths,
             "idle_exp_bonus_seconds": save.idle_exp_bonus_seconds,
             "idle_exp_penalty_seconds": save.idle_exp_penalty_seconds,
+            "idle_shared_exp_percentage": save.idle_shared_exp_percentage,
+            "idle_risk_reward_level": save.idle_risk_reward_level,
         }
 
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -288,6 +296,8 @@ def _normalized_save(save: RunSave) -> RunSave:
         character_deaths=deaths,
         idle_exp_bonus_seconds=float(max(0.0, getattr(save, "idle_exp_bonus_seconds", 0.0))),
         idle_exp_penalty_seconds=float(max(0.0, getattr(save, "idle_exp_penalty_seconds", 0.0))),
+        idle_shared_exp_percentage=max(0, min(95, int(getattr(save, "idle_shared_exp_percentage", 0)))),
+        idle_risk_reward_level=max(0, min(150, int(getattr(save, "idle_risk_reward_level", 0)))),
     )
 
 
