@@ -371,7 +371,6 @@ QLabel#standbyShopLabel {
 }
 
 QFrame#stainedTooltipPanel {
-    background-color: rgba(10, 14, 26, 210);
     border: 1px solid rgba(255, 255, 255, 60);
 }
 
