@@ -87,6 +87,11 @@ def apply_plugin_overrides(stats: Stats, *, plugin: object | None) -> None:
     if plugin is None:
         return
 
+    damage_type_id = getattr(plugin, "damage_type_id", None)
+    if damage_type_id is not None:
+        from endless_idler.combat.damage_types import load_damage_type
+        stats.damage_type = load_damage_type(damage_type_id)
+
     base_aggro = getattr(plugin, "base_aggro", None)
     if isinstance(base_aggro, (int, float)):
         stats.base_aggro = float(base_aggro)

@@ -203,8 +203,8 @@ class IdleOffsiteCard(QFrame):
         element_id = getattr(stats, "element_id", "generic")
         color = color_for_damage_type_id(element_id)
         
-        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 20)"
-        self.setStyleSheet(f"#idleOffsiteCard {{ background-color: {tint_color}; }}")
+        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 60)"
+        self.setStyleSheet(f"QFrame#idleOffsiteCard {{ background-color: {tint_color} !important; }}")
 
     def _request_rebirth(self) -> None:
         if self._on_rebirth is None:
