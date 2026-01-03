@@ -30,7 +30,7 @@ KNOWN_DAMAGE_TYPE_IDS = (
 RANDOM_DAMAGE_TYPE_IDS = tuple(item for item in KNOWN_DAMAGE_TYPE_IDS if item != "generic")
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, unsafe_hash=True)
 class Combatant:
     char_id: str
     name: str
