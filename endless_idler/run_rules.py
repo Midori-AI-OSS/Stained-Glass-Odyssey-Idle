@@ -27,8 +27,10 @@ def apply_battle_result(save: RunSave, *, victory: bool) -> bool:
     if victory:
         save.party_hp_current = min(save.party_hp_max, save.party_hp_current + PARTY_HP_WIN_HEAL)
         save.fight_number = fight_number + 1
+        save.winstreak = max(0, int(getattr(save, "winstreak", 0))) + 1
         return False
 
+    save.winstreak = 0
     damage = PARTY_HP_LOSS_DAMAGE_PER_FIGHT * fight_number
     save.party_hp_current = max(0, save.party_hp_current - damage)
     if save.party_hp_current <= 0:
@@ -36,6 +38,27 @@ def apply_battle_result(save: RunSave, *, victory: bool) -> bool:
 
     save.party_hp_current = min(save.party_hp_max, save.party_hp_current + PARTY_HP_LOSS_HEAL)
     return False
+
+
+def calculate_gold_bonus(tokens: int, winstreak: int) -> int:
+    """Calculate bonus gold from tokens and winstreak.
+    
+    Each 5 tokens/gold grants +1 gold on win or loss, with soft cap at 100
+    where it becomes every 25 tokens/gold +1.
+    """
+    tokens = max(0, int(tokens))
+    winstreak = max(0, int(winstreak))
+    
+    total = tokens + winstreak
+    
+    if total <= 100:
+        return total // 5
+    
+    base_bonus = 100 // 5
+    excess = total - 100
+    soft_capped_bonus = excess // 25
+    
+    return base_bonus + soft_capped_bonus
 
 
 def apply_idle_party_heal(save: RunSave, *, now: float | None = None) -> int:

@@ -103,6 +103,7 @@ class PartyBuilderWidget(QWidget):
         self._fight_bar: FightBar | None = None
         self._idle_bar: IdleBar | None = None
         self._party_hp_header: PartyHpHeader | None = None
+        self._next_fight_info: object | None = None
         self._merge_fx: MergeFxOverlay | None = None
 
         root = QVBoxLayout()
@@ -126,11 +127,13 @@ class PartyBuilderWidget(QWidget):
         party_hp = PartyHpHeader()
         self._party_hp_header = party_hp
         header.addWidget(party_hp, 0, 1, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
+        
+        from endless_idler.ui.next_fight_info import NextFightInfo
+        next_fight = NextFightInfo()
+        self._next_fight_info = next_fight
+        header.addWidget(next_fight, 0, 2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        
         header.setColumnStretch(1, 1)
-        spacer = QWidget()
-        spacer.setFixedWidth(back.sizeHint().width())
-        spacer.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        header.addWidget(spacer, 0, 2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         self._char_bar: CharacterBar | None = None
         self._token_label: QLabel | None = None
@@ -1035,6 +1038,17 @@ class PartyBuilderWidget(QWidget):
             current=int(getattr(self._save, "party_hp_current", 0)),
             max_hp=int(getattr(self._save, "party_hp_max", 0)),
         )
+        self._refresh_next_fight_info()
+    
+    def _refresh_next_fight_info(self) -> None:
+        if self._next_fight_info is None:
+            return
+        
+        party_level = max(1, int(getattr(self._save, "party_level", 1)))
+        fight_number = max(1, int(getattr(self._save, "fight_number", 1)))
+        foe_level = max(1, int(party_level * float(fight_number) * 1.3))
+        
+        self._next_fight_info.set_level(foe_level)
 
     def _refresh_rewards_plane(self) -> None:
         if self._rewards_plane is None:

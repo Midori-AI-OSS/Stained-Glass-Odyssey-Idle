@@ -243,6 +243,16 @@ class OnsiteCharacterCardBase(QFrame):
 
         if self._stats_popup is not None:
             self._stats_popup.set_panel(self._stats_panel)
+        
+        self._apply_element_tint(stats)
+    
+    def _apply_element_tint(self, stats: Stats) -> None:
+        from endless_idler.ui.battle.colors import color_for_damage_type_id
+        element_id = getattr(stats, "element_id", "generic")
+        color = color_for_damage_type_id(element_id)
+        
+        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 20)"
+        self.setStyleSheet(f"#onsiteCharacterCard {{ background-color: {tint_color}; }}")
 
     def pulse_anchor_global(self) -> QPointF:
         rect = self.rect()
