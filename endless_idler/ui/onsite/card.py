@@ -227,6 +227,7 @@ class OnsiteCharacterCardBase(QFrame):
         stats: Stats,
         maxima: dict[str, float],
     ) -> None:
+        self._stats = stats
         self._tooltip_html = build_character_stats_tooltip(
             name=str(name),
             stars=stars,
