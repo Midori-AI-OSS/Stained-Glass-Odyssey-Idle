@@ -117,6 +117,8 @@ class IdleOffsiteCard(QFrame):
         body.addWidget(self._exp_bar)
 
         body.addStretch(1)
+        
+        # Element tint will be applied on first update_display call
 
     def update_display(self) -> None:
         data = self._idle_state.get_char_data(self._char_id)
@@ -150,6 +152,59 @@ class IdleOffsiteCard(QFrame):
         self._hp_bar.setFormat(f"{max(0, int(hp))} / {max(1, int(max_hp))}")
 
         self._rebirth_button.setVisible(level >= 50)
+        
+        # Apply element tint on each update
+        self._apply_element_tint(data)
+    
+    def _apply_element_tint(self, data: dict) -> None:
+        from endless_idler.combat.party_stats import build_scaled_character_stats
+        
+        if not self._plugin:
+            return
+        
+        if not data or not isinstance(data, dict):
+            return
+        
+        base_stats = data.get("base_stats")
+        saved_base_stats = dict(base_stats) if isinstance(base_stats, dict) else {}
+        
+        try:
+            stack_count = max(1, int(data.get("stack", 1)))
+        except (TypeError, ValueError):
+            stack_count = 1
+        
+        stars = max(1, int(getattr(self._plugin, "stars", 1) or 1))
+        
+        progress: dict[str, float | int] = {
+            "level": max(1, int(data.get("level", 1))),
+            "exp": float(max(0.0, float(data.get("exp", 0.0)))),
+            "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
+            "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
+        }
+        
+        party_level = 1
+        party_level_getter = getattr(self._idle_state, "get_party_level", None)
+        if callable(party_level_getter):
+            try:
+                party_level = max(1, int(party_level_getter()))
+            except Exception:
+                party_level = 1
+        
+        stats = build_scaled_character_stats(
+            plugin=self._plugin,
+            party_level=party_level,
+            stars=stars,
+            stacks=stack_count,
+            progress=progress,
+            saved_base_stats=saved_base_stats,
+        )
+        
+        from endless_idler.ui.battle.colors import color_for_damage_type_id
+        element_id = getattr(stats, "element_id", "generic")
+        color = color_for_damage_type_id(element_id)
+        
+        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 20)"
+        self.setStyleSheet(f"#idleOffsiteCard {{ background-color: {tint_color}; }}")
 
     def _request_rebirth(self) -> None:
         if self._on_rebirth is None:

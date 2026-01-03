@@ -409,7 +409,14 @@ class DropSlot(QFrame):
 
     def enterEvent(self, event: object) -> None:
         if self._tooltip_html:
-            show_stained_tooltip(self, self._tooltip_html)
+            stats: Stats | None = None
+            if self._get_tooltip_stats is not None and self._char_id:
+                try:
+                    stats = self._get_tooltip_stats(self._char_id, self._slot_kind)
+                except Exception:
+                    stats = None
+            element_id = getattr(stats, "element_id", None) if stats else None
+            show_stained_tooltip(self, self._tooltip_html, element_id=element_id)
         try:
             super().enterEvent(event)  # type: ignore[misc]
         except Exception:
