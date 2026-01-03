@@ -11,7 +11,7 @@ _TYPE_COLORS: dict[str, tuple[int, int, int]] = {
     "water": (60, 130, 255),
     "nature": (80, 200, 120),
     "arcane": (255, 80, 200),
-    "dark": (150, 80, 220),
+    "dark": (75, 45, 100),
     "light": (255, 220, 120),
     "physical": (180, 180, 190),
     "generic": (235, 235, 240),
