@@ -35,6 +35,7 @@ class LinePulse:
     remaining_ms: int = 220
     width: int = 3
     crit: bool = False
+    same_team: bool = False
 
 
 class PortraitLabel(QLabel):
@@ -139,6 +140,15 @@ class CombatantCard(QFrame):
             body.addWidget(self._exp)
 
         self._refresh_tooltip()
+        self._apply_element_tint()
+    
+    def _apply_element_tint(self) -> None:
+        from endless_idler.ui.battle.colors import color_for_damage_type_id
+        element_id = getattr(self._combatant.stats, "element_id", "generic")
+        color = color_for_damage_type_id(element_id)
+        
+        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 20)"
+        self.setStyleSheet(f"#battleCombatantCard {{ background-color: {tint_color}; }}")
 
     @property
     def combatant(self) -> Combatant:
@@ -255,9 +265,9 @@ class LineOverlay(QWidget):
         self.setAutoFillBackground(False)
         self._pulses: list[LinePulse] = []
 
-    def add_pulse(self, source: QWidget, target: QWidget, color: QColor, *, crit: bool = False) -> None:
+    def add_pulse(self, source: QWidget, target: QWidget, color: QColor, *, crit: bool = False, same_team: bool = False) -> None:
         width = 6 if crit else 3
-        self._pulses.append(LinePulse(source=source, target=target, color=color, width=width, crit=crit))
+        self._pulses.append(LinePulse(source=source, target=target, color=color, width=width, crit=crit, same_team=same_team))
         self.update()
 
     def tick(self, delta_ms: int) -> None:
@@ -297,17 +307,100 @@ class LineOverlay(QWidget):
             pen.setWidth(max(1, int(pulse.width)))
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             painter.setPen(pen)
-            painter.drawLine(start, end)
-
-            self._draw_arrow_head(painter, start, end, color, width=pulse.width)
+            
+            if pulse.same_team:
+                mid_x = (start.x() + end.x()) / 2.0
+                mid_y = min(start.y(), end.y()) - 50.0
+                
+                from PySide6.QtGui import QPainterPath
+                path = QPainterPath()
+                path.moveTo(start)
+                path.quadTo(QPointF(mid_x, mid_y), end)
+                painter.drawPath(path)
+                
+                t = 0.75
+                curve_end = QPointF(
+                    (1 - t) * (1 - t) * start.x() + 2 * (1 - t) * t * mid_x + t * t * end.x(),
+                    (1 - t) * (1 - t) * start.y() + 2 * (1 - t) * t * mid_y + t * t * end.y()
+                )
+                self._draw_arrow_head(painter, QPointF(mid_x, mid_y), end, color, width=pulse.width)
+            else:
+                dx = float(end.x() - start.x())
+                dy = float(end.y() - start.y())
+                dist = (dx * dx + dy * dy) ** 0.5
+                
+                if dist > 10:
+                    import math
+                    
+                    seed = int((start.x() + start.y() + end.x() + end.y()) * 1000) % 10000
+                    rng = random.Random(seed)
+                    curve_offset = rng.uniform(10, 30)
+                    curve_dir = 1 if rng.random() > 0.5 else -1
+                    
+                    mid_x = (start.x() + end.x()) / 2.0
+                    mid_y = (start.y() + end.y()) / 2.0
+                    
+                    perp_x = -dy / dist
+                    perp_y = dx / dist
+                    
+                    control_x = mid_x + perp_x * curve_offset * curve_dir
+                    control_y = mid_y + perp_y * curve_offset * curve_dir
+                    
+                    from PySide6.QtGui import QPainterPath
+                    path = QPainterPath()
+                    path.moveTo(start)
+                    path.quadTo(QPointF(control_x, control_y), end)
+                    painter.drawPath(path)
+                    
+                    t = 0.75
+                    curve_point = QPointF(
+                        (1 - t) * (1 - t) * start.x() + 2 * (1 - t) * t * control_x + t * t * end.x(),
+                        (1 - t) * (1 - t) * start.y() + 2 * (1 - t) * t * control_y + t * t * end.y()
+                    )
+                    self._draw_arrow_head(painter, curve_point, end, color, width=pulse.width)
+                else:
+                    painter.drawLine(start, end)
+                    self._draw_arrow_head(painter, start, end, color, width=pulse.width)
 
             if pulse.crit:
                 progress = 1.0 - (pulse.remaining_ms / 220.0)
                 progress = max(0.0, min(1.0, float(progress)))
-                point = QPointF(
-                    start.x() + (end.x() - start.x()) * progress,
-                    start.y() + (end.y() - start.y()) * progress,
-                )
+                
+                if pulse.same_team:
+                    mid_x = (start.x() + end.x()) / 2.0
+                    mid_y = min(start.y(), end.y()) - 50.0
+                    point = QPointF(
+                        (1 - progress) * (1 - progress) * start.x() + 2 * (1 - progress) * progress * mid_x + progress * progress * end.x(),
+                        (1 - progress) * (1 - progress) * start.y() + 2 * (1 - progress) * progress * mid_y + progress * progress * end.y()
+                    )
+                else:
+                    dx = float(end.x() - start.x())
+                    dy = float(end.y() - start.y())
+                    dist = (dx * dx + dy * dy) ** 0.5
+                    
+                    if dist > 10:
+                        seed = int((start.x() + start.y() + end.x() + end.y()) * 1000) % 10000
+                        rng = random.Random(seed)
+                        curve_offset = rng.uniform(10, 30)
+                        curve_dir = 1 if rng.random() > 0.5 else -1
+                        
+                        mid_x = (start.x() + end.x()) / 2.0
+                        mid_y = (start.y() + end.y()) / 2.0
+                        perp_x = -dy / dist
+                        perp_y = dx / dist
+                        control_x = mid_x + perp_x * curve_offset * curve_dir
+                        control_y = mid_y + perp_y * curve_offset * curve_dir
+                        
+                        point = QPointF(
+                            (1 - progress) * (1 - progress) * start.x() + 2 * (1 - progress) * progress * control_x + progress * progress * end.x(),
+                            (1 - progress) * (1 - progress) * start.y() + 2 * (1 - progress) * progress * control_y + progress * progress * end.y()
+                        )
+                    else:
+                        point = QPointF(
+                            start.x() + (end.x() - start.x()) * progress,
+                            start.y() + (end.y() - start.y()) * progress,
+                        )
+                
                 gold = QColor(255, 215, 0)
                 gold.setAlpha(alpha)
                 painter.setPen(Qt.PenStyle.NoPen)
@@ -376,8 +469,8 @@ class Arena(QFrame):
         timer.start()
         self._timer = timer
 
-    def add_pulse(self, source: QWidget, target: QWidget, color: QColor, *, crit: bool = False) -> None:
-        self._overlay.add_pulse(source, target, color, crit=crit)
+    def add_pulse(self, source: QWidget, target: QWidget, color: QColor, *, crit: bool = False, same_team: bool = False) -> None:
+        self._overlay.add_pulse(source, target, color, crit=crit, same_team=same_team)
         self._overlay.raise_()
 
     def resizeEvent(self, event: object) -> None:

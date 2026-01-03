@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QWidget
 
 from endless_idler.characters.plugins import discover_character_plugins
 from endless_idler.run_rules import apply_battle_result
+from endless_idler.run_rules import calculate_gold_bonus
 from endless_idler.ui.battle.colors import color_for_damage_type_id
 from endless_idler.ui.battle.mechanics import apply_dark_sacrifice
 from endless_idler.ui.battle.mechanics import apply_fire_self_bleed
@@ -132,7 +133,7 @@ class BattleScreenWidget(QWidget):
         back = QPushButton("Back")
         back.setObjectName("battleBackButton")
         back.setCursor(Qt.CursorShape.PointingHandCursor)
-        back.clicked.connect(self._finish)
+        back.clicked.connect(self._on_back_clicked)
         header.addWidget(back, 0, Qt.AlignmentFlag.AlignLeft)
 
         header.addStretch(1)
@@ -348,7 +349,7 @@ class BattleScreenWidget(QWidget):
                     widget = party_widgets.get(target) or foe_widgets.get(target) or reserve_widgets.get(target)
                     if widget is not None:
                         widget.refresh()
-                        self._arena.add_pulse(attacker_widget, widget, color)
+                        self._arena.add_pulse(attacker_widget, widget, color, same_team=True)
                 return
 
         if element_id == "dark":
@@ -572,7 +573,13 @@ class BattleScreenWidget(QWidget):
         try:
             manager = SaveManager()
             save = manager.load() or RunSave()
-            save.tokens = max(0, int(save.tokens)) + gold
+            
+            tokens = max(0, int(save.tokens))
+            winstreak = max(0, int(getattr(save, "winstreak", 0)))
+            bonus = calculate_gold_bonus(tokens, winstreak)
+            
+            total_gold = gold + bonus
+            save.tokens = tokens + total_gold
             manager.save(save)
         except Exception:
             return
@@ -631,6 +638,50 @@ class BattleScreenWidget(QWidget):
         party_alive = any(c.stats.hp > 0 for c in self._party)
         foes_alive = any(c.stats.hp > 0 for c in self._foes)
         return not party_alive or not foes_alive
+
+    def _on_back_clicked(self) -> None:
+        if self._battle_over:
+            self._finish()
+            return
+        
+        try:
+            save = self._save_manager.load() or self._save or RunSave()
+            should_reset = apply_battle_result(save, victory=False)
+            
+            if should_reset:
+                for char_id in sorted(set(self._onsite_ids + self._offsite_ids)):
+                    plugin = self._plugin_by_id.get(char_id)
+                    record_character_death(
+                        save,
+                        char_id=char_id,
+                        base_stats_template=getattr(plugin, "base_stats", None),
+                    )
+                
+                preserved_progress = dict(save.character_progress)
+                preserved_stats = dict(save.character_stats)
+                preserved_initial_stats = dict(getattr(save, "character_initial_stats", {}) or {})
+                preserved_deaths = dict(getattr(save, "character_deaths", {}) or {})
+                preserved_bonus = float(save.idle_exp_bonus_seconds)
+                preserved_penalty = float(save.idle_exp_penalty_seconds)
+                
+                save = new_run_save(
+                    available_char_ids=[plugin.char_id for plugin in self._plugins],
+                    rng=self._rng,
+                )
+                save.character_progress = preserved_progress
+                save.character_stats = preserved_stats
+                save.character_initial_stats = preserved_initial_stats
+                save.character_deaths = preserved_deaths
+                save.idle_exp_bonus_seconds = preserved_bonus
+                save.idle_exp_penalty_seconds = preserved_penalty
+            
+            self._save_manager.save(save)
+            self._save = save
+            self._refresh_party_hp()
+        except Exception:
+            pass
+        
+        self._finish()
 
     def _finish(self) -> None:
         try:

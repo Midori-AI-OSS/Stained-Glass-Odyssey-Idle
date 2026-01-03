@@ -103,6 +103,23 @@ QProgressBar#partyHpHeaderBar::chunk {
     background-color: rgba(46, 204, 113, 165);
 }
 
+QFrame#nextFightInfo {
+    background-color: rgba(20, 30, 60, 120);
+    border: 1px solid rgba(255, 255, 255, 22);
+}
+
+QLabel#nextFightLabel {
+    color: rgba(255, 255, 255, 210);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+QLabel#nextFightLevelLabel {
+    color: rgba(255, 200, 100, 220);
+    font-size: 12px;
+    font-weight: 600;
+}
+
 QPushButton#partyRerollButton {
     background-color: rgba(255, 255, 255, 16);
     border: 1px solid rgba(255, 255, 255, 22);
