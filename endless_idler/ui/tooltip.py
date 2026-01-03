@@ -21,7 +21,7 @@ from endless_idler.ui.assets import asset_path
 _TOOLTIP: "StainedGlassTooltip | None" = None
 
 
-def show_stained_tooltip(owner: QWidget, html: str) -> None:
+def show_stained_tooltip(owner: QWidget, html: str, *, element_id: str | None = None) -> None:
     global _TOOLTIP  # noqa: PLW0603
 
     if not html:
@@ -31,7 +31,7 @@ def show_stained_tooltip(owner: QWidget, html: str) -> None:
     if _TOOLTIP is None:
         _TOOLTIP = StainedGlassTooltip()
 
-    _TOOLTIP.set_html(html)
+    _TOOLTIP.set_html(html, element_id=element_id)
     _TOOLTIP.show_near_cursor(owner)
 
 
@@ -84,14 +84,17 @@ class StainedGlassTooltip(QFrame):
         self._content.setWordWrap(True)
         panel_layout.addWidget(self._content)
 
+        self._element_id: str | None = None
         self.hide()
 
-    def set_html(self, html: str) -> None:
+    def set_html(self, html: str, *, element_id: str | None = None) -> None:
         self._content.setText(html)
+        self._element_id = element_id
         self._content.adjustSize()
         self._panel.adjustSize()
         self.adjustSize()
         self._refresh_background()
+        self._apply_element_tint()
 
     def show_near_cursor(self, owner: QWidget) -> None:
         pos = QCursor.pos()
@@ -161,3 +164,13 @@ class StainedGlassTooltip(QFrame):
 
         painter.end()
         return tinted
+
+    def _apply_element_tint(self) -> None:
+        if not self._element_id:
+            return
+        
+        from endless_idler.ui.battle.colors import color_for_damage_type_id
+        color = color_for_damage_type_id(self._element_id)
+        
+        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 30)"
+        self._panel.setStyleSheet(f"#stainedTooltipPanel {{ background-color: {tint_color}; }}")

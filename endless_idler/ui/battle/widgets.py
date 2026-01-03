@@ -204,7 +204,8 @@ class CombatantCard(QFrame):
 
     def enterEvent(self, event: object) -> None:
         if self._tooltip_html:
-            show_stained_tooltip(self, self._tooltip_html)
+            element_id = getattr(self._combatant.stats, "element_id", None)
+            show_stained_tooltip(self, self._tooltip_html, element_id=element_id)
         try:
             super().enterEvent(event)  # type: ignore[misc]
         except Exception:
