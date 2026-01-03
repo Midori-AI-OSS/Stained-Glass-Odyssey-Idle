@@ -1089,27 +1089,13 @@ class PartyBuilderWidget(QWidget):
         except Exception:
             return
 
-        if self._shop_exp_state is not None:
-            progress = dict(latest.character_progress)
-            progress.update(self._shop_exp_state.export_progress())
-            latest.character_progress = progress
-
-            stats = dict(latest.character_stats)
-            stats.update(self._shop_exp_state.export_character_stats())
-            latest.character_stats = stats
-
-            initial_stats = dict(getattr(latest, "character_initial_stats", {}) or {})
-            initial_stats.update(self._shop_exp_state.export_initial_stats())
-            latest.character_initial_stats = initial_stats
-
-            self._save_manager.save(latest)
-
         latest = sanitize_save_characters(save=latest, allowed_char_ids=set(self._plugin_by_id))
         self._save_manager.save(latest)
 
         self._save = latest
         self._shop_exp_state = None
         self._shop_exp_signature = None
+        self._shop_exp_ticks = 0
         self._refresh_tokens()
         self._refresh_party_level()
         self._refresh_action_bars_state()
