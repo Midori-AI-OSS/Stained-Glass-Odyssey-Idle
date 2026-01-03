@@ -6,7 +6,7 @@ from PySide6.QtGui import QColor
 _TYPE_COLORS: dict[str, tuple[int, int, int]] = {
     "fire": (255, 90, 40),
     "ice": (80, 200, 255),
-    "lightning": (185, 90, 255),
+    "lightning": (255, 220, 0),
     "wind": (80, 230, 170),
     "water": (60, 130, 255),
     "nature": (80, 200, 120),
