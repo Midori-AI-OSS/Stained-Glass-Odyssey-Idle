@@ -1,7 +1,10 @@
 from dataclasses import dataclass
+from dataclasses import field
 from typing import ClassVar
 
 from plugins.characters._base import PlayerBase
+from plugins.damage_types._base import DamageTypeBase
+from plugins.damage_types.ice import Ice
 
 
 placement = "both"
@@ -29,4 +32,5 @@ class Slime(PlayerBase):
     As a training dummy, the slime exists in a state of perfect passivity. It doesn't attack, doesn't defend itself with any particular vigor, and shows no signs of personality, emotion, or intent. It simply exists, providing a target for those who wish to practice their combat techniques against something that can absorb punishment without complaint or resistance. There's something oddly peaceful about its complete lack of ambition or awareness—it is content to be exactly what it is: a blob of elemental-colored goo, serving its purpose without question or complaint, a perfect canvas upon which warriors can paint their practice strikes.
     """
     gacha_rarity = 0
+    damage_type: DamageTypeBase = field(default_factory=Ice)
     ui_non_selectable: ClassVar[bool] = True
