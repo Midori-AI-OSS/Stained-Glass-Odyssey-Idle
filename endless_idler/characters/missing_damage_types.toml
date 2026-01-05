@@ -2,7 +2,6 @@
 # This file tracks character modules that effectively have *no fixed element/damage type*.
 # Criteria for inclusion:
 # - No `damage_type` declared, OR
-# - `damage_type` resolves to Generic, OR
 # - `damage_type` is randomized (e.g. choice(ALL_DAMAGE_TYPES)).
 #
 # Please implement the requested damage type in the referenced character class/module, then remove the entry.
@@ -11,11 +10,6 @@
 [[character]]
 id = "slime"
 file = "slime.py"
-"requested damage type" = ""
-
-[[character]]
-id = "luna"
-file = "luna.py"
 "requested damage type" = ""
 
 [[character]]
