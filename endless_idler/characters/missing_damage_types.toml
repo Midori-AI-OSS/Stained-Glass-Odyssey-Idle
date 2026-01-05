@@ -1,0 +1,9 @@
+# NOTE FOR NEXT AGENT:
+# This file tracks character modules that currently do not declare an explicit `damage_type` (element).
+# Please implement the requested damage type in the referenced character class/module, then remove the entry.
+# Valid damage types (currently): fire, ice, wind, lightning, light, dark, generic.
+
+[[character]]
+id = "slime"
+file = "slime.py"
+requested_damage_type = "generic"
