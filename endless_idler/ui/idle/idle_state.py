@@ -371,7 +371,7 @@ class IdleGameState(QObject):
                 ticks_per_drain = max(1, int(speed_modifier / IDLE_TICK_INTERVAL_SECONDS))
                 
                 if self._tick_count % ticks_per_drain == 0:
-                    drain = 1.5 * self._risk_reward_level
+                    drain = 5.5 * self._risk_reward_level
                     data["hp"] = max(0.0, data["hp"] - drain)
 
             if data["exp"] >= data["next_exp"]:

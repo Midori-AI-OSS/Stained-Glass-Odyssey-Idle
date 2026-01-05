@@ -733,6 +733,19 @@ QLabel#idleOffsiteName {
     font-weight: 700;
 }
 
+QPushButton#idleRebirthButton {
+    background-color: rgba(255, 255, 255, 14);
+    border: 1px solid rgba(255, 255, 255, 20);
+    border-radius: 0px;
+    padding: 4px 8px;
+    color: rgba(255, 255, 255, 230);
+    font-size: 11px;
+}
+
+QPushButton#idleRebirthButton:hover {
+    background-color: rgba(120, 180, 255, 44);
+}
+
 QLabel#idleStackPlus {
     color: rgba(255, 255, 255, 170);
     font-size: 11px;
