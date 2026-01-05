@@ -280,7 +280,7 @@ class IdleScreenWidget(QWidget):
         self._rr_slider.valueChanged.connect(self._on_risk_reward_changed)
         layout.addWidget(self._rr_slider)
 
-        rr_help = QLabel("Boost: (Lvl+1)x EXP\nDrain: (1.5x Lvl) HP\nSpeed scales with level")
+        rr_help = QLabel("Boost: (Lvl+1)x EXP\nDrain: (5.5x Lvl) HP\nSpeed scales with level")
         rr_help.setObjectName("idleModsHelp")
         rr_help.setWordWrap(True)
         layout.addWidget(rr_help)
