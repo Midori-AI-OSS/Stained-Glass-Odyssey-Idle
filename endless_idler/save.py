@@ -359,3 +359,40 @@ def sanitize_save_characters(*, save: RunSave, allowed_char_ids: set[str]) -> Ru
     save.character_deaths = {key: value for key, value in save.character_deaths.items() if key in allowed}
 
     return _normalized_save(save)
+
+
+def reset_character_progress_for_new_run(
+    progress_by_id: dict[str, dict[str, float | int]],
+) -> dict[str, dict[str, float | int]]:
+    reset: dict[str, dict[str, float | int]] = {}
+    for char_id, raw in progress_by_id.items():
+        raw = raw if isinstance(raw, dict) else {}
+
+        try:
+            exp_multiplier = max(0.0, float(raw.get("exp_multiplier", 1.0)))
+        except (TypeError, ValueError):
+            exp_multiplier = 1.0
+        try:
+            req_multiplier = max(0.0, float(raw.get("req_multiplier", 1.0)))
+        except (TypeError, ValueError):
+            req_multiplier = 1.0
+        try:
+            rebirths = max(0, int(raw.get("rebirths", 0)))
+        except (TypeError, ValueError):
+            rebirths = 0
+
+        reset[char_id] = {
+            "level": 1,
+            "exp": 0.0,
+            "next_exp": 30.0,
+            "exp_multiplier": exp_multiplier,
+            "req_multiplier": req_multiplier,
+            "rebirths": rebirths,
+            "death_exp_debuff_stacks": 0,
+            "death_exp_debuff_until": 0.0,
+            "next_vitality_gain_level": 0,
+            "next_mitigation_gain_level": 0,
+            "max_hp_level_bonus_version": 0,
+        }
+
+    return reset

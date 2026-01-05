@@ -39,6 +39,7 @@ from endless_idler.ui.party_hp_bar import PartyHpHeader
 from endless_idler.save import RunSave
 from endless_idler.save import SaveManager
 from endless_idler.save import new_run_save
+from endless_idler.save import reset_character_progress_for_new_run
 from endless_idler.progression import record_character_death
 
 
@@ -608,9 +609,9 @@ class BattleScreenWidget(QWidget):
                         base_stats_template=getattr(plugin, "base_stats", None),
                     )
 
-                preserved_progress = dict(save.character_progress)
-                preserved_stats = dict(save.character_stats)
+                preserved_progress = reset_character_progress_for_new_run(dict(save.character_progress))
                 preserved_initial_stats = dict(getattr(save, "character_initial_stats", {}) or {})
+                preserved_stats = dict(preserved_initial_stats)
                 preserved_deaths = dict(getattr(save, "character_deaths", {}) or {})
                 preserved_bonus = float(save.idle_exp_bonus_seconds)
                 preserved_penalty = float(save.idle_exp_penalty_seconds)
@@ -735,9 +736,9 @@ class BattleScreenWidget(QWidget):
                         base_stats_template=getattr(plugin, "base_stats", None),
                     )
                 
-                preserved_progress = dict(save.character_progress)
-                preserved_stats = dict(save.character_stats)
+                preserved_progress = reset_character_progress_for_new_run(dict(save.character_progress))
                 preserved_initial_stats = dict(getattr(save, "character_initial_stats", {}) or {})
+                preserved_stats = dict(preserved_initial_stats)
                 preserved_deaths = dict(getattr(save, "character_deaths", {}) or {})
                 preserved_bonus = float(save.idle_exp_bonus_seconds)
                 preserved_penalty = float(save.idle_exp_penalty_seconds)

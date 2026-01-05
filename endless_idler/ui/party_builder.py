@@ -33,8 +33,9 @@ from endless_idler.save import (
     RunSave,
     SaveManager,
     new_run_save,
-    sanitize_save_characters,
     next_party_level_up_cost,
+    reset_character_progress_for_new_run,
+    sanitize_save_characters,
 )
 from endless_idler.ui.party_builder_bar import CharacterBar
 from endless_idler.ui.party_builder_fight_bar import FightBar
@@ -722,9 +723,10 @@ class PartyBuilderWidget(QWidget):
                 char_id=char_id,
                 base_stats_template=getattr(plugin, "base_stats", None),
             )
-        preserved_stats = dict(self._save.character_stats)
         preserved_initial_stats = dict(getattr(self._save, "character_initial_stats", {}) or {})
+        preserved_stats = dict(preserved_initial_stats)
         preserved_deaths = dict(getattr(self._save, "character_deaths", {}) or {})
+        preserved_progress = reset_character_progress_for_new_run(preserved_progress)
 
         self._save = self._new_run_save()
         self._save.character_progress = preserved_progress
