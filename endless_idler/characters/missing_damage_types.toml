@@ -10,34 +10,34 @@
 [[character]]
 id = "slime"
 file = "slime.py"
-"requested damage type" = ""
+"requested damage type" = "Fire or Ice"
 
 [[character]]
 id = "ally"
 file = "ally.py"
-"requested damage type" = ""
+"requested damage type" = "Fire"
 
 [[character]]
 id = "becca"
 file = "becca.py"
-"requested damage type" = ""
+"requested damage type" = "Light"
 
 [[character]]
 id = "bubbles"
 file = "bubbles.py"
-"requested damage type" = ""
+"requested damage type" = "Dark"
 
 [[character]]
 id = "graygray"
 file = "graygray.py"
-"requested damage type" = ""
+"requested damage type" = "Wind"
 
 [[character]]
 id = "hilander"
 file = "hilander.py"
-"requested damage type" = ""
+"requested damage type" = "Wind"
 
 [[character]]
 id = "mezzy"
 file = "mezzy.py"
-"requested damage type" = ""
+"requested damage type" = "Light"
