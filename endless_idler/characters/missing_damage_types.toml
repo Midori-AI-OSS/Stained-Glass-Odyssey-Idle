@@ -1,9 +1,43 @@
 # NOTE FOR NEXT AGENT:
-# This file tracks character modules that currently do not declare an explicit `damage_type` (element).
+# This file tracks character modules that effectively have *no fixed element/damage type*.
+# Criteria for inclusion:
+# - No `damage_type` declared, OR
+# - `damage_type` is randomized (e.g. choice(ALL_DAMAGE_TYPES)).
+#
 # Please implement the requested damage type in the referenced character class/module, then remove the entry.
 # Valid damage types (currently): fire, ice, wind, lightning, light, dark, generic.
 
 [[character]]
 id = "slime"
 file = "slime.py"
-requested_damage_type = "generic"
+"requested damage type" = "Fire or Ice"
+
+[[character]]
+id = "ally"
+file = "ally.py"
+"requested damage type" = "Fire"
+
+[[character]]
+id = "becca"
+file = "becca.py"
+"requested damage type" = "Light"
+
+[[character]]
+id = "bubbles"
+file = "bubbles.py"
+"requested damage type" = "Dark"
+
+[[character]]
+id = "graygray"
+file = "graygray.py"
+"requested damage type" = "Wind"
+
+[[character]]
+id = "hilander"
+file = "hilander.py"
+"requested damage type" = "Wind"
+
+[[character]]
+id = "mezzy"
+file = "mezzy.py"
+"requested damage type" = "Light"
