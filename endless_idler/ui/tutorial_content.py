@@ -69,48 +69,16 @@ MAIN_TUTORIAL_STEPS = [
         title="Starting Your Run",
         message=(
             "Click <b>Run</b> to enter the Party Builder.<br><br>"
-            "This is where you'll assemble your team and prepare for battles."
+            "This is where you'll assemble your team and prepare for battles.<br><br>"
+            "In Party Builder, you'll see:<br>"
+            "• <b>Resources</b> at the top (tokens and party HP)<br>"
+            "• <b>Bar</b> area with characters to buy<br>"
+            "• <b>Onsite</b> and <b>Offsite</b> zones for your party<br>"
+            "• <b>Fight</b> and <b>Idle</b> buttons at the bottom"
         ),
         target_widget_name="mainMenuButton_run",
         target_screen="main_menu",
         card_position=TutorialPosition.RIGHT,
-    ),
-    TutorialStep(
-        step_id="resources",
-        title="Your Resources",
-        message=(
-            "These indicators show your <b>tokens</b> (for buying characters) "
-            "and <b>party HP</b> (your team's health).<br><br>"
-            "Hover over them for detailed tooltips."
-        ),
-        target_widget_name="partyHpHeader",
-        target_screen="party_builder",
-        card_position=TutorialPosition.BOTTOM,
-    ),
-    TutorialStep(
-        step_id="party_zones",
-        title="Party Management",
-        message=(
-            "Your team has three areas:<br>"
-            "• <b>Bar</b> (top): Available characters to buy<br>"
-            "• <b>Onsite</b> (middle): Active fighters<br>"
-            "• <b>Offsite</b> (middle): Reserve support<br><br>"
-            "Drag and drop characters to move them between zones!"
-        ),
-        target_widget_name=None,
-        target_screen="party_builder",
-        card_position=TutorialPosition.CENTER,
-    ),
-    TutorialStep(
-        step_id="fight_idle",
-        title="Into Battle!",
-        message=(
-            "When you're ready, click <b>Fight</b> to test your party in combat!<br><br>"
-            "You can also use <b>Idle</b> mode to earn experience passively while you're away."
-        ),
-        target_widget_name=None,
-        target_screen="party_builder",
-        card_position=TutorialPosition.CENTER,
     ),
     TutorialStep(
         step_id="complete",
@@ -119,7 +87,8 @@ MAIN_TUTORIAL_STEPS = [
             "That covers the basics!<br><br>"
             "• Press <b>[K]</b> to view Skills anytime<br>"
             "• Press <b>[ESC]</b> to return to the main menu<br>"
-            "• Check the <b>Guidebook</b> for more help (coming soon)<br><br>"
+            "• Drag and drop characters in Party Builder<br>"
+            "• Hover over resources for tooltips<br><br>"
             "Good luck on your journey! ✨"
         ),
         target_widget_name=None,

@@ -461,16 +461,21 @@ class TutorialOverlay(QWidget):
         if not parent_window:
             return
 
-        # Access the stacked widget (this is a bit hacky, but works)
-        # The MainMenuWindow has a _stack attribute we can use
+        # Access the stacked widget
         if hasattr(parent_window, "_stack"):
             stack = parent_window._stack
             if screen_name == "main_menu" and hasattr(parent_window, "_main_menu_widget"):
-                stack.setCurrentWidget(parent_window._main_menu_widget)
-            elif screen_name == "party_builder" and hasattr(parent_window, "_party_builder"):
-                stack.setCurrentWidget(parent_window._party_builder)
-            elif screen_name == "skills" and hasattr(parent_window, "_skills_screen"):
-                stack.setCurrentWidget(parent_window._skills_screen)
+                # Switch to main menu
+                if hasattr(parent_window, "_menu_screen") and parent_window._menu_screen:
+                    stack.setCurrentWidget(parent_window._menu_screen)
+            elif screen_name == "party_builder":
+                # Open party builder if not already open
+                if hasattr(parent_window, "_open_party_builder"):
+                    parent_window._open_party_builder()
+            elif screen_name == "skills":
+                # Open skills screen if needed
+                if hasattr(parent_window, "_open_skills_screen"):
+                    parent_window._open_skills_screen()
 
     def _find_widget(self, object_name: str) -> QWidget | None:
         """Find a widget by its object name."""
