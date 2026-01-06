@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QPoint, QPropertyAnimation, QRect, Qt, Signal
+
+logger = logging.getLogger(__name__)
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPolygon
 from PySide6.QtWidgets import (
     QFrame,
@@ -488,11 +491,14 @@ class TutorialOverlay(QWidget):
 
     def _on_next(self) -> None:
         """Handle next button click."""
+        logger.info(f"_on_next called: current_step={self._current_step_index}, total_steps={len(self._steps)}")
         if self._current_step_index < len(self._steps) - 1:
+            logger.info(f"Advancing to step {self._current_step_index + 1}")
             self._current_step_index += 1
             self._show_current_step()
         else:
             # Tutorial complete
+            logger.info("Tutorial complete - calling _complete_tutorial()")
             self._complete_tutorial()
 
     def _on_previous(self) -> None:
@@ -503,11 +509,13 @@ class TutorialOverlay(QWidget):
 
     def _on_skip(self) -> None:
         """Handle skip button click."""
+        logger.info("Skip button clicked - emitting finished(False)")
         self.finished.emit(False)
         self._fade_out()
 
     def _complete_tutorial(self) -> None:
         """Handle tutorial completion."""
+        logger.info("_complete_tutorial called - emitting finished(True)")
         self.finished.emit(True)
         self._fade_out()
 

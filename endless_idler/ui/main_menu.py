@@ -1,4 +1,5 @@
 from collections.abc import Callable
+import logging
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPixmap
@@ -22,6 +23,8 @@ from endless_idler.ui.party_builder import PartyBuilderWidget
 from endless_idler.ui.skills_screen import SkillsScreenWidget
 from endless_idler.ui.tutorial_content import MAIN_TUTORIAL_STEPS
 from endless_idler.ui.tutorial_overlay import TutorialOverlay
+
+logger = logging.getLogger(__name__)
 
 
 class MainMenuWidget(QWidget):
@@ -143,10 +146,14 @@ class MainMenuWindow(QMainWindow):
         self._tutorial_overlay = TutorialOverlay(self)
         self._tutorial_overlay.finished.connect(self._on_tutorial_finished)
         self._tutorial_overlay.hide()
+        logger.info("Tutorial overlay initialized and signal connected")
 
         # Check if tutorial should run (delayed to allow UI to fully render)
         if self._settings_manager.should_show_tutorial(self._settings):
+            logger.info("Tutorial should be shown - scheduling start")
             QTimer.singleShot(500, self._start_tutorial)
+        else:
+            logger.info(f"Tutorial will NOT be shown: completed={self._settings.tutorial_completed}, skipped={self._settings.tutorial_skipped}, first_launch={self._settings.first_launch}")
 
     def _open_party_builder(self) -> None:
         if self._party_builder is None:
@@ -236,15 +243,22 @@ class MainMenuWindow(QMainWindow):
 
     def _start_tutorial(self) -> None:
         """Start the tutorial sequence."""
+        logger.info("Starting tutorial with %d steps", len(MAIN_TUTORIAL_STEPS))
         self._tutorial_overlay.start_tutorial(MAIN_TUTORIAL_STEPS)
 
     def _on_tutorial_finished(self, completed: bool) -> None:
         """Handle tutorial completion or skip."""
+        logger.info(f"_on_tutorial_finished called with completed={completed}")
         if completed:
+            logger.info("Marking tutorial as completed")
             self._settings = self._settings_manager.mark_tutorial_completed(self._settings)
         else:
+            logger.info("Marking tutorial as skipped")
             self._settings = self._settings_manager.mark_tutorial_skipped(self._settings)
+        
+        logger.info(f"Saving settings to {self._settings_manager.path}")
         self._settings_manager.save(self._settings)
+        logger.info(f"Settings saved: tutorial_completed={self._settings.tutorial_completed}, first_launch={self._settings.first_launch}")
 
     def resizeEvent(self, event: object) -> None:
         """Keep tutorial overlay sized to window."""
