@@ -584,10 +584,11 @@ class BattleScreenWidget(QWidget):
         victory = bool(party_alive and not foes_alive)
         defeat = bool(foes_alive and not party_alive)
         if party_alive and not foes_alive:
-            self._award_gold(self._foe_kills)
+            self._award_gold(self._foe_kills, victory=True)
             self._set_status("Victory")
             self._apply_idle_exp_bonus()
         elif foes_alive and not party_alive:
+            self._award_gold(self._foe_kills, victory=False)
             self._set_status("Defeat")
             self._apply_idle_exp_penalty()
         else:
@@ -644,7 +645,13 @@ class BattleScreenWidget(QWidget):
     def _apply_idle_exp_penalty(self) -> None:
         self._extend_idle_exp_timer(key="idle_exp_penalty_seconds", seconds=15 * 60)
 
-    def _award_gold(self, kills: int) -> None:
+    def _award_gold(self, kills: int, victory: bool = True) -> None:
+        """Award gold based on foe kills.
+        
+        Args:
+            kills: Number of foes defeated
+            victory: If True, award full gold. If False, award 50% of base kills only.
+        """
         gold = max(0, int(kills))
         if gold <= 0:
             return
@@ -657,7 +664,15 @@ class BattleScreenWidget(QWidget):
             winstreak = max(0, int(getattr(save, "winstreak", 0)))
             bonus = calculate_gold_bonus(tokens, winstreak)
             
-            total_gold = gold + bonus
+            if victory:
+                # Full rewards on victory: base kills + bonus
+                total_gold = gold + bonus
+            else:
+                # Partial rewards on loss: 50% of base kills + full bonus
+                # Bonus helps struggling players, reduced base maintains win incentive
+                loss_gold = max(1, gold // 2)  # Minimum 1 gold for killing any foes
+                total_gold = loss_gold + bonus
+            
             save.tokens = tokens + total_gold
             manager.save(save)
         except Exception:
