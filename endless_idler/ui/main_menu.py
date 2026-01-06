@@ -18,6 +18,7 @@ from endless_idler.ui.assets import asset_path
 from endless_idler.ui.battle import BattleScreenWidget
 from endless_idler.ui.idle import IdleScreenWidget
 from endless_idler.ui.party_builder import PartyBuilderWidget
+from endless_idler.ui.skills_screen import SkillsScreenWidget
 
 
 class MainMenuWidget(QWidget):
@@ -27,6 +28,7 @@ class MainMenuWidget(QWidget):
     inventory_requested = Signal()
     guidebook_requested = Signal()
     feedback_requested = Signal()
+    skills_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -57,6 +59,7 @@ class MainMenuWidget(QWidget):
 
         menu_layout.addWidget(self._make_button("Run", self.play_requested.emit))
         menu_layout.addWidget(self._make_button("Warp", self.warp_requested.emit))
+        menu_layout.addWidget(self._make_button("Skills", self.skills_requested.emit))
         menu_layout.addWidget(self._make_button("Inventory", self.inventory_requested.emit))
         menu_layout.addWidget(self._make_button("Guidebook", self.guidebook_requested.emit))
         menu_layout.addWidget(self._make_button("Settings", self.settings_requested.emit))
@@ -102,6 +105,7 @@ class MainMenuWindow(QMainWindow):
         self._party_builder: PartyBuilderWidget | None = None
         self._battle_screen: BattleScreenWidget | None = None
         self._idle_screen: IdleScreenWidget | None = None
+        self._skills_screen: SkillsScreenWidget | None = None
         self._menu_screen: QWidget | None = None
 
         self.setWindowTitle("Stained Glass Odyssey Idle")
@@ -111,6 +115,7 @@ class MainMenuWindow(QMainWindow):
         menu.play_requested.connect(self._open_party_builder)
         menu.settings_requested.connect(self._stub_settings)
         menu.warp_requested.connect(self._stub_warp)
+        menu.skills_requested.connect(self._open_skills_screen)
         menu.inventory_requested.connect(self._stub_inventory)
         menu.guidebook_requested.connect(self._stub_guidebook)
         menu.feedback_requested.connect(self._stub_feedback)
@@ -179,6 +184,13 @@ class MainMenuWindow(QMainWindow):
         self._cleanup_widget(self._idle_screen)
         self._idle_screen = None
 
+    def _open_skills_screen(self) -> None:
+        if self._skills_screen is None:
+            self._skills_screen = SkillsScreenWidget()
+            self._skills_screen.back_requested.connect(self._open_main_menu)
+            self._stack.addWidget(self._skills_screen)
+        self._stack.setCurrentWidget(self._skills_screen)
+
     def _cleanup_widget(self, widget: QWidget) -> None:
         """Safely remove and delete a widget from the stack."""
         try:
@@ -187,6 +199,21 @@ class MainMenuWindow(QMainWindow):
             pass
         try:
             widget.deleteLater()
+        except Exception:
+            pass
+
+    def keyPressEvent(self, event: object) -> None:
+        """Handle keyboard shortcuts."""
+        if hasattr(event, "key"):
+            key = event.key()
+            # K key to open Skills screen
+            if key == Qt.Key.Key_K:
+                # Only open if on main menu screen
+                if self._stack.currentWidget() == self._menu_screen:
+                    self._open_skills_screen()
+                    return
+        try:
+            super().keyPressEvent(event)  # type: ignore[misc]
         except Exception:
             pass
 
