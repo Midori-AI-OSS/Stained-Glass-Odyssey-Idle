@@ -20,16 +20,10 @@ from endless_idler.ui.battle.mechanics import apply_dark_sacrifice
 from endless_idler.ui.battle.mechanics import apply_fire_self_bleed
 from endless_idler.ui.battle.mechanics import dark_damage_multiplier_from_removed_hp
 from endless_idler.ui.battle.mechanics import fire_damage_multiplier_from_removed_hp
-from endless_idler.ui.battle.mechanics import heal_amount
 from endless_idler.ui.battle.mechanics import resolve_light_heal
 from endless_idler.run_rules import apply_battle_result
 from endless_idler.run_rules import calculate_gold_bonus
 from endless_idler.ui.battle.colors import color_for_damage_type_id
-from endless_idler.ui.battle.mechanics import apply_dark_sacrifice
-from endless_idler.ui.battle.mechanics import apply_fire_self_bleed
-from endless_idler.ui.battle.mechanics import dark_damage_multiplier_from_removed_hp
-from endless_idler.ui.battle.mechanics import fire_damage_multiplier_from_removed_hp
-from endless_idler.ui.battle.mechanics import resolve_light_heal
 from endless_idler.ui.battle.sim import Combatant
 from endless_idler.ui.battle.sim import apply_offsite_stat_share
 from endless_idler.ui.battle.sim import build_reserves
