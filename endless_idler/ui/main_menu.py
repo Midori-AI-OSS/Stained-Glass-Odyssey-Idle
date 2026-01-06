@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
@@ -14,11 +14,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from endless_idler.settings import SettingsManager
 from endless_idler.ui.assets import asset_path
 from endless_idler.ui.battle import BattleScreenWidget
 from endless_idler.ui.idle import IdleScreenWidget
 from endless_idler.ui.party_builder import PartyBuilderWidget
 from endless_idler.ui.skills_screen import SkillsScreenWidget
+from endless_idler.ui.tutorial_content import MAIN_TUTORIAL_STEPS
+from endless_idler.ui.tutorial_overlay import TutorialOverlay
 
 
 class MainMenuWidget(QWidget):
@@ -112,6 +115,7 @@ class MainMenuWindow(QMainWindow):
         self.resize(1280, 820)
 
         menu = MainMenuWidget()
+        self._main_menu_widget = menu
         menu.play_requested.connect(self._open_party_builder)
         menu.settings_requested.connect(self._stub_settings)
         menu.warp_requested.connect(self._stub_warp)
@@ -130,6 +134,19 @@ class MainMenuWindow(QMainWindow):
         self._menu_screen = background
         self._stack.addWidget(self._menu_screen)
         self.setCentralWidget(self._stack)
+
+        # Initialize settings manager
+        self._settings_manager = SettingsManager()
+        self._settings = self._settings_manager.load()
+
+        # Initialize tutorial overlay
+        self._tutorial_overlay = TutorialOverlay(self)
+        self._tutorial_overlay.finished.connect(self._on_tutorial_finished)
+        self._tutorial_overlay.hide()
+
+        # Check if tutorial should run (delayed to allow UI to fully render)
+        if self._settings_manager.should_show_tutorial(self._settings):
+            QTimer.singleShot(500, self._start_tutorial)
 
     def _open_party_builder(self) -> None:
         if self._party_builder is None:
@@ -217,7 +234,27 @@ class MainMenuWindow(QMainWindow):
         except Exception:
             pass
 
+    def _start_tutorial(self) -> None:
+        """Start the tutorial sequence."""
+        self._tutorial_overlay.start_tutorial(MAIN_TUTORIAL_STEPS)
+
+    def _on_tutorial_finished(self, completed: bool) -> None:
+        """Handle tutorial completion or skip."""
+        if completed:
+            self._settings = self._settings_manager.mark_tutorial_completed(self._settings)
+        else:
+            self._settings = self._settings_manager.mark_tutorial_skipped(self._settings)
+        self._settings_manager.save(self._settings)
+
+    def resizeEvent(self, event: object) -> None:
+        """Keep tutorial overlay sized to window."""
+        super().resizeEvent(event)  # type: ignore[misc]
+        if hasattr(self, "_tutorial_overlay"):
+            self._tutorial_overlay.resize(self.size())
+
     def _stub_settings(self) -> None:
+        # TODO: Implement settings screen
+        # When implemented, add "Reset Tutorial" button that calls self._start_tutorial()
         self._show_not_implemented("Settings")
 
     def _stub_warp(self) -> None:
