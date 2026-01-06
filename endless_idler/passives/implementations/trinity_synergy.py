@@ -123,11 +123,17 @@ class TrinitySynergy(Passive):
             if redirection:
                 effects_applied.append(redirection)
         
-        return {
+        result = {
             "trigger_type": context.trigger.value,
             "effects_applied": effects_applied,
             "character_id": owner_id,
         }
+        
+        # For TARGET_SELECTION, include the new target if redirected
+        if context.trigger == PassiveTrigger.TARGET_SELECTION and "new_target" in context.extra:
+            result["new_target"] = context.extra["new_target"]
+        
+        return result
     
     def _apply_turn_start_effects(
         self,

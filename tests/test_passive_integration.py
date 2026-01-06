@@ -250,5 +250,106 @@ def test_character_without_passives():
     assert len(stats._passive_instances) == 0
 
 
+def test_target_selection_passives_integration():
+    """Test that TARGET_SELECTION passives can redirect attacks.
+    
+    This test verifies that the apply_target_selection_passives function
+    works correctly when integrated with the combat system, particularly
+    for Trinity Synergy's attack redirection to Persona.
+    """
+    from endless_idler.passives.execution import apply_target_selection_passives
+    
+    # Create Trinity members
+    lady_light = Stats()
+    lady_light.character_id = "lady_light"
+    lady_light.hp = 100
+    lady_light.max_hp = 100
+    lady_light._passive_instances = [load_passive("trinity_synergy")]
+    
+    lady_darkness = Stats()
+    lady_darkness.character_id = "lady_darkness"
+    lady_darkness.hp = 100
+    lady_darkness.max_hp = 100
+    lady_darkness._passive_instances = [load_passive("trinity_synergy")]
+    
+    persona = Stats()
+    persona.character_id = "persona_light_and_dark"
+    persona.hp = 100
+    persona.max_hp = 100
+    persona._passive_instances = [load_passive("trinity_synergy")]
+    
+    # Create enemies
+    enemy1 = Stats()
+    enemy1.character_id = "enemy1"
+    enemy1.hp = 50
+    enemy1.max_hp = 50
+    
+    enemy2 = Stats()
+    enemy2.character_id = "enemy2"
+    enemy2.hp = 50
+    enemy2.max_hp = 50
+    
+    # Setup attack: enemy targets Lady Darkness (Trinity redirects Darkness -> Persona)
+    attacker = enemy1
+    original_target = lady_darkness
+    all_allies = [lady_light, lady_darkness, persona]
+    enemies = [enemy1, enemy2]
+    
+    # Apply target selection passives
+    final_target = apply_target_selection_passives(
+        attacker=attacker,
+        original_target=original_target,
+        available_targets=all_allies,
+        all_allies=all_allies,
+        onsite_allies=all_allies,
+        offsite_allies=[],
+        enemies=enemies,
+    )
+    
+    # Trinity Synergy should redirect attacks from Lady Darkness to Persona
+    assert final_target is persona, "Attack on Lady Darkness should be redirected to Persona by Trinity Synergy"
+    
+    # Test attack on Lady Light - should NOT redirect (Trinity only redirects Lady Darkness)
+    final_target_light = apply_target_selection_passives(
+        attacker=attacker,
+        original_target=lady_light,
+        available_targets=all_allies,
+        all_allies=all_allies,
+        onsite_allies=all_allies,
+        offsite_allies=[],
+        enemies=enemies,
+    )
+    
+    assert final_target_light is lady_light, "Attack on Lady Light should not redirect"
+    
+    # Test with Persona dead - should not redirect
+    persona.hp = 0
+    final_target_dead = apply_target_selection_passives(
+        attacker=attacker,
+        original_target=lady_darkness,
+        available_targets=all_allies,
+        all_allies=all_allies,
+        onsite_allies=all_allies,
+        offsite_allies=[],
+        enemies=enemies,
+    )
+    
+    assert final_target_dead is lady_darkness, "Attack should not redirect when Persona is dead"
+    
+    # Test without Trinity (missing a member)
+    incomplete_allies = [lady_light, lady_darkness]
+    final_target_incomplete = apply_target_selection_passives(
+        attacker=attacker,
+        original_target=lady_darkness,
+        available_targets=incomplete_allies,
+        all_allies=incomplete_allies,
+        onsite_allies=incomplete_allies,
+        offsite_allies=[],
+        enemies=enemies,
+    )
+    
+    assert final_target_incomplete is lady_darkness, "Attack should not redirect when Trinity is incomplete"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
