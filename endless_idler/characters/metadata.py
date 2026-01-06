@@ -36,7 +36,7 @@ _PLACEMENTS = ("onsite", "offsite", "both")
 
 def extract_character_metadata(
     path: Path,
-) -> tuple[str, str, int, str, str, bool, dict[str, float], float | None, int | None]:
+) -> tuple[str, str, int, str, str, bool, dict[str, float], float | None, int | None, list[str]]:
     char_id = path.stem
     display_name = _derive_display_name(char_id)
     stars = 1
@@ -46,6 +46,7 @@ def extract_character_metadata(
     base_stats: dict[str, float] = dict(DEFAULT_BASE_STATS)
     base_aggro: float | None = None
     damage_reduction_passes: int | None = None
+    passives: list[str] = []
 
     try:
         source = path.read_text(encoding="utf-8")
@@ -60,6 +61,7 @@ def extract_character_metadata(
             base_stats,
             base_aggro,
             damage_reduction_passes,
+            passives,
         )
 
     try:
