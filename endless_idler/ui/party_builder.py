@@ -702,7 +702,7 @@ class PartyBuilderWidget(QWidget):
         result = QMessageBox.question(
             self,
             "Reset Run",
-            "Reset tokens, party, stacks, and shop?",
+            "Reset coins, party, stacks, and shop?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )

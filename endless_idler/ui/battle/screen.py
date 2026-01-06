@@ -646,11 +646,11 @@ class BattleScreenWidget(QWidget):
         self._extend_idle_exp_timer(key="idle_exp_penalty_seconds", seconds=15 * 60)
 
     def _award_gold(self, kills: int, victory: bool = True) -> None:
-        """Award gold based on foe kills.
+        """Award coins based on foe kills.
         
         Args:
             kills: Number of foes defeated
-            victory: If True, award full gold. If False, award 50% of base kills only.
+            victory: If True, award full coins. If False, award 50% of base kills only.
         """
         gold = max(0, int(kills))
         if gold <= 0:
@@ -670,7 +670,7 @@ class BattleScreenWidget(QWidget):
             else:
                 # Partial rewards on loss: 50% of base kills + full bonus
                 # Bonus helps struggling players, reduced base maintains win incentive
-                loss_gold = max(1, gold // 2)  # Minimum 1 gold for killing any foes
+                loss_gold = max(1, gold // 2)  # Minimum 1 coin for killing any foes
                 total_gold = loss_gold + bonus
             
             save.tokens = tokens + total_gold
