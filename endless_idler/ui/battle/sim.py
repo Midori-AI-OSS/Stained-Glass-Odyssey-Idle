@@ -272,15 +272,54 @@ def calculate_damage(
     rng: random.Random,
     *,
     damage_multiplier: float = 1.0,
+    all_allies: list[Stats] | None = None,
+    onsite_allies: list[Stats] | None = None,
+    offsite_allies: list[Stats] | None = None,
+    enemies: list[Stats] | None = None,
 ) -> tuple[int, bool, bool]:
+    """Calculate damage with optional passive effects.
+    
+    Args:
+        attacker: The attacking character's stats
+        target: The target character's stats
+        rng: Random number generator
+        damage_multiplier: Base damage multiplier
+        all_allies: All ally stats for passive context (optional)
+        onsite_allies: Onsite allies for passive context (optional)
+        offsite_allies: Offsite allies for passive context (optional)
+        enemies: Enemy stats for passive context (optional)
+        
+    Returns:
+        Tuple of (damage, is_crit, is_dodged)
+    """
     dodge_odds = float(max(0.0, min(1.0, target.dodge_odds)))
     if rng.random() < dodge_odds:
         return 0, False, True
 
     atk = attacker.atk
     defense = max(0, target.defense)
+    
+    # Apply PRE_DAMAGE passives if context is provided
+    passive_damage_mult = 1.0
+    defense_ignore = 0.0
+    
+    if all_allies is not None and onsite_allies is not None and offsite_allies is not None and enemies is not None:
+        from endless_idler.passives.execution import apply_pre_damage_passives
+        
+        passive_damage_mult, defense_ignore = apply_pre_damage_passives(
+            attacker=attacker,
+            target=target,
+            all_allies=all_allies,
+            onsite_allies=onsite_allies,
+            offsite_allies=offsite_allies,
+            enemies=enemies,
+        )
+    
+    # Apply defense ignore from passives (e.g., Lady Darkness)
+    effective_defense = int(defense * (1.0 - min(1.0, defense_ignore)))
+    
     mitigation_passes = max(1, int(getattr(target, "damage_reduction_passes", 1) or 1))
-    mitigation_multiplier = 100.0 / (100.0 + float(defense))
+    mitigation_multiplier = 100.0 / (100.0 + float(effective_defense))
     mitigation_multiplier **= float(mitigation_passes)
     base = float(atk) * mitigation_multiplier
 
@@ -289,6 +328,7 @@ def calculate_damage(
     base /= float(max(0.01, target.vitality))
     base /= float(max(0.1, target.mitigation))
     base *= float(max(0.0, damage_multiplier))
+    base *= float(max(0.0, passive_damage_mult))
 
     crit_rate = float(max(0.0, min(1.0, attacker.crit_rate)))
     crit = rng.random() < crit_rate
