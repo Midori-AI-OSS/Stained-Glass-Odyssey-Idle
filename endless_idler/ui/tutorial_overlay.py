@@ -279,6 +279,7 @@ class TutorialOverlay(QWidget):
         self._opacity_effect = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(self._opacity_effect)
         self._opacity_effect.setOpacity(0.0)
+        self._fade_animation: QPropertyAnimation | None = None
 
         self.hide()
 
@@ -295,11 +296,11 @@ class TutorialOverlay(QWidget):
         self.raise_()
 
         # Fade in animation
-        fade_in = QPropertyAnimation(self._opacity_effect, b"opacity")
-        fade_in.setDuration(300)
-        fade_in.setStartValue(0.0)
-        fade_in.setEndValue(1.0)
-        fade_in.start()
+        self._fade_animation = QPropertyAnimation(self._opacity_effect, b"opacity")
+        self._fade_animation.setDuration(300)
+        self._fade_animation.setStartValue(0.0)
+        self._fade_animation.setEndValue(1.0)
+        self._fade_animation.start()
 
         # Show first step
         self._show_current_step()
@@ -521,12 +522,12 @@ class TutorialOverlay(QWidget):
 
     def _fade_out(self) -> None:
         """Fade out and hide the overlay."""
-        fade_out = QPropertyAnimation(self._opacity_effect, b"opacity")
-        fade_out.setDuration(300)
-        fade_out.setStartValue(1.0)
-        fade_out.setEndValue(0.0)
-        fade_out.finished.connect(self.hide)
-        fade_out.start()
+        self._fade_animation = QPropertyAnimation(self._opacity_effect, b"opacity")
+        self._fade_animation.setDuration(300)
+        self._fade_animation.setStartValue(1.0)
+        self._fade_animation.setEndValue(0.0)
+        self._fade_animation.finished.connect(self.hide)
+        self._fade_animation.start()
 
     def paintEvent(self, event: object) -> None:
         """Draw dark overlay with spotlight cutout."""
