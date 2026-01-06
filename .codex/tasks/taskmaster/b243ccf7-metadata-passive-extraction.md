@@ -249,3 +249,164 @@ result = extract_character_metadata(Path("endless_idler/characters/persona_light
 - `endless_idler/characters/metadata.py` - Main file to modify
 - `endless_idler/characters/*.py` - Test files with passive declarations
 - `endless_idler/characters/plugins.py` - May need updates if it uses metadata
+
+---
+
+## AUDITOR REVIEW
+
+**Auditor**: Auditor Mode  
+**Review Date**: 2026-01-06  
+**Commits Reviewed**: 7a54a4d, 1236b66, 37d8f68  
+**Status**: ✅ **APPROVED - Ready for Task Master**
+
+### Implementation Summary
+
+The coder successfully implemented passive ID extraction from character metadata through AST parsing. The implementation includes:
+
+1. **Core Implementation** (Commit 7a54a4d):
+   - Added `_extract_passives_from_classdef()` function with comprehensive docstring
+   - Added `_extract_passive_list()` helper function with comprehensive docstring  
+   - Updated `extract_character_metadata()` return type signature to include `list[str]` for passives
+   - Integrated passive extraction into the main flow
+   - Added passives initialization and return in all code paths (success, OSError, SyntaxError)
+
+2. **Integration** (Commit 1236b66):
+   - Updated `CharacterPlugin` dataclass to include `passives: list[str]` field with proper default factory
+   - Updated `discover_character_plugins()` to unpack and pass the passives field
+
+3. **Task Management** (Commit 37d8f68):
+   - Task moved from `wip/` to `review/` with appropriate commit message
+
+### Acceptance Criteria Verification
+
+All acceptance criteria have been met:
+
+- ✅ `extract_character_metadata()` returns passives as 10th element in tuple (index 9)
+- ✅ Extracts passives from `field(default_factory=lambda: [...])` pattern (verified with all 22 character files)
+- ✅ Extracts passives from direct list assignment (AST handles both patterns)
+- ✅ Returns empty list when no passives found (verified with edge case testing)
+- ✅ All existing character files parse correctly (all 22 characters extracted successfully)
+- ✅ Passives extracted from Lady Light, Lady Darkness, Persona Light and Dark (verified):
+  - `lady_light` → `['lady_light_radiant_aegis']`
+  - `lady_darkness` → `['lady_darkness_eclipsing_veil']`
+  - `persona_light_and_dark` → `['persona_light_and_dark_duality']`
+- ✅ Code passes linting (`ruff check` returned "All checks passed!" for both files)
+- ✅ All functions have docstrings (both new functions include comprehensive docstrings)
+
+### Code Quality Assessment
+
+**Strengths:**
+1. **Robust AST Parsing**: The implementation correctly handles multiple AST patterns:
+   - Annotated assignments (`passives: list[str] = ...`)
+   - Regular assignments (`passives = ...`)
+   - Direct list literals (`["id1", "id2"]`)
+   - Field with lambda factories (`field(default_factory=lambda: [...])`)
+
+2. **Type Safety**: 
+   - Non-string values in lists are properly filtered out
+   - Return type correctly specified as `list[str]`
+   - All type hints are accurate
+
+3. **Error Handling**:
+   - Graceful handling of `None` values
+   - Empty list returned for malformed data
+   - All error paths properly initialized with empty list
+
+4. **Consistency**:
+   - Follows existing code patterns in the file
+   - Naming conventions match existing helpers (`_extract_*`, `_const_*`)
+   - Proper integration with existing extraction flow
+
+5. **Documentation**:
+   - Clear docstrings explaining the purpose and patterns handled
+   - Comments in code explain the logic
+
+6. **Integration**:
+   - `plugins.py` correctly updated to handle the new field
+   - All callers properly unpacking the new return value
+
+### Edge Case Testing
+
+Verified the following edge cases:
+- ✅ Empty passives list returns `[]`
+- ✅ Mixed types in list (strings and integers) - correctly filters to strings only
+- ✅ No passives field defined - returns `[]`
+- ✅ Multiple passive declarations - Python AST naturally handles this (uses last)
+- ✅ `None` value handling - returns `[]`
+
+### Real-World Testing
+
+Tested against all 22 character files in the repository:
+- All characters successfully parsed
+- All passives correctly extracted
+- No parsing errors or crashes
+- Type integrity maintained throughout
+
+**Sample Results:**
+```
+ally                           passives: ['ally_overload']
+becca                          passives: ['becca_menagerie_bond']
+bubbles                        passives: ['bubbles_bubble_burst']
+lady_light                     passives: ['lady_light_radiant_aegis']
+lady_darkness                  passives: ['lady_darkness_eclipsing_veil']
+persona_light_and_dark         passives: ['persona_light_and_dark_duality']
+```
+
+### Performance & Maintainability
+
+- **Performance**: No performance concerns - AST parsing is efficient and the implementation adds minimal overhead
+- **Maintainability**: Code is clear, well-documented, and follows established patterns
+- **Extensibility**: The pattern-matching approach makes it easy to add support for new passive declaration formats if needed
+
+### Issues Found
+
+**None** - No issues or defects found in the implementation.
+
+### Recommendations
+
+While the implementation is complete and production-ready, for future enhancement consider:
+1. If duplicate passive IDs within a single character become a concern, a deduplication step could be added
+2. Consider logging/warning for non-string values found in passive lists (currently silently filtered)
+
+These are minor suggestions and **do not block approval**.
+
+### Linting & Code Standards
+
+- ✅ `ruff check endless_idler/characters/metadata.py` - All checks passed
+- ✅ `ruff check endless_idler/characters/plugins.py` - All checks passed
+- ✅ Code follows repository Python style guide (imports sorted, proper spacing, type hints)
+- ✅ Docstrings present and properly formatted
+- ✅ No style violations detected
+
+### Testing Coverage
+
+**Manual Testing**: ✅ Comprehensive
+- Tested all 22 character files
+- Tested edge cases (empty lists, None values, mixed types)
+- Tested integration with `discover_character_plugins()`
+- Verified type correctness of all return values
+
+**Automated Tests**: ⚠️ Not Required
+- Task requirements did not specify creation of automated tests
+- Repository does not have a `tests/` directory
+- Per AGENTS.md: "Do not build tests unless asked to"
+
+### Final Assessment
+
+This implementation is **exemplary**. The coder:
+- Met all acceptance criteria completely
+- Followed repository coding standards precisely
+- Handled edge cases properly
+- Integrated the feature seamlessly
+- Documented the code thoroughly
+- Used appropriate commit messages
+- Moved the task through the workflow correctly
+
+The code is production-ready and requires no changes.
+
+**VERDICT**: ✅ **APPROVED FOR TASK MASTER REVIEW**
+
+---
+
+**Auditor Signature**: Auditor Mode  
+**Audit Completed**: 2026-01-06 10:56:00 UTC
