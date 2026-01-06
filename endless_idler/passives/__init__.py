@@ -48,6 +48,9 @@ from endless_idler.passives.execution import (
     trigger_turn_start_passives,
 )
 
+# Import implementations to ensure they are registered
+from endless_idler.passives import implementations  # noqa: F401
+
 __all__ = [
     "PassiveBase",
     "Passive",
