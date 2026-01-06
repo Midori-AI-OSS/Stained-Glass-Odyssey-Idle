@@ -6,6 +6,9 @@ from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QVBoxLayout
 
+from endless_idler.ui.resource_tooltips import build_tokens_tooltip
+from endless_idler.ui.tooltip import hide_stained_tooltip, show_stained_tooltip
+
 
 class StandbyShopTile(QFrame):
     toggled = Signal(bool)
@@ -18,6 +21,11 @@ class StandbyShopTile(QFrame):
 
         self._open = bool(open_)
         self.setProperty("open", self._open)
+        
+        # Store for tooltip generation
+        self._current_tokens = tokens
+        self._bonus = 0
+        self._winstreak = 0
 
         layout = QVBoxLayout()
         layout.setContentsMargins(10, 10, 10, 10)
@@ -38,13 +46,19 @@ class StandbyShopTile(QFrame):
 
         layout.addStretch(1)
         self.set_tokens(tokens)
+        
+        # Enable hover events for tooltip
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
 
     @property
     def token_label(self) -> QLabel:
         return self._token_label
 
-    def set_tokens(self, tokens: int) -> None:
-        self._token_label.setText(f"{max(0, int(tokens))}")
+    def set_tokens(self, tokens: int, *, bonus: int = 0, winstreak: int = 0) -> None:
+        self._current_tokens = max(0, int(tokens))
+        self._bonus = max(0, int(bonus))
+        self._winstreak = max(0, int(winstreak))
+        self._token_label.setText(f"{self._current_tokens}")
 
     def set_open(self, open_: bool) -> None:
         self._open = bool(open_)
@@ -62,3 +76,22 @@ class StandbyShopTile(QFrame):
             return
         self.set_open(not self._open)
         self.toggled.emit(self._open)
+    
+    def enterEvent(self, event: object) -> None:
+        html = build_tokens_tooltip(
+            current=self._current_tokens,
+            bonus=self._bonus,
+            winstreak=self._winstreak,
+        )
+        show_stained_tooltip(self, html)
+        try:
+            super().enterEvent(event)  # type: ignore[misc]
+        except Exception:
+            pass
+    
+    def leaveEvent(self, event: object) -> None:
+        hide_stained_tooltip()
+        try:
+            super().leaveEvent(event)  # type: ignore[misc]
+        except Exception:
+            pass

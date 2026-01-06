@@ -23,6 +23,7 @@ from endless_idler.combat.party_stats import apply_offsite_stat_share
 from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.combat.stats import Stats
 from endless_idler.progression import record_character_death
+from endless_idler.run_rules import calculate_gold_bonus
 from endless_idler.save import (
     BAR_SLOTS,
     DEFAULT_CHARACTER_COST,
@@ -1030,7 +1031,12 @@ class PartyBuilderWidget(QWidget):
 
     def _refresh_tokens(self) -> None:
         if self._shop_tile is not None:
-            self._shop_tile.set_tokens(self._save.tokens)
+            bonus = calculate_gold_bonus(self._save.tokens, self._save.winstreak)
+            self._shop_tile.set_tokens(
+                self._save.tokens,
+                bonus=bonus,
+                winstreak=self._save.winstreak
+            )
 
     def _refresh_party_hp(self) -> None:
         if self._party_hp_header is None:
@@ -1039,6 +1045,7 @@ class PartyBuilderWidget(QWidget):
         self._party_hp_header.set_hp(
             current=int(getattr(self._save, "party_hp_current", 0)),
             max_hp=int(getattr(self._save, "party_hp_max", 0)),
+            fight_number=int(getattr(self._save, "fight_number", 1)),
         )
         self._refresh_next_fight_info()
     

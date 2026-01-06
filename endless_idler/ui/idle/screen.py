@@ -126,6 +126,7 @@ class IdleScreenWidget(QWidget):
         party_hp.set_hp(
             current=int(getattr(self._save, "party_hp_current", 0)),
             max_hp=int(getattr(self._save, "party_hp_max", 0)),
+            fight_number=int(getattr(self._save, "fight_number", 1)),
         )
         header.addWidget(party_hp, 0, Qt.AlignmentFlag.AlignVCenter)
         self._party_hp_header = party_hp
@@ -226,6 +227,7 @@ class IdleScreenWidget(QWidget):
         self._party_hp_header.set_hp(
             current=int(getattr(self._save, "party_hp_current", 0)),
             max_hp=int(getattr(self._save, "party_hp_max", 0)),
+            fight_number=int(getattr(self._save, "fight_number", 1)),
         )
 
     def _make_mods_panel(self) -> QFrame:

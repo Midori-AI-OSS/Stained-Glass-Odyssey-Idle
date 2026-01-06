@@ -6,6 +6,10 @@ from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QVBoxLayout
 
+from endless_idler.save import next_party_level_up_cost
+from endless_idler.ui.resource_tooltips import build_party_level_tooltip
+from endless_idler.ui.tooltip import hide_stained_tooltip, show_stained_tooltip
+
 
 class StandbyPartyLevelTile(QFrame):
     level_requested = Signal()
@@ -15,6 +19,10 @@ class StandbyPartyLevelTile(QFrame):
         self.setObjectName("standbyPartyLevelTile")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedSize(110, 130)
+        
+        # Store for tooltip
+        self._current_level = level
+        self._current_cost = cost
 
         layout = QVBoxLayout()
         layout.setContentsMargins(10, 10, 10, 10)
@@ -41,13 +49,17 @@ class StandbyPartyLevelTile(QFrame):
         layout.addStretch(1)
         self.set_level(level)
         self.set_cost(cost)
+        
+        # Enable hover events for tooltip
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
 
     def set_level(self, level: int) -> None:
-        self._value.setText(f"Lv {max(1, int(level))}")
+        self._current_level = max(1, int(level))
+        self._value.setText(f"Lv {self._current_level}")
 
     def set_cost(self, cost: int) -> None:
-        cost = max(0, int(cost))
-        self._cost.setText(f"Cost: {cost}" if cost else "")
+        self._current_cost = max(0, int(cost))
+        self._cost.setText(f"Cost: {self._current_cost}" if self._current_cost else "")
 
     def mousePressEvent(self, event: object) -> None:
         try:
@@ -57,3 +69,28 @@ class StandbyPartyLevelTile(QFrame):
         if button != Qt.MouseButton.LeftButton:
             return
         self.level_requested.emit()
+    
+    def enterEvent(self, event: object) -> None:
+        # Calculate next cost for preview
+        next_cost = next_party_level_up_cost(
+            new_level=self._current_level + 1,
+            previous_cost=self._current_cost
+        )
+        
+        html = build_party_level_tooltip(
+            level=self._current_level,
+            cost=self._current_cost,
+            next_cost=next_cost,
+        )
+        show_stained_tooltip(self, html)
+        try:
+            super().enterEvent(event)  # type: ignore[misc]
+        except Exception:
+            pass
+    
+    def leaveEvent(self, event: object) -> None:
+        hide_stained_tooltip()
+        try:
+            super().leaveEvent(event)  # type: ignore[misc]
+        except Exception:
+            pass
