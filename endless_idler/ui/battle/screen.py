@@ -15,14 +15,16 @@ from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
 from endless_idler.characters.plugins import discover_character_plugins
-from endless_idler.run_rules import apply_battle_result
-from endless_idler.run_rules import calculate_gold_bonus
-from endless_idler.ui.battle.colors import color_for_damage_type_id
+from endless_idler.passives.execution import apply_target_selection_passives
+from endless_idler.passives.execution import trigger_turn_start_passives
 from endless_idler.ui.battle.mechanics import apply_dark_sacrifice
 from endless_idler.ui.battle.mechanics import apply_fire_self_bleed
 from endless_idler.ui.battle.mechanics import dark_damage_multiplier_from_removed_hp
 from endless_idler.ui.battle.mechanics import fire_damage_multiplier_from_removed_hp
 from endless_idler.ui.battle.mechanics import resolve_light_heal
+from endless_idler.run_rules import apply_battle_result
+from endless_idler.run_rules import calculate_gold_bonus
+from endless_idler.ui.battle.colors import color_for_damage_type_id
 from endless_idler.ui.battle.sim import Combatant
 from endless_idler.ui.battle.sim import apply_offsite_stat_share
 from endless_idler.ui.battle.sim import build_reserves
@@ -376,6 +378,37 @@ class BattleScreenWidget(QWidget):
             self._on_battle_over()
             return
 
+        # Trigger TURN_START passives for party
+        party_stats = [c.stats for c in self._party if c.stats.hp > 0]
+        reserve_stats = [c.stats for c in self._reserves if c.stats.hp > 0]
+        all_party_stats = party_stats + reserve_stats
+        foe_stats = [c.stats for c in self._foes if c.stats.hp > 0]
+        
+        turn_start_results = trigger_turn_start_passives(
+            all_allies=all_party_stats,
+            onsite_allies=party_stats,
+            offsite_allies=reserve_stats,
+            enemies=foe_stats,
+        )
+        
+        # Process TURN_START passive results (e.g., healing from Lady Light)
+        for result in turn_start_results:
+            if "healing_done" in result:
+                heals_by_target = result["healing_done"]
+                for target_stats, heal_amount_val in heals_by_target.items():
+                    # Find the combatant widget to refresh
+                    for combatant in self._party + self._reserves:
+                        if combatant.stats is target_stats:
+                            # Find the widget
+                            for card in self._party_cards + self._reserve_cards:
+                                if hasattr(card, 'refresh'):
+                                    card.refresh()
+                            break
+        
+        if not party_alive or not foes_alive:
+            self._on_battle_over()
+            return
+
         if self._turn_side == "party":
             attacker, attacker_widget = choose_weighted_attacker(party_alive, self._rng)
             self._turn_side = "foes"
@@ -452,7 +485,59 @@ class BattleScreenWidget(QWidget):
         if not enemies:
             return
 
+        # Prepare passive context (convert Combatants to Stats)
+        allies_onsite_stats = [c.stats for c in allies_onsite]
+        allies_offsite_stats = [c.stats for c in allies_offsite]
+        all_allies_stats = allies_onsite_stats + allies_offsite_stats
+        enemies_stats = [c.stats for c, _ in enemies]
+
         if element_id == "wind":
+            # Check if TARGET_SELECTION passives want to redirect
+            # Use first enemy as "original_target" for wind attacks
+            original_target_stats = enemies[0][0].stats if enemies else None
+            
+            if original_target_stats:
+                final_target_stats = apply_target_selection_passives(
+                    attacker=attacker.stats,
+                    original_target=original_target_stats,
+                    available_targets=enemies_stats,
+                    all_allies=all_allies_stats,
+                    onsite_allies=allies_onsite_stats,
+                    offsite_allies=allies_offsite_stats,
+                    enemies=enemies_stats,
+                )
+                
+                # If redirected to a different target, attack only that target
+                if final_target_stats is not original_target_stats:
+                    # Find the combatant and widget for the redirected target
+                    target, target_widget = next(
+                        (c, w) for c, w in enemies if c.stats is final_target_stats
+                    )
+                    
+                    # Single target attack due to redirection
+                    damage, crit, dodged = calculate_damage(
+                        attacker.stats,
+                        target.stats,
+                        self._rng,
+                        damage_multiplier=damage_multiplier,
+                        all_allies=all_allies_stats,
+                        onsite_allies=allies_onsite_stats,
+                        offsite_allies=allies_offsite_stats,
+                        enemies=enemies_stats,
+                    )
+                    if not dodged and damage > 0:
+                        previous_hp = int(target.stats.hp)
+                        target.stats.hp = max(0, previous_hp - int(damage))
+                        self._arena.add_pulse(attacker_widget, target_widget, color, crit=crit)
+                        self._set_status(f"{attacker.name} gusts {target.name} for {damage}{' (CRIT)' if crit else ''} (redirected)")
+                        target_widget.refresh()
+                        if previous_hp > 0 and target.stats.hp <= 0:
+                            self._handle_combatant_fell(target)
+                    if self._is_over():
+                        self._on_battle_over()
+                    return
+            
+            # Normal wind attack - hit all enemies
             target_count = len(enemies)
             total_damage = 0
             any_crit = False
@@ -462,6 +547,10 @@ class BattleScreenWidget(QWidget):
                     target.stats,
                     self._rng,
                     damage_multiplier=damage_multiplier,
+                    all_allies=all_allies_stats,
+                    onsite_allies=allies_onsite_stats,
+                    offsite_allies=allies_offsite_stats,
+                    enemies=enemies_stats,
                 )
                 if dodged:
                     continue
@@ -483,10 +572,27 @@ class BattleScreenWidget(QWidget):
             return
 
         if element_id == "lightning":
-            target, target_widget = (
+            # Initial target selection
+            initial_target, initial_widget = (
                 self._rng.choice(enemies)
                 if attacker_side == "party"
                 else choose_weighted_target_by_aggro(enemies, self._rng)
+            )
+            
+            # Apply TARGET_SELECTION passives to allow redirection
+            final_target_stats = apply_target_selection_passives(
+                attacker=attacker.stats,
+                original_target=initial_target.stats,
+                available_targets=enemies_stats,
+                all_allies=all_allies_stats,
+                onsite_allies=allies_onsite_stats,
+                offsite_allies=allies_offsite_stats,
+                enemies=enemies_stats,
+            )
+            
+            # Find the combatant and widget for the final target
+            target, target_widget = next(
+                (c, w) for c, w in enemies if c.stats is final_target_stats
             )
             total_damage = 0
             any_crit = False
@@ -499,6 +605,10 @@ class BattleScreenWidget(QWidget):
                     target.stats,
                     self._rng,
                     damage_multiplier=damage_multiplier,
+                    all_allies=all_allies_stats,
+                    onsite_allies=allies_onsite_stats,
+                    offsite_allies=allies_offsite_stats,
+                    enemies=enemies_stats,
                 )
                 if dodged:
                     continue
@@ -520,10 +630,27 @@ class BattleScreenWidget(QWidget):
                 self._on_battle_over()
             return
 
-        target, target_widget = (
+        # Initial target selection for generic attack
+        initial_target, initial_widget = (
             self._rng.choice(enemies)
             if attacker_side == "party"
             else choose_weighted_target_by_aggro(enemies, self._rng)
+        )
+        
+        # Apply TARGET_SELECTION passives to allow redirection
+        final_target_stats = apply_target_selection_passives(
+            attacker=attacker.stats,
+            original_target=initial_target.stats,
+            available_targets=enemies_stats,
+            all_allies=all_allies_stats,
+            onsite_allies=allies_onsite_stats,
+            offsite_allies=allies_offsite_stats,
+            enemies=enemies_stats,
+        )
+        
+        # Find the combatant and widget for the final target
+        target, target_widget = next(
+            (c, w) for c, w in enemies if c.stats is final_target_stats
         )
 
         damage, crit, dodged = calculate_damage(
@@ -531,6 +658,10 @@ class BattleScreenWidget(QWidget):
             target.stats,
             self._rng,
             damage_multiplier=damage_multiplier,
+            all_allies=all_allies_stats,
+            onsite_allies=allies_onsite_stats,
+            offsite_allies=allies_offsite_stats,
+            enemies=enemies_stats,
         )
         if dodged:
             self._set_status(f"{target.name} dodged!")
@@ -584,10 +715,11 @@ class BattleScreenWidget(QWidget):
         victory = bool(party_alive and not foes_alive)
         defeat = bool(foes_alive and not party_alive)
         if party_alive and not foes_alive:
-            self._award_gold(self._foe_kills)
+            self._award_gold(self._foe_kills, victory=True)
             self._set_status("Victory")
             self._apply_idle_exp_bonus()
         elif foes_alive and not party_alive:
+            self._award_gold(self._foe_kills, victory=False)
             self._set_status("Defeat")
             self._apply_idle_exp_penalty()
         else:
@@ -644,7 +776,13 @@ class BattleScreenWidget(QWidget):
     def _apply_idle_exp_penalty(self) -> None:
         self._extend_idle_exp_timer(key="idle_exp_penalty_seconds", seconds=15 * 60)
 
-    def _award_gold(self, kills: int) -> None:
+    def _award_gold(self, kills: int, victory: bool = True) -> None:
+        """Award gold based on foe kills.
+        
+        Args:
+            kills: Number of foes defeated
+            victory: If True, award full gold. If False, award 50% of base kills only.
+        """
         gold = max(0, int(kills))
         if gold <= 0:
             return
@@ -657,7 +795,15 @@ class BattleScreenWidget(QWidget):
             winstreak = max(0, int(getattr(save, "winstreak", 0)))
             bonus = calculate_gold_bonus(tokens, winstreak)
             
-            total_gold = gold + bonus
+            if victory:
+                # Full rewards on victory: base kills + bonus
+                total_gold = gold + bonus
+            else:
+                # Partial rewards on loss: 50% of base kills + full bonus
+                # Bonus helps struggling players, reduced base maintains win incentive
+                loss_gold = max(1, gold // 2)  # Minimum 1 gold for killing any foes
+                total_gold = loss_gold + bonus
+            
             save.tokens = tokens + total_gold
             manager.save(save)
         except Exception:

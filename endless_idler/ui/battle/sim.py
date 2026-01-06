@@ -15,6 +15,7 @@ from endless_idler.combat.damage_types import normalize_damage_type_id
 from endless_idler.combat.damage_types import resolve_damage_type_for_battle
 from endless_idler.combat.damage_types import type_multiplier
 from endless_idler.combat.stats import Stats
+from endless_idler.passives.registry import load_passive
 
 
 KNOWN_DAMAGE_TYPE_IDS = (
@@ -28,6 +29,28 @@ KNOWN_DAMAGE_TYPE_IDS = (
 )
 
 RANDOM_DAMAGE_TYPE_IDS = tuple(item for item in KNOWN_DAMAGE_TYPE_IDS if item != "generic")
+
+
+def load_passives_for_character(stats: Stats, plugin: CharacterPlugin | None, char_id: str) -> None:
+    """Load passive instances for a character and attach to stats.
+    
+    Args:
+        stats: Stats object to attach passives to
+        plugin: Character plugin with passive IDs
+        char_id: Character identifier
+    """
+    stats.character_id = char_id
+    
+    if not plugin or not plugin.passives:
+        return
+    
+    loaded_passives = []
+    for passive_id in plugin.passives:
+        passive = load_passive(passive_id)
+        if passive:
+            loaded_passives.append(passive)
+    
+    stats._passive_instances = loaded_passives
 
 
 @dataclass(slots=True)
@@ -95,6 +118,7 @@ def build_party(
         apply_plugin_overrides(stats, plugin=plugin)
         if stats.element_id == "ice" and (plugin is None or plugin.damage_reduction_passes is None):
             stats.damage_reduction_passes = max(2, int(stats.damage_reduction_passes))
+        load_passives_for_character(stats, plugin, char_id)
         party.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
     return party
 
@@ -140,6 +164,7 @@ def build_foes(
             stats.damage_reduction_passes = max(2, int(stats.damage_reduction_passes))
         stats.level = party_level
         stats.hp = stats.max_hp
+        load_passives_for_character(stats, plugin, char_id)
         foes.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
     return foes
 
@@ -185,6 +210,7 @@ def build_reserves(
         apply_plugin_overrides(stats, plugin=plugin)
         if stats.element_id == "ice" and (plugin is None or plugin.damage_reduction_passes is None):
             stats.damage_reduction_passes = max(2, int(stats.damage_reduction_passes))
+        load_passives_for_character(stats, plugin, char_id)
         reserves.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
     return reserves
 
@@ -246,15 +272,54 @@ def calculate_damage(
     rng: random.Random,
     *,
     damage_multiplier: float = 1.0,
+    all_allies: list[Stats] | None = None,
+    onsite_allies: list[Stats] | None = None,
+    offsite_allies: list[Stats] | None = None,
+    enemies: list[Stats] | None = None,
 ) -> tuple[int, bool, bool]:
+    """Calculate damage with optional passive effects.
+    
+    Args:
+        attacker: The attacking character's stats
+        target: The target character's stats
+        rng: Random number generator
+        damage_multiplier: Base damage multiplier
+        all_allies: All ally stats for passive context (optional)
+        onsite_allies: Onsite allies for passive context (optional)
+        offsite_allies: Offsite allies for passive context (optional)
+        enemies: Enemy stats for passive context (optional)
+        
+    Returns:
+        Tuple of (damage, is_crit, is_dodged)
+    """
     dodge_odds = float(max(0.0, min(1.0, target.dodge_odds)))
     if rng.random() < dodge_odds:
         return 0, False, True
 
     atk = attacker.atk
     defense = max(0, target.defense)
+    
+    # Apply PRE_DAMAGE passives if context is provided
+    passive_damage_mult = 1.0
+    defense_ignore = 0.0
+    
+    if all_allies is not None and onsite_allies is not None and offsite_allies is not None and enemies is not None:
+        from endless_idler.passives.execution import apply_pre_damage_passives
+        
+        passive_damage_mult, defense_ignore = apply_pre_damage_passives(
+            attacker=attacker,
+            target=target,
+            all_allies=all_allies,
+            onsite_allies=onsite_allies,
+            offsite_allies=offsite_allies,
+            enemies=enemies,
+        )
+    
+    # Apply defense ignore from passives (e.g., Lady Darkness)
+    effective_defense = int(defense * (1.0 - min(1.0, defense_ignore)))
+    
     mitigation_passes = max(1, int(getattr(target, "damage_reduction_passes", 1) or 1))
-    mitigation_multiplier = 100.0 / (100.0 + float(defense))
+    mitigation_multiplier = 100.0 / (100.0 + float(effective_defense))
     mitigation_multiplier **= float(mitigation_passes)
     base = float(atk) * mitigation_multiplier
 
@@ -263,6 +328,7 @@ def calculate_damage(
     base /= float(max(0.01, target.vitality))
     base /= float(max(0.1, target.mitigation))
     base *= float(max(0.0, damage_multiplier))
+    base *= float(max(0.0, passive_damage_mult))
 
     crit_rate = float(max(0.0, min(1.0, attacker.crit_rate)))
     crit = rng.random() < crit_rate

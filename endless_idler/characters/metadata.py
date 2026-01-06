@@ -36,7 +36,7 @@ _PLACEMENTS = ("onsite", "offsite", "both")
 
 def extract_character_metadata(
     path: Path,
-) -> tuple[str, str, int, str, str, bool, dict[str, float], float | None, int | None]:
+) -> tuple[str, str, int, str, str, bool, dict[str, float], float | None, int | None, list[str]]:
     char_id = path.stem
     display_name = _derive_display_name(char_id)
     stars = 1
@@ -46,6 +46,7 @@ def extract_character_metadata(
     base_stats: dict[str, float] = dict(DEFAULT_BASE_STATS)
     base_aggro: float | None = None
     damage_reduction_passes: int | None = None
+    passives: list[str] = []
 
     try:
         source = path.read_text(encoding="utf-8")
@@ -60,6 +61,7 @@ def extract_character_metadata(
             base_stats,
             base_aggro,
             damage_reduction_passes,
+            passives,
         )
 
     try:
@@ -75,6 +77,7 @@ def extract_character_metadata(
             base_stats,
             base_aggro,
             damage_reduction_passes,
+            passives,
         )
 
     module_placement = _extract_from_module(tree)
@@ -88,6 +91,7 @@ def extract_character_metadata(
         found_id, found_name, found_stars, found_placement = _extract_from_classdef(node)
         found_damage_type, found_damage_random = _extract_damage_type_from_classdef(node)
         stat_overrides, found_base_aggro, found_damage_reduction_passes = _extract_stat_overrides_from_classdef(node)
+        found_passives = _extract_passives_from_classdef(node)
         if found_id or found_name:
             found_character = True
         if found_id:
@@ -109,6 +113,8 @@ def extract_character_metadata(
             base_aggro = found_base_aggro
         if found_damage_reduction_passes is not None:
             damage_reduction_passes = found_damage_reduction_passes
+        if found_passives:
+            passives = found_passives
         if found_id or found_name:
             break
 
@@ -123,6 +129,7 @@ def extract_character_metadata(
             base_stats,
             base_aggro,
             damage_reduction_passes,
+            passives,
         )
 
     if not display_name:
@@ -139,6 +146,7 @@ def extract_character_metadata(
         sanitized_base_stats,
         base_aggro,
         damage_reduction_passes,
+        passives,
     )
 
 
@@ -261,6 +269,61 @@ def _const_float(node: ast.AST | None) -> float | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
         return float(node.value)
     return None
+
+
+def _extract_passives_from_classdef(node: ast.ClassDef) -> list[str]:
+    """Extract passive IDs from a character class definition.
+    
+    Looks for:
+    - passives: list[str] = field(default_factory=lambda: ["passive_id_1", "passive_id_2"])
+    - passives: list[str] = ["passive_id"]
+    """
+    for stmt in node.body:
+        # Check annotated assignments: passives: list[str] = ...
+        if isinstance(stmt, ast.AnnAssign):
+            if isinstance(stmt.target, ast.Name) and stmt.target.id == "passives":
+                return _extract_passive_list(stmt.value)
+        
+        # Check regular assignments: passives = ...
+        elif isinstance(stmt, ast.Assign):
+            for target in stmt.targets:
+                if isinstance(target, ast.Name) and target.id == "passives":
+                    return _extract_passive_list(stmt.value)
+    
+    return []
+
+
+def _extract_passive_list(node: ast.AST | None) -> list[str]:
+    """Extract list of strings from various AST patterns.
+    
+    Handles:
+    - Direct list: ["id1", "id2"]
+    - field(default_factory=lambda: ["id1", "id2"])
+    """
+    if node is None:
+        return []
+    
+    # Direct list literal
+    if isinstance(node, ast.List):
+        passives = []
+        for elt in node.elts:
+            if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                passives.append(elt.value)
+        return passives
+    
+    # field(default_factory=lambda: [...])
+    if isinstance(node, ast.Call):
+        # Check if it's a field() call
+        if isinstance(node.func, ast.Name) and node.func.id == "field":
+            # Look for default_factory keyword argument
+            for keyword in node.keywords:
+                if keyword.arg == "default_factory":
+                    # Check if it's a lambda
+                    if isinstance(keyword.value, ast.Lambda):
+                        # Extract the lambda body
+                        return _extract_passive_list(keyword.value.body)
+    
+    return []
 
 
 def _derive_display_name(char_id: str) -> str:

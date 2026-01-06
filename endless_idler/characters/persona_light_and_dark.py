@@ -35,7 +35,7 @@ class PersonaLightAndDark(PlayerBase):
         default_factory=lambda: load_damage_type(choice(["Light", "Dark"]))
     )
     passives: list[str] = field(
-        default_factory=lambda: ["persona_light_and_dark_duality"]
+        default_factory=lambda: ["persona_light_and_dark_duality", "trinity_synergy"]
     )
 
     def __post_init__(self) -> None:
