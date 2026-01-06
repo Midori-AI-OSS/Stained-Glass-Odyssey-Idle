@@ -95,7 +95,6 @@ class TestLadyLightRadiantAegis:
     def test_passive_registration(self):
         """Test that passive is properly registered in the registry."""
         # Import the module to trigger registration
-        from endless_idler.passives.implementations import lady_light_radiant_aegis
 
         passive_class = get_passive("lady_light_radiant_aegis")
         assert passive_class is not None
@@ -126,7 +125,7 @@ class TestLadyLightRadiantAegis:
         result = self.passive.execute(context)
 
         assert result["base_heal_amount"] == 100
-        assert result["total_healing"] == 300  # 100 (ally1) + 100 (ally2) + 100 (lady_light)
+        assert result["total_healing"] == 200  # 100 (ally1) + 100 (ally2), lady_light is at max
         assert self.ally1.hp == 600  # 500 + 100
         assert self.ally2.hp == 900  # 800 + 100
         assert self.lady_light.hp == 1000  # Already at max, no change
@@ -275,7 +274,7 @@ class TestLadyLightRadiantAegis:
     def test_character_id_fallback(self):
         """Test that passive handles missing character_id gracefully."""
         # Create ally without character_id attribute
-        ally_no_id = Mock()
+        ally_no_id = Mock(spec=['hp', 'max_hp'])  # Restrict to specific attributes
         ally_no_id.hp = 500
         ally_no_id.max_hp = 1000
         # Don't set character_id
