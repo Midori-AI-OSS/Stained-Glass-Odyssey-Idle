@@ -194,12 +194,12 @@ Placeholder for passive implementations:
 
 ## Acceptance Criteria
 
-- [ ] All files created with proper structure
-- [ ] Imports work correctly (`from endless_idler.passives import ...`)
-- [ ] Registry can register and retrieve passive classes
-- [ ] TriggerContext includes all necessary fields
-- [ ] Code passes linting (`ruff check endless_idler/passives`)
-- [ ] All classes and functions have docstrings
+- [x] All files created with proper structure
+- [x] Imports work correctly (`from endless_idler.passives import ...`)
+- [x] Registry can register and retrieve passive classes
+- [x] TriggerContext includes all necessary fields
+- [x] Code passes linting (`ruff check endless_idler/passives`)
+- [x] All classes and functions have docstrings
 
 ## Notes
 
@@ -212,3 +212,130 @@ Placeholder for passive implementations:
 - Will be used by: `endless_idler/passives/implementations/*.py`
 - Will integrate with: `endless_idler/combat/` (in later task)
 - Pattern reference: `endless_idler/combat/damage_types.py` (similar registry pattern)
+
+---
+
+## Audit Report
+
+**Auditor**: Auditor Agent  
+**Date**: 2026-01-06  
+**Status**: ✅ **APPROVED**  
+**Commit**: b03c2fcad95bfc955dbd569259c2e4302836fcad
+
+### Summary
+
+This task has been completed to an **exemplary standard**. All acceptance criteria are met, code quality is excellent, and the implementation demonstrates thoughtful design decisions that will facilitate future development.
+
+### Detailed Review
+
+#### 1. File Structure ✅
+All required files are present and correctly organized:
+```
+endless_idler/passives/
+├── __init__.py (53 lines)
+├── base.py (114 lines)
+├── triggers.py (55 lines)
+├── registry.py (105 lines)
+└── implementations/
+    └── __init__.py (9 lines)
+```
+
+#### 2. Code Quality ✅
+
+**Documentation**: All modules, classes, and functions have comprehensive docstrings with clear descriptions, parameter documentation, return types, and usage examples.
+
+**Type Hints**: Complete and accurate type annotations throughout. Notable highlights:
+- Proper use of `Protocol` for interface definition
+- Correct use of `ABC` and `abstractmethod` for base implementation
+- Appropriate use of `Type[PassiveBase]` for class references
+- Union types (`Type[PassiveBase] | None`) for nullable returns
+
+**Import Style**: Follows repository standards perfectly:
+- Grouped imports (standard library, then project modules)
+- Sorted within groups
+- Blank lines between groups
+- No inline imports
+
+#### 3. Implementation Excellence ✅
+
+**triggers.py**: Clean enum and dataclass implementation. The `TriggerContext` is well-designed for extensibility with the `extra` field for trigger-specific data.
+
+**base.py**: Excellent dual implementation:
+- `PassiveBase` protocol for interface definition
+- `Passive` ABC for convenient implementation
+- Both approaches supported, giving future developers flexibility
+
+**registry.py**: Robust registry implementation with several strengths:
+- Handles both class-attribute and instance-attribute ID patterns
+- Returns `None` for missing passives (fail-safe)
+- Includes `clear_registry()` for testing
+- `list_passives()` returns sorted list for deterministic output
+- O(1) dictionary lookups as required
+
+**__init__.py**: Clean public API with proper `__all__` exports and helpful docstring with usage example.
+
+**implementations/__init__.py**: Appropriate placeholder with clear comment about future usage.
+
+#### 4. Testing Results ✅
+
+**Linting**: `ruff check endless_idler/passives/` passes with no issues.
+
+**Import Testing**: All imports work correctly:
+```python
+from endless_idler.passives import (
+    PassiveBase, Passive, PassiveTrigger, TriggerContext,
+    register_passive, get_passive, load_passive, list_passives
+)
+```
+
+**Functional Testing**:
+- ✅ Registry registration works with decorator pattern
+- ✅ Both class-attribute and instance-attribute ID patterns supported
+- ✅ `load_passive()` correctly instantiates registered passives
+- ✅ `TriggerContext` dataclass instantiates correctly
+- ✅ Passive methods (`can_trigger`, `execute`) work as expected
+- ✅ Edge cases handled properly (returns `None` for missing passives)
+
+#### 5. Edge Cases & Error Handling ✅
+
+Verified the following edge cases:
+- Non-existent passive lookup returns `None` (not exception)
+- Empty registry returns empty list
+- Both registration patterns work correctly
+- Registry can be cleared for testing
+
+#### 6. Breaking Changes ✅
+
+**No breaking changes detected**:
+- This is new infrastructure; no existing code depends on it
+- Character files reference `autofighter.passives` (external plugin), not this module
+- No naming conflicts exist
+
+#### 7. Code Patterns ✅
+
+Implementation follows established repository patterns:
+- Similar to `endless_idler/combat/damage_types.py` registry pattern
+- Consistent with dataclass usage throughout codebase
+- Follows module organization standards
+
+### Areas of Excellence
+
+1. **Comprehensive documentation** with usage examples in docstrings
+2. **Dual implementation strategy** (Protocol + ABC) provides maximum flexibility
+3. **Robust registry** that handles multiple ID assignment patterns
+4. **Extensive testing** coverage including edge cases
+5. **Forward compatibility** designed into `TriggerContext.extra` field
+6. **Clean public API** with well-thought-out exports
+7. **Added utility function** (`clear_registry`) not in requirements but useful for testing
+
+### Issues Found
+
+**None**. Zero issues identified.
+
+### Recommendations
+
+None required. Implementation is ready for integration. Future tasks can confidently build on this foundation.
+
+### Approval
+
+This task is **approved without reservations** and ready for Task Master review.
