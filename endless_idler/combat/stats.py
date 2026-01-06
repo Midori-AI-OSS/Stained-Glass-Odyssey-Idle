@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from collections.abc import Iterable
 from dataclasses import dataclass
 from dataclasses import field
@@ -18,6 +19,7 @@ GAUGE_START: int = 10_000
 
 @dataclass(slots=True)
 class Stats:
+    character_id: str = ""
     hp: int = 1000
     exp: int = 0
     level: int = 1
@@ -83,6 +85,7 @@ class Stats:
     login_theme_identifier: str = field(default="", init=False)
 
     _active_effects: list[StatEffect] = field(default_factory=list, init=False)
+    _passive_instances: list[Any] = field(default_factory=list, init=False)
 
     level_up_gains: dict[str, float] = field(
         default_factory=lambda: {"max_hp": 10.0, "atk": 5.0, "defense": 3.0}
