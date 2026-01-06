@@ -77,6 +77,7 @@ class CombatantCard(QFrame):
     ) -> None:
         super().__init__(parent)
         self._combatant = combatant
+        self._plugin = plugin
         self._compact = bool(compact)
         self._team_side = (team_side or "left").strip().lower()
         self._stack_count = max(1, int(stack_count))
@@ -194,12 +195,14 @@ class CombatantCard(QFrame):
         if self._compact:
             self._tooltip_html = ""
             return
+        passive_ids = self._plugin.passives if self._plugin else None
         self._tooltip_html = build_character_stats_tooltip(
             name=self._combatant.name,
             stars=self._stars,
             stacks=self._stack_count,
             stackable=self._stack_count > 1,
             stats=self._combatant.stats,
+            passive_ids=passive_ids,
         )
 
     def enterEvent(self, event: object) -> None:

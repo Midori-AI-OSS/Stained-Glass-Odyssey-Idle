@@ -226,6 +226,7 @@ class OnsiteCharacterCardBase(QFrame):
         stackable: bool,
         stats: Stats,
         maxima: dict[str, float],
+        passive_ids: list[str] | None = None,
     ) -> None:
         self._stats = stats
         self._tooltip_html = build_character_stats_tooltip(
@@ -234,6 +235,7 @@ class OnsiteCharacterCardBase(QFrame):
             stacks=stacks,
             stackable=stackable,
             stats=stats,
+            passive_ids=passive_ids,
         )
 
         if self._stats_panel is None:
@@ -338,6 +340,7 @@ class BattleOnsiteCharacterCard(OnsiteCharacterCardBase):
 
         stats = getattr(combatant, "stats", None)
         if isinstance(stats, Stats):
+            passive_ids = getattr(plugin, "passives", None) if plugin else None
             self.set_stats(
                 name=str(name),
                 stars=getattr(plugin, "stars", None) if plugin else None,
@@ -345,6 +348,7 @@ class BattleOnsiteCharacterCard(OnsiteCharacterCardBase):
                 stackable=max(1, int(stack_count)) > 1,
                 stats=stats,
                 maxima=maxima,
+                passive_ids=passive_ids,
             )
             self.set_level(int(getattr(stats, "level", 1)))
             self.set_stack_count(int(stack_count))
@@ -480,6 +484,7 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
 
         stars = getattr(self._plugin, "stars", None) if self._plugin else None
         display_name = getattr(self._plugin, "display_name", self._char_id) if self._plugin else self._char_id
+        passive_ids = getattr(self._plugin, "passives", None) if self._plugin else None
         self.set_stats(
             name=str(display_name),
             stars=stars,
@@ -487,4 +492,5 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
             stackable=stack_count > 1,
             stats=stats,
             maxima=maxima,
+            passive_ids=passive_ids,
         )

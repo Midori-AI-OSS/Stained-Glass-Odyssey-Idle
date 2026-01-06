@@ -389,6 +389,7 @@ class DropSlot(QFrame):
             except Exception:
                 stats = None
 
+        passive_ids = plugin.passives if plugin else None
         self._tooltip_html = (
             build_character_stats_tooltip(
                 name=self._display_name,
@@ -396,6 +397,7 @@ class DropSlot(QFrame):
                 stacks=stacks if (self._show_stack_badge and primary_stack) else None,
                 stackable=stacks > 1,
                 stats=stats,
+                passive_ids=passive_ids,
             )
         )
         self.setToolTip("")

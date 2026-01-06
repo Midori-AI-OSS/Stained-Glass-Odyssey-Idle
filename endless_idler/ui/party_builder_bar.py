@@ -111,6 +111,7 @@ class CharacterBar(QFrame):
             stars = sanitize_stars(plugin.stars if plugin else 1)
             placement = (plugin.placement if plugin else "both").strip().lower()
             stacks = self._get_stack_count(char_id)
+            passive_ids = plugin.passives if plugin else None
             slot.set_character(
                 char_id=char_id,
                 display_name=display_name,
@@ -122,6 +123,7 @@ class CharacterBar(QFrame):
                 can_afford=self._can_afford,
                 on_insufficient_funds=self._on_insufficient_funds,
                 get_tooltip_stats=self._get_tooltip_stats,
+                passive_ids=passive_ids,
             )
 
     def clear_char_id(self, char_id: str) -> None:
@@ -199,6 +201,7 @@ class ShopSlot(QFrame):
         can_afford: Callable[[int], bool],
         on_insufficient_funds: Callable[[], None],
         get_tooltip_stats: Callable[[str, str], Stats | None] | None = None,
+        passive_ids: list[str] | None = None,
     ) -> None:
         self.clear()
 
@@ -214,6 +217,7 @@ class ShopSlot(QFrame):
             can_afford=can_afford,
             on_insufficient_funds=on_insufficient_funds,
             get_tooltip_stats=get_tooltip_stats,
+            passive_ids=passive_ids,
         )
         item.destroyed.connect(self._on_item_destroyed)
         self._item = item
@@ -241,6 +245,7 @@ class ShopItem(QFrame):
         can_afford: Callable[[int], bool],
         on_insufficient_funds: Callable[[], None],
         get_tooltip_stats: Callable[[str, str], Stats | None] | None = None,
+        passive_ids: list[str] | None = None,
     ) -> None:
         super().__init__()
         self.setObjectName("characterTileInner")
@@ -254,6 +259,7 @@ class ShopItem(QFrame):
         self._can_afford = can_afford
         self._on_insufficient_funds = on_insufficient_funds
         self._get_tooltip_stats = get_tooltip_stats
+        self._passive_ids = passive_ids or []
         self._tooltip_html = ""
 
         apply_star_rank_visuals(self, self._stars)
@@ -347,6 +353,7 @@ class ShopItem(QFrame):
                 stacks=self._stack_count if self._stack_count > 1 else None,
                 stackable=self._stack_count > 1,
                 stats=stats,
+                passive_ids=self._passive_ids,
             )
         )
         self.setToolTip("")

@@ -113,6 +113,7 @@ def build_character_stats_tooltip(
     stacks: int | None = None,
     stackable: bool | None = None,
     stats: Stats | None = None,
+    passive_ids: list[str] | None = None,
 ) -> str:
     generated_stats = stats is None
     stats = stats or Stats()
@@ -178,6 +179,34 @@ def build_character_stats_tooltip(
         for index, (label, value) in enumerate(stat_pairs)
     )
 
+    # Build passive abilities section
+    passive_section = ""
+    if passive_ids:
+        from endless_idler.passives.registry import load_passive
+        passive_items = []
+        
+        for passive_id in passive_ids:
+            passive = load_passive(passive_id)
+            if passive:
+                passive_items.append(
+                    f"<div style='margin-bottom: 8px;'>"
+                    f"<b style='color: #FFD700;'>{html.escape(passive.display_name)}</b><br/>"
+                    f"<span style='color: rgba(255, 255, 255, 180); font-size: 11px;'>"
+                    f"{html.escape(passive.description)}</span>"
+                    f"</div>"
+                )
+        
+        if passive_items:
+            passive_section = (
+                "<tr><td colspan='2' style='padding: 10px 10px 4px 10px; "
+                "border-top: 1px solid rgba(255, 255, 255, 0.1);'>"
+                "<b style='color: rgba(255, 255, 255, 220);'>Passive Abilities</b>"
+                "</td></tr>"
+                "<tr><td colspan='2' style='padding: 4px 10px 8px 10px;'>"
+                + "".join(passive_items)
+                + "</td></tr>"
+            )
+
     return (
         "<div style='min-width: 280px; max-width: 340px;'>"
         "<table style='width: 100%; border-collapse: collapse;'>"
@@ -206,6 +235,7 @@ def build_character_stats_tooltip(
         + "</table>"
         "</td>"
         "</tr>"
-        "</table>"
+        + passive_section
+        + "</table>"
         "</div>"
     )
