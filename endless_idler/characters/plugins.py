@@ -42,6 +42,7 @@ class CharacterPlugin:
     base_stats: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_BASE_STATS))
     base_aggro: float | None = None
     damage_reduction_passes: int | None = None
+    passives: list[str] = field(default_factory=list)
 
     @property
     def image_dir(self) -> Path:
@@ -87,6 +88,7 @@ def discover_character_plugins() -> list[CharacterPlugin]:
             base_stats,
             base_aggro,
             damage_reduction_passes,
+            passives,
         ) = extract_character_metadata(path)
         if not char_id:
             continue
@@ -101,6 +103,7 @@ def discover_character_plugins() -> list[CharacterPlugin]:
                 base_stats=base_stats,
                 base_aggro=base_aggro,
                 damage_reduction_passes=damage_reduction_passes,
+                passives=passives,
             )
         )
 
