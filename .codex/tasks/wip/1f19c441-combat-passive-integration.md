@@ -369,3 +369,253 @@ Take time to understand the existing combat flow before making changes. Consider
 - Create visual effects for passive activations
 - Add passive management UI
 - Allow enabling/disabling specific passives
+
+---
+
+## AUDIT REPORT - January 6, 2025
+
+**Auditor**: AI Assistant  
+**Status**: ⚠️ ISSUES FOUND - RETURN TO WIP  
+**Overall Assessment**: Strong implementation with critical missing feature
+
+### Summary
+
+The passive system integration is **substantially complete** but has **one critical missing integration point**: TARGET_SELECTION passives are not integrated into the combat flow, which means Trinity Synergy's attack redirection feature is completely non-functional in actual gameplay.
+
+### ✅ What Works Well
+
+1. **Core Architecture**: Exceptional design
+   - Clean separation of concerns (base, triggers, registry, execution)
+   - Extensible and well-documented
+   - Error handling prevents combat crashes
+   - Type hints throughout
+
+2. **Stats Class Integration**: Perfect ✅
+   - `character_id` field added (line 22)
+   - `_passive_instances` field added (line 88)
+   - Both properly integrated in dataclass structure
+
+3. **Character Loading**: Complete ✅
+   - `load_passives_for_character()` implemented in `sim.py` (lines 34-53)
+   - Called in `build_party()` (line 121)
+   - Called in `build_foes()` (line 167)
+   - Called in `build_reserves()` (line 213)
+   - Handles invalid passive IDs gracefully
+
+4. **TURN_START Integration**: Excellent ✅
+   - Fully integrated in `screen.py` (lines 386-405)
+   - Processes healing results from Lady Light's passive
+   - Refreshes UI cards after healing
+   - All edge cases handled
+
+5. **PRE_DAMAGE Integration**: Complete ✅
+   - Integrated in `calculate_damage()` in `sim.py` (lines 306-316)
+   - Applies damage multipliers correctly
+   - Applies defense ignore correctly
+   - Backwards compatible (optional context parameters)
+
+6. **Test Coverage**: Outstanding ✅
+   - All 73 tests pass
+   - Comprehensive unit tests for each passive
+   - Integration tests verify end-to-end loading
+   - Edge cases well covered
+   - Parametrized tests for calculations
+
+7. **Documentation**: Comprehensive ✅
+   - `.codex/implementation/passive-system.md` is excellent
+   - Clear architecture overview
+   - Step-by-step guides for adding passives/triggers
+   - Debugging section
+   - Performance considerations
+   - 537 lines of detailed documentation
+
+8. **Code Quality**: Excellent ✅
+   - Linting passes on all files
+   - Proper type hints
+   - Good docstrings
+   - Clean imports (follows repository standards)
+
+### ❌ Critical Issues
+
+#### 1. **TARGET_SELECTION NOT INTEGRATED** (Blocking)
+
+**Severity**: CRITICAL  
+**Impact**: Trinity Synergy's attack redirection is completely non-functional
+
+**Problem**:
+- `apply_target_selection_passives()` exists in `execution.py` (lines 151-198)
+- Function is well-implemented and tested
+- **BUT**: Never called in `screen.py` during target selection
+- Combat always uses `choose_weighted_target_by_aggro()` or `random.choice()` directly
+- No passive hook before target is finalized
+
+**Evidence**:
+```python
+# screen.py line 569-573 - No passive integration
+target, target_widget = (
+    self._rng.choice(enemies)
+    if attacker_side == "party"
+    else choose_weighted_target_by_aggro(enemies, self._rng)
+)
+```
+
+**Expected**:
+```python
+# After initial selection, apply passives
+original_target, original_widget = (...)
+final_target = apply_target_selection_passives(
+    attacker=attacker.stats,
+    original_target=original_target.stats,
+    available_targets=[e.stats for e, _ in enemies],
+    all_allies=all_allies_stats,
+    onsite_allies=allies_onsite_stats,
+    offsite_allies=allies_offsite_stats,
+    enemies=enemies_stats,
+)
+# Find widget for final target
+target_widget = next(w for c, w in enemies if c.stats is final_target)
+```
+
+**Locations Needing Fix**:
+1. Generic damage (line ~569)
+2. Wind element attacks (line ~494)
+3. Lightning element attacks (line ~527)
+
+**Task Requirement**: 
+- Acceptance criteria explicitly requires: "TARGET_SELECTION passives can redirect attacks" ❌
+- Task description section 5 provides detailed integration instructions
+
+### ⚠️ Minor Issues
+
+#### 2. **Trinity Synergy Stat Modifications** (Minor)
+
+**Severity**: MINOR  
+**Impact**: Trinity bonuses may not persist correctly across turns
+
+**Problem**:
+Trinity Synergy modifies stats directly in TURN_START:
+```python
+# line 157-158 in trinity_synergy.py
+if hasattr(lady_light, 'regain'):
+    lady_light.regain += bonus_regain
+```
+
+**Concern**: 
+- This adds to the regain property (which includes stat effect modifiers)
+- Should use StatEffect system for temporary bonuses OR modify base stats
+- Current approach may compound on repeated TURN_START triggers
+- Not using established stat modification pattern
+
+**Recommendation**: Use StatEffect system or store multipliers in context.extra for damage calculations to read
+
+#### 3. **Minimal Combat Logging** (Minor)
+
+**Severity**: MINOR  
+**Impact**: Players can't see passive activations clearly
+
+**Problem**:
+- Passive effects not logged to combat status
+- Only TURN_START healing refreshes cards
+- No visual indication when Lady Darkness eclipses enemy defense
+- No visual indication when Trinity bonuses activate
+
+**Task Requirement**: 
+- Acceptance criteria requires: "Combat log shows passive activations" ⚠️
+- Currently only implicit (status bar updates for turns)
+
+**Recommendation**: Add status messages like:
+- "Lady Light heals party for X HP!"
+- "Lady Darkness eclipses enemy defenses!"
+- "Trinity Synergy active!"
+
+### 📊 Acceptance Criteria Review
+
+| Criterion | Status | Notes |
+|-----------|--------|-------|
+| Stats has character_id and _passive_instances | ✅ PASS | Lines 22, 88 in stats.py |
+| Passives loaded at character creation | ✅ PASS | Integrated in build_party/foes/reserves |
+| TURN_START passives trigger | ✅ PASS | Lines 386-405 in screen.py |
+| PRE_DAMAGE passives modify damage | ✅ PASS | Lines 306-316 in sim.py |
+| TARGET_SELECTION passives redirect | ❌ FAIL | **NOT INTEGRATED** |
+| All three passives work correctly | ⚠️ PARTIAL | Lady Light ✅, Lady Darkness ✅, Trinity ⚠️ |
+| Combat log shows activations | ⚠️ MINIMAL | Only status bar, no passive-specific logs |
+| No regressions | ✅ PASS | All 73 tests pass |
+| Code passes linting | ✅ PASS | ruff check passes |
+| Integration tests pass | ✅ PASS | 73/73 tests pass |
+
+**Score**: 7.5/10 criteria met (75%)
+
+### 🔍 Deep Dive: Trinity Synergy Analysis
+
+**Current State**:
+- TURN_START effects: ⚠️ Implemented but stat modification pattern questionable
+- TARGET_SELECTION effects: ❌ Cannot execute (no integration point)
+- Unit tests: ✅ All pass (but don't test actual combat integration)
+
+**Test Coverage Gap**:
+The tests verify that Trinity Synergy **can** redirect targets when called:
+```python
+# test_trinity_synergy.py line 224
+result = passive.execute(context)
+assert "new_target" in context.extra
+```
+
+But there's no test verifying this happens **in actual combat**. The integration tests only verify loading, not execution during battle.
+
+### 📋 Required Changes for Approval
+
+To meet ALL acceptance criteria and complete the task:
+
+1. **[BLOCKING] Integrate TARGET_SELECTION in screen.py**
+   - Add calls to `apply_target_selection_passives()` after initial target selection
+   - Handle all combat types (generic, wind, lightning)
+   - Map back from Stats to Combatant/widget pairs
+
+2. **[RECOMMENDED] Improve Trinity stat modifications**
+   - Either use StatEffect system
+   - Or document why direct modification is intentional
+   - Ensure no compounding issues across turns
+
+3. **[OPTIONAL] Enhanced combat logging**
+   - Add status messages for passive activations
+   - Make passive effects visible to players
+
+### 🎯 Recommendation
+
+**RETURN TO WIP** - Critical feature incomplete
+
+**Rationale**:
+- Core architecture is excellent (9/10)
+- Implementation quality is high (8/10)
+- Test coverage is comprehensive (9/10)
+- Documentation is outstanding (10/10)
+- **BUT**: Missing TARGET_SELECTION integration is a **critical gap**
+  - Explicitly required by acceptance criteria
+  - One of three main integration points
+  - Trinity Synergy's signature feature is non-functional
+  - Task description provides detailed integration instructions
+
+**Estimated Fix Time**: 2-4 hours
+- Implementation: 1-2 hours (straightforward, pattern exists)
+- Testing: 1 hour (verify redirection works in all cases)
+- Documentation: 0.5 hours (minimal, already covered)
+
+**Positive Notes**:
+- This is **very close** to completion
+- The hard parts (architecture, loading, execution) are done exceptionally well
+- The fix is straightforward - just wire up existing function
+- Once fixed, this will be a **production-ready feature**
+
+### 📝 Feedback for Coder
+
+Great work on this complex integration! The architecture is solid and the implementation quality is high. The passive system is well-designed and extensible. 
+
+The missing TARGET_SELECTION integration is likely an oversight - the function exists and is tested, just not called in the battle flow. This is the last piece needed to make Trinity Synergy fully functional.
+
+Consider this analogy: You've built an excellent engine with all the right parts (passive loading, trigger system, execution utilities), and successfully connected the fuel system (TURN_START) and transmission (PRE_DAMAGE), but the steering wheel (TARGET_SELECTION) isn't connected yet. The car runs great in a straight line, but can't turn!
+
+Once you add those 10-15 lines of code to integrate `apply_target_selection_passives()` into the three target selection points in `screen.py`, this feature will be complete and ready for production.
+
+**Task Status**: RETURN TO WIP with detailed instructions above ⬆️
+
+---
