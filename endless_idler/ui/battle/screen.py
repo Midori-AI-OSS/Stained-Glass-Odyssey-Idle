@@ -15,6 +15,13 @@ from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
 from endless_idler.characters.plugins import discover_character_plugins
+from endless_idler.passives.execution import trigger_turn_start_passives
+from endless_idler.ui.battle.mechanics import apply_dark_sacrifice
+from endless_idler.ui.battle.mechanics import apply_fire_self_bleed
+from endless_idler.ui.battle.mechanics import dark_damage_multiplier_from_removed_hp
+from endless_idler.ui.battle.mechanics import fire_damage_multiplier_from_removed_hp
+from endless_idler.ui.battle.mechanics import heal_amount
+from endless_idler.ui.battle.mechanics import resolve_light_heal
 from endless_idler.run_rules import apply_battle_result
 from endless_idler.run_rules import calculate_gold_bonus
 from endless_idler.ui.battle.colors import color_for_damage_type_id
@@ -376,6 +383,37 @@ class BattleScreenWidget(QWidget):
             self._on_battle_over()
             return
 
+        # Trigger TURN_START passives for party
+        party_stats = [c.stats for c in self._party if c.stats.hp > 0]
+        reserve_stats = [c.stats for c in self._reserves if c.stats.hp > 0]
+        all_party_stats = party_stats + reserve_stats
+        foe_stats = [c.stats for c in self._foes if c.stats.hp > 0]
+        
+        turn_start_results = trigger_turn_start_passives(
+            all_allies=all_party_stats,
+            onsite_allies=party_stats,
+            offsite_allies=reserve_stats,
+            enemies=foe_stats,
+        )
+        
+        # Process TURN_START passive results (e.g., healing from Lady Light)
+        for result in turn_start_results:
+            if "healing_done" in result:
+                heals_by_target = result["healing_done"]
+                for target_stats, heal_amount_val in heals_by_target.items():
+                    # Find the combatant widget to refresh
+                    for combatant in self._party + self._reserves:
+                        if combatant.stats is target_stats:
+                            # Find the widget
+                            for card in self._party_cards + self._reserve_cards:
+                                if hasattr(card, 'refresh'):
+                                    card.refresh()
+                            break
+        
+        if not party_alive or not foes_alive:
+            self._on_battle_over()
+            return
+
         if self._turn_side == "party":
             attacker, attacker_widget = choose_weighted_attacker(party_alive, self._rng)
             self._turn_side = "foes"
@@ -452,6 +490,12 @@ class BattleScreenWidget(QWidget):
         if not enemies:
             return
 
+        # Prepare passive context (convert Combatants to Stats)
+        allies_onsite_stats = [c.stats for c in allies_onsite]
+        allies_offsite_stats = [c.stats for c in allies_offsite]
+        all_allies_stats = allies_onsite_stats + allies_offsite_stats
+        enemies_stats = [c.stats for c, _ in enemies]
+
         if element_id == "wind":
             target_count = len(enemies)
             total_damage = 0
@@ -462,6 +506,10 @@ class BattleScreenWidget(QWidget):
                     target.stats,
                     self._rng,
                     damage_multiplier=damage_multiplier,
+                    all_allies=all_allies_stats,
+                    onsite_allies=allies_onsite_stats,
+                    offsite_allies=allies_offsite_stats,
+                    enemies=enemies_stats,
                 )
                 if dodged:
                     continue
@@ -499,6 +547,10 @@ class BattleScreenWidget(QWidget):
                     target.stats,
                     self._rng,
                     damage_multiplier=damage_multiplier,
+                    all_allies=all_allies_stats,
+                    onsite_allies=allies_onsite_stats,
+                    offsite_allies=allies_offsite_stats,
+                    enemies=enemies_stats,
                 )
                 if dodged:
                     continue
@@ -531,6 +583,10 @@ class BattleScreenWidget(QWidget):
             target.stats,
             self._rng,
             damage_multiplier=damage_multiplier,
+            all_allies=all_allies_stats,
+            onsite_allies=allies_onsite_stats,
+            offsite_allies=allies_offsite_stats,
+            enemies=enemies_stats,
         )
         if dodged:
             self._set_status(f"{target.name} dodged!")
