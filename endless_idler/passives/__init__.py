@@ -41,6 +41,13 @@ from endless_idler.passives.registry import (
     register_passive,
 )
 
+from endless_idler.passives.execution import (
+    apply_pre_damage_passives,
+    apply_target_selection_passives,
+    trigger_passives_for_characters,
+    trigger_turn_start_passives,
+)
+
 __all__ = [
     "PassiveBase",
     "Passive",
@@ -50,4 +57,8 @@ __all__ = [
     "get_passive",
     "load_passive",
     "list_passives",
+    "apply_pre_damage_passives",
+    "apply_target_selection_passives",
+    "trigger_passives_for_characters",
+    "trigger_turn_start_passives",
 ]
