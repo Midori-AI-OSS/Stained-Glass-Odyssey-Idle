@@ -44,7 +44,7 @@ class StandbyShopTile(QFrame):
         return self._token_label
 
     def set_tokens(self, tokens: int) -> None:
-        self._token_label.setText(f"{max(0, int(tokens))}")
+        self._token_label.setText(f"Coins: {max(0, int(tokens))}")
 
     def set_open(self, open_: bool) -> None:
         self._open = bool(open_)
