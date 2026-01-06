@@ -358,7 +358,6 @@ class LineOverlay(QWidget):
                 dist = (dx * dx + dy * dy) ** 0.5
                 
                 if dist > 10:
-                    import math
                     
                     seed = int((start.x() + start.y() + end.x() + end.y()) * 1000) % 10000
                     rng = random.Random(seed)
