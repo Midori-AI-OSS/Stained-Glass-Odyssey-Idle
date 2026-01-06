@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import random
+import shutil
 import time
 
 from dataclasses import dataclass, field
@@ -19,6 +21,9 @@ from endless_idler.save_codec import as_int_dict
 from endless_idler.save_codec import as_optional_str_list
 from endless_idler.save_codec import normalized_character_progress
 from endless_idler.save_codec import normalized_character_stats
+
+
+logger = logging.getLogger(__name__)
 
 
 SAVE_VERSION = 8
@@ -72,6 +77,9 @@ class SaveManager:
         return self._path
 
     def load(self) -> RunSave | None:
+        # Attempt migration from legacy path
+        _migrate_save_if_needed(self._path)
+        
         try:
             raw = self._path.read_text(encoding="utf-8")
         except FileNotFoundError:
@@ -173,18 +181,69 @@ class SaveManager:
 
 
 def _default_save_path() -> Path:
+    """Default save path with game namespace.
+    
+    Returns:
+        Path to idlesave.json in game-specific subfolder.
+        
+    Priority:
+        1. Environment variable: ENDLESS_IDLER_SAVE_PATH
+        2. Game subfolder: ~/.midoriai/stained-glass-odyssey/idlesave.json
+        3. Qt AppDataLocation fallback
+        4. Current directory fallback
+    """
     override = os.environ.get("ENDLESS_IDLER_SAVE_PATH", "").strip()
     if override:
         return Path(override).expanduser()
 
     home = Path.home()
     if home.exists():
-        return home / ".midoriai" / "idlesave.json"
+        return home / ".midoriai" / "stained-glass-odyssey" / "idlesave.json"
 
     base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
     if not base:
         base = str(Path.cwd())
     return Path(base) / "idlesave.json"
+
+
+def _legacy_save_path() -> Path:
+    """Legacy save path for backward compatibility."""
+    home = Path.home()
+    if home.exists():
+        return home / ".midoriai" / "idlesave.json"
+    return Path("")  # Invalid path if home doesn't exist
+
+
+def _migrate_save_if_needed(new_path: Path) -> None:
+    """Migrate save from legacy location to new location.
+    
+    Args:
+        new_path: Target path in game-specific subfolder
+    """
+    # Skip if new path already exists
+    if new_path.exists():
+        return
+    
+    legacy_path = _legacy_save_path()
+    
+    # Skip if legacy path doesn't exist or is invalid
+    if not legacy_path or not legacy_path.exists():
+        return
+    
+    try:
+        # Ensure new directory exists
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Copy legacy file to new location
+        shutil.copy2(legacy_path, new_path)
+        
+        logger.info(f"Migrated save from {legacy_path} to {new_path}")
+        
+        # Keep legacy file for safety (can be removed in future version)
+        
+    except (OSError, IOError) as e:
+        # Migration failed, but don't crash - new path will create fresh save
+        logger.warning(f"Failed to migrate save from {legacy_path} to {new_path}: {e}")
 
 
 def _normalized_save(save: RunSave) -> RunSave:

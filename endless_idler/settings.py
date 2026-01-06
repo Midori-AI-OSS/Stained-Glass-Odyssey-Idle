@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -32,8 +37,59 @@ class SettingsSave:
 
 
 def _default_settings_path() -> Path:
-    """Default settings path: ~/.midoriai/settings.json"""
+    """Default settings path with game namespace.
+    
+    Returns:
+        Path to settings.json in game-specific subfolder.
+        
+    Priority:
+        1. Environment variable: ENDLESS_IDLER_SETTINGS_PATH
+        2. Game subfolder: ~/.midoriai/stained-glass-odyssey/settings.json
+    """
+    # Check environment override first
+    override = os.environ.get("ENDLESS_IDLER_SETTINGS_PATH", "").strip()
+    if override:
+        return Path(override).expanduser()
+    
+    # New game-specific location
+    return Path.home() / ".midoriai" / "stained-glass-odyssey" / "settings.json"
+
+
+def _legacy_settings_path() -> Path:
+    """Legacy settings path for backward compatibility."""
     return Path.home() / ".midoriai" / "settings.json"
+
+
+def _migrate_settings_if_needed(new_path: Path) -> None:
+    """Migrate settings from legacy location to new location.
+    
+    Args:
+        new_path: Target path in game-specific subfolder
+    """
+    # Skip if new path already exists
+    if new_path.exists():
+        return
+    
+    legacy_path = _legacy_settings_path()
+    
+    # Skip if legacy path doesn't exist
+    if not legacy_path.exists():
+        return
+    
+    try:
+        # Ensure new directory exists
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Copy legacy file to new location
+        shutil.copy2(legacy_path, new_path)
+        
+        logger.info(f"Migrated settings from {legacy_path} to {new_path}")
+        
+        # Keep legacy file for safety (can be removed in future version)
+        
+    except (OSError, IOError) as e:
+        # Migration failed, but don't crash - new path will use defaults
+        logger.warning(f"Failed to migrate settings from {legacy_path} to {new_path}: {e}")
 
 
 class SettingsManager:
@@ -48,6 +104,9 @@ class SettingsManager:
 
     def load(self) -> SettingsSave:
         """Load settings, returning defaults if file doesn't exist."""
+        # Attempt migration from legacy path
+        _migrate_settings_if_needed(self._path)
+        
         try:
             raw = self._path.read_text(encoding="utf-8")
             data = json.loads(raw)
