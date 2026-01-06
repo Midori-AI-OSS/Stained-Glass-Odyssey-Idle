@@ -15,6 +15,7 @@ from endless_idler.combat.damage_types import normalize_damage_type_id
 from endless_idler.combat.damage_types import resolve_damage_type_for_battle
 from endless_idler.combat.damage_types import type_multiplier
 from endless_idler.combat.stats import Stats
+from endless_idler.passives.registry import load_passive
 
 
 KNOWN_DAMAGE_TYPE_IDS = (
@@ -28,6 +29,28 @@ KNOWN_DAMAGE_TYPE_IDS = (
 )
 
 RANDOM_DAMAGE_TYPE_IDS = tuple(item for item in KNOWN_DAMAGE_TYPE_IDS if item != "generic")
+
+
+def load_passives_for_character(stats: Stats, plugin: CharacterPlugin | None, char_id: str) -> None:
+    """Load passive instances for a character and attach to stats.
+    
+    Args:
+        stats: Stats object to attach passives to
+        plugin: Character plugin with passive IDs
+        char_id: Character identifier
+    """
+    stats.character_id = char_id
+    
+    if not plugin or not plugin.passives:
+        return
+    
+    loaded_passives = []
+    for passive_id in plugin.passives:
+        passive = load_passive(passive_id)
+        if passive:
+            loaded_passives.append(passive)
+    
+    stats._passive_instances = loaded_passives
 
 
 @dataclass(slots=True)
@@ -95,6 +118,7 @@ def build_party(
         apply_plugin_overrides(stats, plugin=plugin)
         if stats.element_id == "ice" and (plugin is None or plugin.damage_reduction_passes is None):
             stats.damage_reduction_passes = max(2, int(stats.damage_reduction_passes))
+        load_passives_for_character(stats, plugin, char_id)
         party.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
     return party
 
@@ -140,6 +164,7 @@ def build_foes(
             stats.damage_reduction_passes = max(2, int(stats.damage_reduction_passes))
         stats.level = party_level
         stats.hp = stats.max_hp
+        load_passives_for_character(stats, plugin, char_id)
         foes.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
     return foes
 
@@ -185,6 +210,7 @@ def build_reserves(
         apply_plugin_overrides(stats, plugin=plugin)
         if stats.element_id == "ice" and (plugin is None or plugin.damage_reduction_passes is None):
             stats.damage_reduction_passes = max(2, int(stats.damage_reduction_passes))
+        load_passives_for_character(stats, plugin, char_id)
         reserves.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
     return reserves
 
