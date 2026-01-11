@@ -48,3 +48,35 @@ None
 
 ## Estimated Complexity
 Low
+
+## Completion Notes
+
+**Status:** ✅ Complete  
+**Commit:** db7a73b  
+**Date:** 2025-01-11
+
+### Implementation Summary
+Updated tooltip styling for proper glass morphism appearance:
+- Reduced background opacity from 60 to 35 for element tints
+- Added default subtle glass tint (alpha 30) when no element ID present
+- Set default semi-transparent background (alpha 25) in stylesheet
+- Maintained blur effect on background layer
+- Maintained border for visual clarity
+
+### Visual Changes
+- **Before:** More opaque appearance with alpha 60
+- **After:** Translucent glass appearance with alpha 35, allowing background to show through
+- **Blur Effect:** Retained on `_bg` layer for glass morphism
+- **Tint Effect:** Semi-transparent color overlay based on element or default blue
+
+### Acceptance Criteria Met
+- [x] Opaque background is removed from tooltips
+- [x] Tint effect is present and visible
+- [x] Blur effect is present and creates glass appearance
+- [x] Tooltips are still readable against various backgrounds
+- [x] Consistent with stained glass aesthetic
+- [x] Changes are applied to all tooltip instances
+
+### Files Modified
+- `endless_idler/ui/tooltip.py` (tint application logic)
+- `endless_idler/ui/theme.py` (default stylesheet)

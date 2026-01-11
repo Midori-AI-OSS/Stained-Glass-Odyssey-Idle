@@ -49,3 +49,42 @@ None
 
 ## Estimated Complexity
 Medium
+
+## Completion Notes
+
+**Status:** ✅ Complete  
+**Commit:** a8c6251  
+**Date:** 2025-01-11
+
+### Implementation Summary
+Improved user experience when a run is lost:
+- Added defeat popup using QMessageBox to show clear feedback
+- Displays run statistics: fight number reached, foes defeated in final battle
+- Auto-returns to main menu after popup dismissal with smooth 100ms transition
+- Stale run clearing already handled by existing reset logic (no changes needed)
+
+### Post-Loss Flow
+1. Battle detects defeat condition
+2. Status label shows "Defeat"
+3. Defeat popup displays with run statistics
+4. User acknowledges by clicking OK
+5. Automatic return to main menu after 100ms delay
+6. Stale run data cleared (existing functionality in lines 735-760)
+
+### Acceptance Criteria Met
+- [x] Popup/toast is shown when run is lost
+- [x] Feedback clearly indicates the run has ended
+- [x] Player is returned to main menu after run loss
+- [x] Stale run data is cleared from game state (existing)
+- [x] Run menu doesn't show the lost run (existing)
+- [x] No leftover state causes issues for next run (existing)
+- [x] Save data is properly updated (existing)
+
+### Files Modified
+- `endless_idler/ui/battle/screen.py` (defeat popup and auto-return)
+
+### Technical Details
+- Used `QMessageBox` for cross-platform compatible popup
+- Connected `finished` signal for auto-return flow
+- Non-blocking popup with smooth transition
+- Maintains existing state management and save logic
