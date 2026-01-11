@@ -37,6 +37,7 @@ class LinePulse:
     crit: bool = False
     same_team: bool = False
     show_target_pulse: bool = False
+    midpoint: QPointF | None = None
 
 
 class PortraitLabel(QLabel):
@@ -267,10 +268,19 @@ class LineOverlay(QWidget):
         self.setAutoFillBackground(False)
         self._pulses: list[LinePulse] = []
 
-    def add_pulse(self, source: QWidget, target: QWidget, color: QColor, *, crit: bool = False, same_team: bool = False) -> None:
+    def add_pulse(self, source: QWidget, target: QWidget, color: QColor, *, crit: bool = False, same_team: bool = False, midpoint: QPointF | None = None) -> None:
         width = 6 if crit else 3
         show_target_pulse = same_team
-        self._pulses.append(LinePulse(source=source, target=target, color=color, width=width, crit=crit, same_team=same_team, show_target_pulse=show_target_pulse))
+        self._pulses.append(LinePulse(
+            source=source,
+            target=target,
+            color=color,
+            width=width,
+            crit=crit,
+            same_team=same_team,
+            show_target_pulse=show_target_pulse,
+            midpoint=midpoint
+        ))
         self.update()
 
     def tick(self, delta_ms: int) -> None:
@@ -314,22 +324,27 @@ class LineOverlay(QWidget):
             if pulse.same_team:
                 from PySide6.QtGui import QPainterPath
                 
-                # Calculate waypoint: 50% towards the opposite side (horizontally)
-                waypoint_x = start.x() + (end.x() - start.x()) * 0.5
-                waypoint_y = min(start.y(), end.y()) - 80.0
+                # Use provided midpoint or calculate fallback
+                if pulse.midpoint is not None:
+                    waypoint = pulse.midpoint
+                else:
+                    # Fallback: Calculate waypoint as 50% towards the opposite side (horizontally)
+                    waypoint_x = start.x() + (end.x() - start.x()) * 0.5
+                    waypoint_y = min(start.y(), end.y()) - 80.0
+                    waypoint = QPointF(waypoint_x, waypoint_y)
                 
-                # First arc: from attacker to waypoint
-                first_mid_x = (start.x() + waypoint_x) / 2.0
-                first_mid_y = (start.y() + waypoint_y) / 2.0 - 30.0
+                # First arc: from attacker to midpoint
+                first_mid_x = (start.x() + waypoint.x()) / 2.0
+                first_mid_y = (start.y() + waypoint.y()) / 2.0 - 30.0
                 
-                # Second arc: from waypoint to target
-                second_mid_x = (waypoint_x + end.x()) / 2.0
-                second_mid_y = (waypoint_y + end.y()) / 2.0 - 30.0
+                # Second arc: from midpoint to target
+                second_mid_x = (waypoint.x() + end.x()) / 2.0
+                second_mid_y = (waypoint.y() + end.y()) / 2.0 - 30.0
                 
-                # Draw double-curved path
+                # Draw double-curved path through midpoint
                 path = QPainterPath()
                 path.moveTo(start)
-                path.quadTo(QPointF(first_mid_x, first_mid_y), QPointF(waypoint_x, waypoint_y))
+                path.quadTo(QPointF(first_mid_x, first_mid_y), waypoint)
                 path.quadTo(QPointF(second_mid_x, second_mid_y), end)
                 painter.drawPath(path)
                 
@@ -489,6 +504,7 @@ class Arena(QFrame):
         self.setFrameShape(QFrame.Shape.NoFrame)
         self._overlay = LineOverlay(self)
         self._overlay.raise_()
+        self._combat_midpoint: QPointF | None = None
 
         timer = QTimer(self)
         timer.setInterval(30)
@@ -496,8 +512,25 @@ class Arena(QFrame):
         timer.start()
         self._timer = timer
 
+    def get_combat_midpoint(self) -> QPointF:
+        """Get the stable combat midpoint for healing arrow animations.
+        
+        The combat midpoint represents the center of the combat area and remains
+        stable throughout the battle. Healing arrows travel to this point before
+        curving to their destination.
+        
+        Returns:
+            QPointF: The midpoint coordinates in the overlay's coordinate system.
+        """
+        if self._combat_midpoint is None:
+            # Calculate midpoint based on viewport center
+            rect = self.rect()
+            self._combat_midpoint = QPointF(rect.width() / 2.0, rect.height() / 2.0)
+        return self._combat_midpoint
+
     def add_pulse(self, source: QWidget, target: QWidget, color: QColor, *, crit: bool = False, same_team: bool = False) -> None:
-        self._overlay.add_pulse(source, target, color, crit=crit, same_team=same_team)
+        midpoint = self.get_combat_midpoint() if same_team else None
+        self._overlay.add_pulse(source, target, color, crit=crit, same_team=same_team, midpoint=midpoint)
         self._overlay.raise_()
 
     def resizeEvent(self, event: object) -> None:
@@ -505,7 +538,10 @@ class Arena(QFrame):
             super().resizeEvent(event)  # type: ignore[misc]
         except Exception:
             pass
-        self._overlay.setGeometry(self.rect())
+        # Recalculate midpoint on resize
+        rect = self.rect()
+        self._combat_midpoint = QPointF(rect.width() / 2.0, rect.height() / 2.0)
+        self._overlay.setGeometry(rect)
         self._overlay.raise_()
 
     def _tick(self) -> None:
