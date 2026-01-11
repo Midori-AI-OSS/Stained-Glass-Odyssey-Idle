@@ -10,9 +10,9 @@ Remove the `_draw_arrow_head` method from the `LineOverlay` class in `endless_id
 - The method draws a triangular polygon at the end of attack/heal animation lines
 
 ## Acceptance Criteria
-- [ ] The `_draw_arrow_head` method is completely removed from the `LineOverlay` class
-- [ ] The file still has valid Python syntax after removal
-- [ ] No syntax errors are introduced
+- [x] The `_draw_arrow_head` method is completely removed from the `LineOverlay` class
+- [x] The file still has valid Python syntax after removal
+- [x] No syntax errors are introduced
 
 ## Notes
 **⚠️ IMPORTANT**: This task should be completed AFTER task 47bddb69 (removing the method calls). If you remove the method before removing the calls, you'll get Python errors.
@@ -32,3 +32,4 @@ def _draw_arrow_head(
 
 ## Status Updates
 - 2025-01-11: Task created
+- 2025-01-11: Task completed - Method removed (31 lines), unused QPolygonF import removed. Syntax verified. Committed in 568d62b.
