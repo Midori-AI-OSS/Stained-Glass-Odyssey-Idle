@@ -93,7 +93,7 @@ class IdleScreenWidget(QWidget):
             initial_stats_by_id=dict(getattr(self._save, "character_initial_stats", {}) or {}),
             exp_bonus_seconds=float(self._save.idle_exp_bonus_seconds),
             exp_penalty_seconds=float(self._save.idle_exp_penalty_seconds),
-            shared_exp_percentage=int(getattr(self._save, "idle_shared_exp_percentage", 0)),
+            shared_exp_percentage=int(getattr(self._save, "idle_shared_exp_percentage", 1)),
             risk_reward_level=int(getattr(self._save, "idle_risk_reward_level", 0)),
         )
 

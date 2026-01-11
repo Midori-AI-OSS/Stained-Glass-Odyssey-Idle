@@ -41,7 +41,7 @@ class IdleGameState(QObject):
         exp_penalty_seconds: float = 0.0,
         exp_gain_scale: float = 1.0,
         advance_run_buffs: bool = True,
-        shared_exp_percentage: int = 0,
+        shared_exp_percentage: int = 1,
         risk_reward_level: int = 0,
     ) -> None:
         super().__init__()
@@ -361,7 +361,9 @@ class IdleGameState(QObject):
             data["exp"] += onsite_gain
             total_onsite_shared_gain += (base_gain - onsite_gain)
 
-            regain = 0.1 if self._shared_exp_percentage == 0 else 0.5
+            # Since minimum shared_exp is now 1%, all players get 0.5 HP regain
+            # Previously, 0% sharing gave 0.1 regain as a penalty
+            regain = 0.1 if self._shared_exp_percentage == 1 else 0.5
             data["hp"] = min(data["max_hp"], data["hp"] + regain)
 
             if self._risk_reward_level > 0:

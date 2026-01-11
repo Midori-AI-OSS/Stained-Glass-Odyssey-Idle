@@ -58,7 +58,7 @@ class RunSave:
     character_deaths: dict[str, int] = field(default_factory=dict)
     idle_exp_bonus_seconds: float = 0.0
     idle_exp_penalty_seconds: float = 0.0
-    idle_shared_exp_percentage: int = 0
+    idle_shared_exp_percentage: int = 1
     idle_risk_reward_level: int = 0
     winstreak: int = 0
 
@@ -89,7 +89,7 @@ class SaveManager:
 
         bonus_seconds = as_float(data.get("idle_exp_bonus_seconds", 0.0), default=0.0)
         penalty_seconds = as_float(data.get("idle_exp_penalty_seconds", 0.0), default=0.0)
-        shared_exp_percentage = as_int(data.get("idle_shared_exp_percentage", 0), default=0)
+        shared_exp_percentage = as_int(data.get("idle_shared_exp_percentage", 1), default=1)
         risk_reward_level = as_int(data.get("idle_risk_reward_level", 0), default=0)
         if "idle_exp_bonus_seconds" not in data:
             legacy_bonus = as_float(data.get("idle_exp_bonus_until", 0.0), default=0.0)
