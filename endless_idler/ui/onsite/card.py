@@ -374,6 +374,7 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         rng: random.Random,
         stack_count: int,
         on_rebirth: Callable[[str], None] | None = None,
+        on_prestige: Callable[[str], None] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         self._char_id = str(char_id)
@@ -381,6 +382,7 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         self._idle_state = idle_state
         self._rng = rng
         self._on_rebirth = on_rebirth
+        self._on_prestige = on_prestige
 
         portrait_path = plugin.random_image_path(rng) if plugin else None
         display_name = getattr(plugin, "display_name", char_id) if plugin else char_id
@@ -470,13 +472,35 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         self.set_hp(current=hp, max_hp=max_hp)
         self.set_exp(current=exp, max_exp=next_exp, format_text=exp_format)
 
-        show_rebirth = max(1, int(level)) >= 50
+        # Check prestige availability first (exp_multiplier >= 10)
+        exp_multiplier = float(data.get("exp_multiplier", 1.0))
+        show_prestige = exp_multiplier >= 10.0
+        
+        # Show rebirth button if level >= 50 and prestige is not available
+        show_rebirth = max(1, int(level)) >= 50 and not show_prestige
 
-        def on_click() -> None:
-            if self._on_rebirth is not None:
-                self._on_rebirth(self._char_id)
-
-        self.set_action_button(label="Rebirth", visible=show_rebirth, on_click=on_click if show_rebirth else None)
+        if show_prestige:
+            def on_prestige_click() -> None:
+                if self._on_prestige is not None:
+                    self._on_prestige(self._char_id)
+            
+            self.set_action_button(
+                label="Prestige",
+                visible=True,
+                on_click=on_prestige_click
+            )
+        elif show_rebirth:
+            def on_rebirth_click() -> None:
+                if self._on_rebirth is not None:
+                    self._on_rebirth(self._char_id)
+            
+            self.set_action_button(
+                label="Rebirth",
+                visible=True,
+                on_click=on_rebirth_click
+            )
+        else:
+            self.set_action_button(label="", visible=False, on_click=None)
 
         stars = getattr(self._plugin, "stars", None) if self._plugin else None
         display_name = getattr(self._plugin, "display_name", self._char_id) if self._plugin else self._char_id
