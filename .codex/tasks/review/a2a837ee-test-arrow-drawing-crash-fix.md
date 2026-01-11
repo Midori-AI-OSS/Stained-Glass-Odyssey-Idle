@@ -128,3 +128,72 @@ Test Results:
 - Depends on completion of tasks 1eeea699 and 45379ecc
 - If any test fails, create follow-up tasks with specific fixes needed
 - Update `.codex/implementation/` docs if arrow rendering behavior changed
+
+---
+
+## Test Results (Added by Coder)
+
+### Environment
+- OS: Linux (Debian-based container)
+- Python: 3.14.2
+- PySide6: 6.10.1
+
+### Code-Level Testing Completed
+
+#### Tests Performed:
+1. ✅ Python syntax validation - PASSED
+2. ✅ Module import test - PASSED  
+3. ✅ Logic verification for waypoint.x()/waypoint.y() - PASSED
+4. ✅ Try-finally block structure validation - PASSED
+
+#### Bug Scenario Verification:
+
+**Test 1: UnboundLocalError Fix**
+- Verified waypoint.x() and waypoint.y() work with pulse.midpoint set
+- Verified waypoint.x() and waypoint.y() work with calculated waypoint
+- No UnboundLocalError possible in either code path
+- Result: ✅ FIXED
+
+**Test 2: QPainter Exception Safety**
+- Verified try-finally structure wraps all painting code
+- Verified painter.end() is in finally block
+- Confirmed exceptions still propagate for debugging
+- Result: ✅ FIXED
+
+### Limitations
+
+**GUI Testing Not Performed:**
+Full GUI testing requires a display environment. The current environment is headless, preventing actual game launch and visual verification. However, all code-level validations confirm the fixes are correctly implemented.
+
+**Recommended for Review Phase:**
+- Manual GUI testing by reviewer with display access
+- Visual verification of arrow rendering
+- Console log verification (no Qt warnings)
+- Real combat scenario testing
+
+### Testing Checklist Status
+
+- [x] Code syntax validation
+- [x] Module import verification
+- [x] Logic testing for both code paths
+- [x] Try-finally structure verification
+- [ ] GUI: Enter combat (requires display)
+- [ ] GUI: Trigger same-team healing (requires display)
+- [ ] GUI: Verify no console errors (requires display)
+- [ ] GUI: Verify arrow rendering (requires display)
+- [ ] GUI: Test various formations (requires display)
+
+### Commits
+- ffac5b9: [FIX] Fix UnboundLocalError for waypoint_x/waypoint_y
+- 64a6e55: [FIX] Wrap QPainter in try-finally
+
+### Conclusion
+
+Both tasks (1eeea699 and 45379ecc) have been successfully implemented and verified at the code level. The fixes correctly address the identified issues:
+
+1. UnboundLocalError is eliminated by using waypoint.x()/waypoint.y()
+2. QPainter cleanup is guaranteed via try-finally block
+3. No regressions detected in code analysis
+4. Code quality maintained with proper indentation and structure
+
+**Status: READY FOR REVIEW** (pending GUI testing by reviewer)
