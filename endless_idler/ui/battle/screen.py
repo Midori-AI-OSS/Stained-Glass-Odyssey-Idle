@@ -10,6 +10,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QMessageBox
 from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
@@ -722,6 +723,8 @@ class BattleScreenWidget(QWidget):
             self._award_gold(self._foe_kills, victory=False)
             self._set_status("Defeat")
             self._apply_idle_exp_penalty()
+            # Show defeat popup and schedule auto-return to main menu
+            self._show_defeat_popup()
         else:
             self._set_status("Over")
 
@@ -907,6 +910,48 @@ class BattleScreenWidget(QWidget):
             pass
         
         self._finish()
+
+    def _show_defeat_popup(self) -> None:
+        """Show defeat popup with run statistics and auto-return to main menu.
+        
+        Displays:
+        - Clear indication that the run has ended
+        - Fight number reached
+        - Foes defeated in final battle
+        - Auto-returns to main menu after dismissal
+        """
+        fight_num = self._fight_number
+        foes_killed = self._foe_kills
+        
+        # Build the message with run statistics
+        message_lines = [
+            "Your party has been defeated!",
+            "",
+            f"Fight reached: {fight_num}",
+            f"Foes defeated in final battle: {foes_killed}",
+            "",
+            "The run has ended and been reset.",
+            "You will return to the main menu."
+        ]
+        message = "\n".join(message_lines)
+        
+        # Create and show the popup
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Run Lost")
+        msg_box.setText(message)
+        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        
+        # Connect to auto-return after popup is closed
+        msg_box.finished.connect(self._on_defeat_popup_closed)
+        
+        # Show the popup (non-blocking)
+        msg_box.show()
+    
+    def _on_defeat_popup_closed(self) -> None:
+        """Handle defeat popup closure by returning to main menu."""
+        # Schedule a brief delay before returning to menu for smoother transition
+        QTimer.singleShot(100, self._finish)
 
     def _finish(self) -> None:
         try:
