@@ -380,6 +380,14 @@ def reset_character_progress_for_new_run(
             rebirths = max(0, int(raw.get("rebirths", 0)))
         except (TypeError, ValueError):
             rebirths = 0
+        try:
+            rebirth_power = max(1.0, float(raw.get("rebirth_power", 1.0)))
+        except (TypeError, ValueError):
+            rebirth_power = 1.0
+        try:
+            prestige_count = max(0, int(raw.get("prestige_count", 0)))
+        except (TypeError, ValueError):
+            prestige_count = 0
 
         reset[char_id] = {
             "level": 1,
@@ -388,6 +396,8 @@ def reset_character_progress_for_new_run(
             "exp_multiplier": exp_multiplier,
             "req_multiplier": req_multiplier,
             "rebirths": rebirths,
+            "rebirth_power": rebirth_power,
+            "prestige_count": prestige_count,
             "death_exp_debuff_stacks": 0,
             "death_exp_debuff_until": 0.0,
             "next_vitality_gain_level": 0,

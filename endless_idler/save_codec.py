@@ -78,6 +78,8 @@ def as_character_progress_dict(value: object) -> dict[str, dict[str, float | int
         exp_multiplier = as_float(raw_progress.get("exp_multiplier", 1.0), default=1.0)
         req_multiplier = as_float(raw_progress.get("req_multiplier", 1.0), default=1.0)
         rebirths = as_int(raw_progress.get("rebirths", 0), default=0)
+        rebirth_power = as_float(raw_progress.get("rebirth_power", 1.0), default=1.0)
+        prestige_count = as_int(raw_progress.get("prestige_count", 0), default=0)
         death_stacks = as_int(raw_progress.get("death_exp_debuff_stacks", 0), default=0)
         death_until = as_float(raw_progress.get("death_exp_debuff_until", 0.0), default=0.0)
         next_vitality_gain_level = as_int(raw_progress.get("next_vitality_gain_level", 0), default=0)
@@ -91,6 +93,8 @@ def as_character_progress_dict(value: object) -> dict[str, dict[str, float | int
             "exp_multiplier": float(max(0.0, exp_multiplier)),
             "req_multiplier": float(max(0.0, req_multiplier)),
             "rebirths": max(0, rebirths),
+            "rebirth_power": float(max(1.0, rebirth_power)),
+            "prestige_count": max(0, prestige_count),
             "death_exp_debuff_stacks": max(0, death_stacks),
             "death_exp_debuff_until": float(max(0.0, death_until)),
             "next_vitality_gain_level": max(0, next_vitality_gain_level),
@@ -147,6 +151,8 @@ def normalized_character_progress(
         exp_multiplier = as_float(raw.get("exp_multiplier", 1.0), default=1.0)
         req_multiplier = as_float(raw.get("req_multiplier", 1.0), default=1.0)
         rebirths = as_int(raw.get("rebirths", 0), default=0)
+        rebirth_power = as_float(raw.get("rebirth_power", 1.0), default=1.0)
+        prestige_count = as_int(raw.get("prestige_count", 0), default=0)
         death_stacks = as_int(raw.get("death_exp_debuff_stacks", 0), default=0)
         death_until = as_float(raw.get("death_exp_debuff_until", 0.0), default=0.0)
         next_vitality_gain_level = as_int(raw.get("next_vitality_gain_level", 0), default=0)
@@ -159,6 +165,8 @@ def normalized_character_progress(
             "exp_multiplier": float(max(0.0, exp_multiplier)),
             "req_multiplier": float(max(0.0, req_multiplier)),
             "rebirths": max(0, rebirths),
+            "rebirth_power": float(max(1.0, rebirth_power)),
+            "prestige_count": max(0, prestige_count),
             "death_exp_debuff_stacks": max(0, death_stacks),
             "death_exp_debuff_until": float(max(0.0, death_until)),
             "next_vitality_gain_level": max(0, next_vitality_gain_level),

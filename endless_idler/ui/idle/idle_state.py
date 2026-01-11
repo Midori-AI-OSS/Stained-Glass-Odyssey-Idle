@@ -22,6 +22,27 @@ SHARED_EXP_OFFSITE_MULTIPLIER = 1.5
 IDLE_TICK_INTERVAL_SECONDS = 0.1
 
 
+def calculate_rebirth_power(level: int) -> float:
+    """
+    Calculate the power value for rebirth mechanics.
+    
+    Formula: power = 1 + 0.15 * (L - 50)
+    Where L is the current level at rebirth time (must be >= 50).
+    
+    This power value is used for:
+    - EXP multiplier bonus calculation
+    - Post-level-50 EXP scaling
+    
+    Args:
+        level: Current character level at rebirth time (must be >= 50)
+        
+    Returns:
+        The calculated power value as a float
+    """
+    level = max(50, int(level))
+    return 1.0 + 0.15 * float(level - 50)
+
+
 class IdleGameState(QObject):
     tick_update = Signal(int)
 
@@ -98,6 +119,8 @@ class IdleGameState(QObject):
             exp_multiplier = 1.0
             req_multiplier = 1.0
             rebirths = 0
+            prestige_count = 0
+            rebirth_power = 1.0
             death_exp_debuff_stacks = 0
             death_exp_debuff_until = 0.0
             max_hp_level_bonus_version = 0
@@ -126,6 +149,14 @@ class IdleGameState(QObject):
                     rebirths = max(0, int(saved.get("rebirths", 0)))
                 except (TypeError, ValueError):
                     rebirths = 0
+                try:
+                    prestige_count = max(0, int(saved.get("prestige_count", 0)))
+                except (TypeError, ValueError):
+                    prestige_count = 0
+                try:
+                    rebirth_power = max(1.0, float(saved.get("rebirth_power", 1.0)))
+                except (TypeError, ValueError):
+                    rebirth_power = 1.0
                 try:
                     death_exp_debuff_stacks = max(0, int(saved.get("death_exp_debuff_stacks", 0)))
                 except (TypeError, ValueError):
@@ -170,6 +201,8 @@ class IdleGameState(QObject):
                 "exp_multiplier": exp_multiplier,
                 "req_multiplier": req_multiplier,
                 "rebirths": rebirths,
+                "prestige_count": prestige_count,
+                "rebirth_power": rebirth_power,
                 "max_hp_level_bonus_version": max_hp_level_bonus_version,
             }
 
@@ -319,14 +352,84 @@ class IdleGameState(QObject):
         data["hp"] = max_hp
         self._ensure_sparse_growth_schedule(char_id)
 
-        bonus = 0.25 * (1 + 0.01 * (old_level - 50))
-        data["exp_multiplier"] = float(max(0.0, float(data.get("exp_multiplier", 1.0)))) + bonus
-        data["req_multiplier"] = float(max(0.0, float(data.get("req_multiplier", 1.0)))) + 0.05
+        # Calculate power based on rebirth level
+        # Formula: power = 1 + 0.15 * (L - 50)
+        power = calculate_rebirth_power(old_level)
+        data["rebirth_power"] = power
+        
+        # New EXP multiplier formula based on power
+        # Formula: rebirth_exp_mult_gain = 0.01 + (power * 0.000005)
+        exp_mult_gain = 0.01 + (power * 0.000005)
+        data["exp_multiplier"] = float(max(0.0, float(data.get("exp_multiplier", 1.0)))) + exp_mult_gain
+        
         data["rebirths"] = max(0, int(data.get("rebirths", 0))) + 1
 
         req_mult = float(data.get("req_multiplier", 1.0))
         data["next_exp"] = (1 * 30 * req_mult) * self._rng.uniform(0.95, 1.05)
         self._apply_offsite_stat_share_to_onsite_hp()
+        return True
+
+    def prestige_character(self, char_id: str) -> bool:
+        """
+        Apply prestige to a character, resetting their EXP multiplier and applying permanent stat gain bonuses.
+        
+        Requirements:
+        - EXP multiplier must be >= 10
+        
+        Effects:
+        1. EXP Multiplier Reset:
+           new_exp_mult = max(0.01, 0.5 * (0.5 ** (prestige_count - 1)))
+           - First prestige: 0.5
+           - Second prestige: 0.25
+           - Third prestige: 0.125
+           - Fourth prestige: 0.0625
+           - Fifth+ prestige: 0.01 (floor)
+           
+        2. Stat Gain Multiplier:
+           Doubles stat gains per level-up (2 ** prestige_count)
+           
+        3. Post-Floor EXP Penalty:
+           After EXP multiplier hits the floor (0.01),
+           add 2x EXP required per level-up for each additional prestige
+        
+        Args:
+            char_id: The character ID to prestige
+            
+        Returns:
+            True if prestige was successful, False otherwise
+        """
+        data = self._char_data.get(char_id)
+        if not data:
+            return False
+        
+        # Check unlock condition: EXP multiplier >= 10
+        exp_multiplier = float(max(0.0, float(data.get("exp_multiplier", 1.0))))
+        if exp_multiplier < 10.0:
+            return False
+        
+        # Increment prestige count
+        prestige_count = max(0, int(data.get("prestige_count", 0)))
+        prestige_count += 1
+        data["prestige_count"] = prestige_count
+        
+        # Apply EXP multiplier reset formula
+        # new_exp_mult = max(0.01, 0.5 * (0.5 ** (prestige_count - 1)))
+        new_exp_mult = 0.5 * (0.5 ** (prestige_count - 1))
+        new_exp_mult = max(0.01, new_exp_mult)
+        data["exp_multiplier"] = new_exp_mult
+        
+        # Apply post-floor EXP penalty if needed
+        # After floor (prestige_count >= 5), add 2x per additional prestige
+        if new_exp_mult <= 0.01 and prestige_count >= 5:
+            # Calculate how many prestiges past the floor
+            prestiges_past_floor = prestige_count - 4  # First 4 prestiges get us to floor
+            # Apply 2x EXP penalty for each prestige past floor
+            penalty_multiplier = 2.0 ** prestiges_past_floor
+            data["req_multiplier"] = float(max(0.0, float(data.get("req_multiplier", 1.0)))) * penalty_multiplier
+        
+        # Note: Stat gain multiplier (2^prestige_count) is applied during level-up
+        # This is handled in the _apply_weighted_stat_upgrades method
+        
         return True
 
     def process_tick(self) -> None:
@@ -511,11 +614,31 @@ class IdleGameState(QObject):
 
         level = data["level"]
         req_mult = data["req_multiplier"]
-        tax = 1.5 ** ((level - 50) // 5) if level >= 50 else 1.0
+        
+        # Post-level-50 EXP scaling using power-based formula
+        # Every 5 levels after 50, multiply by: (1.25 + (0.05 * power))
+        # The multiplier compounds at levels 55, 60, 65, 70, etc.
+        if level >= 50:
+            power = float(data.get("rebirth_power", 1.0))
+            step_multiplier = 1.25 + (0.05 * power)
+            steps = (level - 50) // 5
+            tax = step_multiplier ** steps
+        else:
+            tax = 1.0
+            
         data["next_exp"] = (level * 30 * req_mult * tax) * self._rng.uniform(0.95, 1.05)
         self._apply_offsite_stat_share_to_onsite_hp()
 
     def _apply_weighted_stat_upgrades(self, *, char_id: str, base_stats: dict[str, float], level: int) -> None:
+        # Get prestige_count to apply stat gain multiplier
+        data = self._char_data.get(char_id)
+        prestige_count = 0
+        if data:
+            prestige_count = max(0, int(data.get("prestige_count", 0)))
+        
+        # Calculate prestige stat multiplier: 2^prestige_count
+        prestige_multiplier = 2.0 ** prestige_count
+        
         points = 1 + (max(1, int(level)) // 10)
         stat_keys = (
             "atk",
@@ -540,9 +663,15 @@ class IdleGameState(QObject):
 
             weights.append(max(0.1, float(weight)))
 
+        # Base stat gain rate is 0.1% (1.001 multiplier)
+        # Apply prestige multiplier to make each gain more impactful
+        base_gain_rate = 0.001
+        prestige_gain_rate = base_gain_rate * prestige_multiplier
+        stat_multiplier = 1.0 + prestige_gain_rate
+        
         for stat_name in self._rng.choices(list(stat_keys), weights=weights, k=points):
             current = float(base_stats.get(stat_name, 1.0))
-            base_stats[stat_name] = current * 1.001
+            base_stats[stat_name] = current * stat_multiplier
 
     def _ensure_sparse_growth_schedule(self, char_id: str) -> None:
         data = self._char_data.get(char_id)
@@ -618,6 +747,14 @@ class IdleGameState(QObject):
             except (TypeError, ValueError):
                 rebirths = 0
             try:
+                rebirth_power = max(1.0, float(data.get("rebirth_power", 1.0)))
+            except (TypeError, ValueError):
+                rebirth_power = 1.0
+            try:
+                prestige_count = max(0, int(data.get("prestige_count", 0)))
+            except (TypeError, ValueError):
+                prestige_count = 0
+            try:
                 death_exp_debuff_stacks = max(0, int(data.get("death_exp_debuff_stacks", 0)))
             except (TypeError, ValueError):
                 death_exp_debuff_stacks = 0
@@ -633,6 +770,8 @@ class IdleGameState(QObject):
                 "exp_multiplier": exp_multiplier,
                 "req_multiplier": req_multiplier,
                 "rebirths": rebirths,
+                "rebirth_power": rebirth_power,
+                "prestige_count": prestige_count,
                 "death_exp_debuff_stacks": death_exp_debuff_stacks,
                 "death_exp_debuff_until": death_exp_debuff_until,
                 "next_vitality_gain_level": max(0, int(data.get("next_vitality_gain_level", 0))),
