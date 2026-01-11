@@ -17,12 +17,29 @@ Characters in the Shop and Party Management screens always show as level 1, rega
 3. Use the same source of truth for character data across all modes
 4. Do not display placeholder values like always showing level 1
 
-## Technical Approach
+## Auditor's Investigation Results (Pre-Implementation)
 
-### Investigation Phase
-1. Trace how `get_tooltip_stats` is implemented and called
-2. Find where character progression data is stored (likely in `save.py` or similar)
-3. Identify why tooltips are not loading saved progression
+**Finding:** The code ALREADY loads character progression correctly!
+
+**Evidence from `party_builder.py` lines 846-866:**
+1. Line 864: `progress=self._save.character_progress.get(char_id)` - loads saved progress
+2. Line 865: `saved_base_stats=self._save.character_stats.get(char_id)` - loads saved stats
+
+**Evidence from `combat/party_stats.py`:**
+1. Lines 107-119 in `apply_progress_meta()`: Correctly applies level, exp, and exp_multiplier from progress dict
+2. This function is called at line 164 of `build_scaled_character_stats()`
+
+**Possible Issues:**
+1. The save data might not be populated correctly (check if `character_progress` is being saved)
+2. There might be a display/rendering issue, not a data loading issue
+3. The problem might only occur in specific scenarios (new game, after certain actions)
+4. The tooltip might be caching old data and not refreshing
+
+**Recommended Investigation Steps:**
+1. Add debug logging to `_tooltip_stats_for_character` to verify what level is actually being loaded
+2. Check if `self._save.character_progress` contains the expected data
+3. Verify the tooltip is being refreshed after characters level up
+4. Test in both shop and party management screens separately
 
 ### Implementation Phase
 1. In `endless_idler/ui/party_builder.py` and related files:
