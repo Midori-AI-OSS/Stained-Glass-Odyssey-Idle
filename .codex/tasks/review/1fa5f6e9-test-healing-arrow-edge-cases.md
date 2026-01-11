@@ -1,10 +1,21 @@
 # Test and Handle Edge Cases for Healing Arrow Animations
 
 **Priority:** Medium  
-**Status:** Blocked (depends on 43ada00a, f3d695c0)  
+**Status:** Ready for Testing  
 **Category:** Testing / Quality Assurance / Combat UI  
 **Task ID:** 1fa5f6e9  
-**Date Created:** 2026-01-11
+**Date Created:** 2026-01-11  
+**Date Updated:** 2026-01-11
+
+## Status Update
+
+Integration is now complete. Core edge cases are handled by the framework:
+- ✅ Wrong target becomes invisible → Falls back to normal path
+- ✅ Missing midpoint → Calculates fallback
+- ✅ Zero distance → Bezier math handles it
+- ✅ Widget visibility checks implemented
+
+Manual testing can now proceed to verify behavior in actual gameplay scenarios.
 
 ## Problem Statement
 
