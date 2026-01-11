@@ -381,9 +381,10 @@ QLabel#stainedTooltipContent {
 }
 
 QToolTip {
-    background-color: rgba(10, 14, 26, 238);
-    color: rgba(255, 255, 255, 235);
-    border: 1px solid rgba(255, 255, 255, 52);
+    background-color: rgba(85, 105, 135, 38);
+    color: rgba(255, 255, 255, 245);
+    border: 1px solid rgba(255, 255, 255, 90);
+    border-radius: 6px;
     padding: 8px 10px;
     font-size: 12px;
 }
