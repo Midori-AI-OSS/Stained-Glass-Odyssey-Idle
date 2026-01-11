@@ -457,7 +457,32 @@ class BattleScreenWidget(QWidget):
                     widget = party_widgets.get(target) or foe_widgets.get(target) or reserve_widgets.get(target)
                     if widget is not None:
                         widget.refresh()
-                        self._arena.add_pulse(attacker_widget, widget, color, same_team=True)
+                        
+                        # Detect wrong-way healing scenario
+                        # Healing might initially target wrong side if healer is wounded (below 50% HP)
+                        wrong_widget = None
+                        if attacker.stats.hp < (attacker.max_hp * 0.5):
+                            # Healer is wounded - might misfire healing toward enemies initially
+                            if attacker_side == "party" and enemies:
+                                # Player healing allies but initially misfires toward enemy
+                                potential_wrong_targets = [c for c, w in enemies if c.stats.hp > 0]
+                                if potential_wrong_targets:
+                                    wrong_target = self._rng.choice(potential_wrong_targets)
+                                    wrong_widget = foe_widgets.get(wrong_target)
+                            elif attacker_side == "foes" and enemies:
+                                # Enemy healing allies but initially misfires toward player
+                                potential_wrong_targets = [c for c, w in enemies if c.stats.hp > 0]
+                                if potential_wrong_targets:
+                                    wrong_target = self._rng.choice(potential_wrong_targets)
+                                    wrong_widget = party_widgets.get(wrong_target)
+                        
+                        self._arena.add_pulse(
+                            attacker_widget, 
+                            widget, 
+                            color, 
+                            same_team=True,
+                            wrong_target=wrong_widget
+                        )
                 return
 
         if element_id == "dark":
