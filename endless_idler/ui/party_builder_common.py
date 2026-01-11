@@ -164,8 +164,6 @@ def build_character_stats_tooltip(
         ("Vitality", f"{stats.vitality:.2f}"),
         ("Mitigation", f"{stats.mitigation:.2f}"),
         ("Crit Mod", f"{stats.crit_mod:.0f}"),
-        ("Crit Rate", f"{stats.crit_rate * 100:.1f}%"),
-        ("Crit Dmg", f"{stats.crit_damage:.2f}x"),
         ("Effect Hit", f"{stats.effect_hit_rate:.2f}"),
         ("Effect Res", f"{stats.effect_resistance:.2f}"),
         ("Dodge", f"{stats.dodge_odds * 100:.1f}%"),

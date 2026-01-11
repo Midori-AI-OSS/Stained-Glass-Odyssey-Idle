@@ -134,22 +134,9 @@ class Stats:
     def crit_rate(self) -> float:
         return calculate_crit_chance(self.crit_mod)
 
-    @crit_rate.setter
-    def crit_rate(self, value: float) -> None:
-        # For backward compatibility: setting crit_rate directly sets a rough crit_mod equivalent
-        # Each 1% crit rate roughly needs 100-200 points, use 150 as average
-        self._base_crit_mod = max(0.0, value * 100.0 * 150.0)
-
     @property
     def crit_damage(self) -> float:
         return calculate_crit_damage(self.crit_mod)
-
-    @crit_damage.setter
-    def crit_damage(self, value: float) -> None:
-        # For backward compatibility: setting crit_damage directly sets a rough crit_mod equivalent
-        # Each 0.05x above 1.0 roughly needs 20-40 points, use 30 as average
-        damage_above_base = max(0.0, value - 1.0)
-        self._base_crit_mod = (damage_above_base / 0.05) * 30.0
 
     @property
     def effect_hit_rate(self) -> float:

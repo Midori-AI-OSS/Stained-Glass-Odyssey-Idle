@@ -109,7 +109,7 @@ class StatBarsPanel(QFrame):
             "atk": (float(stats.atk), f"Attack {stats.atk}"),
             "defense": (float(stats.defense), f"Defense {stats.defense}"),
             "spd": (float(stats.spd), f"Speed {stats.spd}"),
-            "crit_mod": (float(stats.crit_mod), f"Crit Mod {stats.crit_mod:.0f} (Rate: {stats.crit_rate * 100:.1f}%, Dmg: {stats.crit_damage:.2f}x)"),
+            "crit_mod": (float(stats.crit_mod), f"Crit Mod {stats.crit_mod:.0f}"),
             "dodge_odds": (float(stats.dodge_odds), f"Dodge {stats.dodge_odds * 100:.1f}%"),
             "regain": (float(stats.regain), f"Regain {stats.regain}"),
             "mitigation": (float(stats.mitigation), f"Mitigation {stats.mitigation:.2f}"),
