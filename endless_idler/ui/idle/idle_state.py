@@ -62,7 +62,7 @@ class IdleGameState(QObject):
         self._offsite_exp_share = OFFSITE_EXP_SHARE_PER_CHAR
 
         self._tick_count = 0
-        self._shared_exp_percentage = max(0, min(95, int(shared_exp_percentage)))
+        self._shared_exp_percentage = max(1, min(95, int(shared_exp_percentage)))
         self._risk_reward_level = max(0, min(150, int(risk_reward_level)))
 
         self._char_data: dict[str, dict] = {}
@@ -682,7 +682,7 @@ class IdleGameState(QObject):
         return payload
 
     def set_shared_exp_percentage(self, percentage: int) -> None:
-        self._shared_exp_percentage = max(0, min(95, int(percentage)))
+        self._shared_exp_percentage = max(1, min(95, int(percentage)))
 
     def get_shared_exp_percentage(self) -> int:
         return self._shared_exp_percentage

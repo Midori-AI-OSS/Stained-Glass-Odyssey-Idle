@@ -299,7 +299,7 @@ def _normalized_save(save: RunSave) -> RunSave:
         character_deaths=deaths,
         idle_exp_bonus_seconds=float(max(0.0, getattr(save, "idle_exp_bonus_seconds", 0.0))),
         idle_exp_penalty_seconds=float(max(0.0, getattr(save, "idle_exp_penalty_seconds", 0.0))),
-        idle_shared_exp_percentage=max(0, min(95, int(getattr(save, "idle_shared_exp_percentage", 0)))),
+        idle_shared_exp_percentage=max(1, min(95, int(getattr(save, "idle_shared_exp_percentage", 1)))),
         idle_risk_reward_level=max(0, min(150, int(getattr(save, "idle_risk_reward_level", 0)))),
         winstreak=max(0, int(getattr(save, "winstreak", 0))),
     )
