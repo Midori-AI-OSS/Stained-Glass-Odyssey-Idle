@@ -452,7 +452,7 @@ class IdleScreenWidget(QWidget):
         message = f"<b>Prestige {display_name}?</b><br><br>"
         message += f"Current Prestige Level: {prestige_count}<br>"
         message += f"New Prestige Level: {new_prestige_count}<br><br>"
-        message += f"<b>Effects:</b><br>"
+        message += "<b>Effects:</b><br>"
         message += f"• EXP Multiplier: {exp_multiplier:.2f} → {new_exp_mult:.2f}<br>"
         message += f"• Stat Gain Multiplier: x{2.0 ** prestige_count:.1f} → x{new_stat_mult:.1f}<br>"
         
@@ -462,7 +462,7 @@ class IdleScreenWidget(QWidget):
             penalty_multiplier = 2.0 ** prestiges_past_floor
             message += f"<br><b>⚠️ Warning:</b> EXP requirement penalty applied (x{penalty_multiplier:.1f})<br>"
         
-        message += f"<br>Your stat gains per level will <b>double</b>, but EXP gain rate will be <b>reduced</b>."
+        message += "<br>Your stat gains per level will <b>double</b>, but EXP gain rate will be <b>reduced</b>."
         
         msg_box.setText(message)
         msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)

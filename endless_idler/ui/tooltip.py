@@ -108,33 +108,33 @@ class StainedGlassTooltip(QFrame):
         self.show()
 
     def _apply_glass_style(self) -> None:
-        """Apply true glass morphism style with element-based tinting."""
+        """Apply true glass morphism style with element-based tinting and enhanced readability."""
         if not self._element_id:
-            # Default glass tint - subtle blue-gray
-            background = "rgba(90, 110, 140, 32)"
-            border_color = "rgba(255, 255, 255, 90)"
+            # Default glass tint - subtle blue-gray with increased opacity for better readability
+            background = "rgba(90, 110, 140, 180)"
+            border_color = "rgba(255, 255, 255, 120)"
         else:
             # Element-tinted glass effect
             from endless_idler.ui.battle.colors import color_for_damage_type_id
             color = color_for_damage_type_id(self._element_id)
             
-            # Use element color with very low opacity for true glass effect
-            background = f"rgba({color.red()}, {color.green()}, {color.blue()}, 38)"
+            # Use element color with increased opacity for better readability while maintaining glass effect
+            background = f"rgba({color.red()}, {color.green()}, {color.blue()}, 160)"
             
             # Brighter border with slight element tint for enhanced glass appearance
             border_r = min(255, color.red() + 100)
             border_g = min(255, color.green() + 100)
             border_b = min(255, color.blue() + 100)
-            border_color = f"rgba({border_r}, {border_g}, {border_b}, 100)"
+            border_color = f"rgba({border_r}, {border_g}, {border_b}, 120)"
         
         # Apply glass morphism stylesheet
-        # - Very low opacity background for transparency
-        # - Rounded corners for modern glass appearance
+        # - Increased opacity background for better text readability
+        # - Square corners for stained glass aesthetic
         # - Bright border with subtle glow effect
         self._panel.setStyleSheet(
             f"QFrame#stainedTooltipPanel {{ "
             f"background-color: {background}; "
             f"border: 1px solid {border_color}; "
-            f"border-radius: 6px; "
+            f"border-radius: 0px; "
             f"}}"
         )
