@@ -10,12 +10,12 @@ Modify the `LineOverlay` class to check the configuration flag before rendering 
 - Keep the tick mechanism working (pulse expiration must continue)
 
 ## Acceptance Criteria
-- [ ] `paintEvent` checks configuration flag at the start
-- [ ] When flag is `False`, no lines or arrows are drawn
-- [ ] Pulse list is still cleaned up properly (expired pulses removed)
-- [ ] Timer and tick mechanism continues to function
-- [ ] No visual artifacts or errors when animations are disabled
-- [ ] Code is clean and well-commented
+- [x] `paintEvent` checks configuration flag at the start
+- [x] When flag is `False`, no lines or arrows are drawn
+- [x] Pulse list is still cleaned up properly (expired pulses removed)
+- [x] Timer and tick mechanism continues to function
+- [x] No visual artifacts or errors when animations are disabled
+- [x] Code is clean and well-commented
 
 ## Implementation Context
 
@@ -102,3 +102,4 @@ Focus on modifying the `paintEvent` method around line 318 in `endless_idler/ui/
 ## Status Updates
 - 2025-01-11: Task created by Task Master
 - 2025-01-11: Enhanced with detailed implementation context and line numbers (Auditor)
+- 2025-01-11: Implemented conditional rendering in `LineOverlay.paintEvent()`. Added check for `SHOW_BATTLE_ANIMATIONS` flag. When False, paintEvent returns early without rendering. The `tick()` method remains unchanged and continues to clean up expired pulses to prevent memory leaks.

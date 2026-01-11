@@ -324,6 +324,11 @@ class LineOverlay(QWidget):
     def paintEvent(self, event: object) -> None:
         if not self._pulses:
             return
+        
+        # Skip rendering if battle animations are disabled
+        # Note: tick() continues to run for cleanup even when rendering is disabled
+        if not SHOW_BATTLE_ANIMATIONS:
+            return
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
