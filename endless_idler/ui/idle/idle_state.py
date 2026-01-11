@@ -182,6 +182,9 @@ class IdleGameState(QObject):
 
             scale = party_scaling(party_level=self._party_level, stars=stars, stacks=stack)
             max_hp = max(1, int(float(base_stats.get("max_hp", 1000.0)) * scale))
+            # Passive modifier formula: (stacks * 0.05) + 1.0
+            # Provides 5% bonus per stack, starting at 1.05 with 1 stack
+            passive_modifier = (stack * 0.05) + 1.0
             self._char_data[char_id] = {
                 "level": level,
                 "exp": exp,
@@ -204,6 +207,7 @@ class IdleGameState(QObject):
                 "prestige_count": prestige_count,
                 "rebirth_power": rebirth_power,
                 "max_hp_level_bonus_version": max_hp_level_bonus_version,
+                "passive_modifier": passive_modifier,
             }
 
             if isinstance(saved, dict):
@@ -458,6 +462,8 @@ class IdleGameState(QObject):
             base_gain *= exp_multiplier
             base_gain *= self._death_exp_debuff_multiplier(data)
             base_gain *= self._exp_gain_scale
+            # Apply passive modifier from character stacks
+            base_gain *= data.get("passive_modifier", 1.0)
             
             total_onsite_base_gain += base_gain
             onsite_gain = base_gain * onsite_mult
@@ -494,7 +500,9 @@ class IdleGameState(QObject):
                 normal_offsite_gain = total_onsite_base_gain * self._offsite_exp_share
                 total_gain = offsite_gain_per_char + normal_offsite_gain
                 
-                data["exp"] += total_gain * self._death_exp_debuff_multiplier(data)
+                # Apply passive modifier and death debuff to offsite experience
+                passive_mod = data.get("passive_modifier", 1.0)
+                data["exp"] += total_gain * self._death_exp_debuff_multiplier(data) * passive_mod
                 data["hp"] = min(data["max_hp"], data["hp"] + 0.5)
                 if data["exp"] >= data["next_exp"]:
                     self._level_up(char_id)
@@ -530,6 +538,8 @@ class IdleGameState(QObject):
             gain *= exp_multiplier
             gain *= self._death_exp_debuff_multiplier(data)
             gain *= self._exp_gain_scale
+            # Apply passive modifier for display consistency
+            gain *= data.get("passive_modifier", 1.0)
             return gain * onsite_mult
 
         if char_id in self._offsite_ids:
@@ -547,6 +557,8 @@ class IdleGameState(QObject):
                 onsite_gain *= exp_multiplier
                 onsite_gain *= self._death_exp_debuff_multiplier(onsite_data)
                 onsite_gain *= self._exp_gain_scale
+                # Apply passive modifier from onsite character
+                onsite_gain *= onsite_data.get("passive_modifier", 1.0)
                 total_onsite_base_gain += onsite_gain
                 shared_reduction = onsite_gain * onsite_reduction
                 total_onsite_shared_gain += shared_reduction
@@ -556,7 +568,9 @@ class IdleGameState(QObject):
                 offsite_gain_per_char = total_onsite_shared_gain / num_offsite
                 normal_offsite_gain = total_onsite_base_gain * self._offsite_exp_share
                 total_gain = offsite_gain_per_char + normal_offsite_gain
-                return total_gain * self._death_exp_debuff_multiplier(data)
+                # Apply passive modifier for offsite character
+                passive_mod = data.get("passive_modifier", 1.0)
+                return total_gain * self._death_exp_debuff_multiplier(data) * passive_mod
 
         return 0.0
 
