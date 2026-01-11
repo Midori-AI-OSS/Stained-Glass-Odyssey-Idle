@@ -26,6 +26,12 @@ from endless_idler.ui.tooltip import hide_stained_tooltip
 from endless_idler.ui.tooltip import show_stained_tooltip
 
 
+# Configuration flag to control battle animation visibility
+# When False, no attack lines or healing arrows are rendered in battle
+# Note: This does NOT affect stack merge animations in party builder (those use MergeFxOverlay)
+SHOW_BATTLE_ANIMATIONS = False
+
+
 @dataclass(slots=True)
 class LinePulse:
     source: QWidget
@@ -317,6 +323,11 @@ class LineOverlay(QWidget):
 
     def paintEvent(self, event: object) -> None:
         if not self._pulses:
+            return
+        
+        # Skip rendering if battle animations are disabled
+        # Note: tick() continues to run for cleanup even when rendering is disabled
+        if not SHOW_BATTLE_ANIMATIONS:
             return
 
         painter = QPainter(self)
