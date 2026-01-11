@@ -21,36 +21,37 @@ Ensure the QPainter.end() is always called in paintEvent, even when exceptions o
 
 ### Specific Changes
 
-1. **Locate the paintEvent method**
-   - Find where QPainter is created
-   - Identify where QPainter.end() is currently called (if at all)
+**CURRENT STATE:**
+- paintEvent method: lines 319-602
+- QPainter is created at line 323: `painter = QPainter(self)`
+- painter.end() is called at line 602 (last line before method ends)
+- **PROBLEM:** If an exception occurs anywhere in lines 323-601, painter.end() is never called
+- The UnboundLocalError from task 1eeea699 happens at line 503, which is BEFORE painter.end()
 
-2. **Wrap painting code in try-finally block**
-   - Pattern to follow:
+**THE FIX:**
+1. **Wrap the painting code in try-finally** (recommended for PySide6)
+   - Pattern to implement:
      ```python
      def paintEvent(self, event):
+         if not self._pulses:
+             return
+         
          painter = QPainter(self)
+         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+         
          try:
-             # All existing painting code here
-             # Arrow drawing
-             # Other widget rendering
+             # All existing painting code (lines 326-601)
+             for pulse in list(self._pulses):
+                 # ... all the arrow drawing logic ...
          finally:
              painter.end()
      ```
 
-3. **Alternative: Use context manager pattern (if preferred)**
-   - If the codebase uses context managers:
-     ```python
-     def paintEvent(self, event):
-         with QPainter(self) as painter:
-             # All painting code here
-     ```
-   - Note: Check if QPainter supports context manager protocol first
-
-4. **Preserve exception propagation**
-   - The finally block should not suppress exceptions
-   - Exceptions should still propagate after painter.end() is called
-   - This allows proper error logging while ensuring cleanup
+2. **Important notes:**
+   - Move the early return check (line 320-321) BEFORE creating QPainter
+   - This is already correct in current code
+   - The try block should start after painter setup and before the for loop
+   - Finally ensures painter.end() is called even if UnboundLocalError or any other exception occurs
 
 ## Testing
 
@@ -62,11 +63,13 @@ Ensure the QPainter.end() is always called in paintEvent, even when exceptions o
 
 ## Success Criteria
 
+- [ ] Try-finally pattern wraps all painting code (lines 326-601)
+- [ ] QPainter.end() is in the finally block
 - [ ] QPainter.end() is called even when exceptions occur in paintEvent
-- [ ] Try-finally pattern (or equivalent) is properly implemented
 - [ ] No Qt painter warnings during normal gameplay
-- [ ] Exceptions still propagate properly for debugging
+- [ ] Exceptions still propagate properly for debugging (not suppressed)
 - [ ] Normal rendering continues to work as expected
+- [ ] When UnboundLocalError occurs (before task 1eeea699 is fixed), painter still ends properly
 
 ## Notes
 

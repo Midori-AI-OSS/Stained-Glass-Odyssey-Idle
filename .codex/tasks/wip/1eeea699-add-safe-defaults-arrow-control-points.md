@@ -21,35 +21,37 @@ Ensure all arrow control point variables (waypoint_x, waypoint_y, second_mid_x, 
 
 ### Specific Changes
 
-1. **Locate the arrow drawing section in paintEvent**
-   - Find where arrows are rendered (around lines 362-503 based on grep results)
-   - Identify all code paths that lead to Bezier calculations
+**EXACT LOCATION OF BUG:**
+- Lines 503-504 use `waypoint_x` and `waypoint_y` variables in Bezier calculation
+- These variables are ONLY defined in the `else` block (lines 481-483)
+- When `pulse.midpoint is not None` (line 477-478), only `waypoint` QPointF object is created
+- This causes UnboundLocalError when the if-branch is taken
 
-2. **Add safe defaults at the start of each arrow render**
-   - Before any conditional branches that might skip variable assignment
-   - Default waypoint should be the combat midpoint if it exists in layout data
-   - If combat midpoint is not available, default waypoint must be the midpoint between start and end
-   - Example pattern:
+**THE FIX:**
+1. **Locate the same_team arrow rendering section** (lines 473-506)
+   - This is the `if pulse.same_team:` block in the paintEvent method
+   - Currently at lines 473-518 in widgets.py
+
+2. **Add waypoint_x and waypoint_y extraction after waypoint is defined** (after line 483)
+   - Insert these lines after the if/else block that sets `waypoint`:
      ```python
-     # Safe defaults for arrow control points
-     waypoint_x = start.x() + (end.x() - start.x()) * 0.5
-     waypoint_y = start.y() + (end.y() - start.y()) * 0.5
-     second_mid_x = waypoint_x
-     second_mid_y = waypoint_y
-     
-     # If combat midpoint exists in layout, use it
-     if hasattr(layout_data, 'combat_midpoint'):
-         waypoint_x = layout_data.combat_midpoint.x()
-         waypoint_y = layout_data.combat_midpoint.y()
+     # Extract x and y for use in Bezier calculations below
+     waypoint_x = waypoint.x()
+     waypoint_y = waypoint.y()
      ```
+   - This ensures waypoint_x and waypoint_y are ALWAYS defined, regardless of which branch is taken
 
-3. **Only override in branches that need special behavior**
-   - Conditional branches can override these defaults as needed
-   - Every path to Bezier calculations must have valid values
+3. **Alternative approach: Fix the Bezier calculation directly** (lines 503-504)
+   - Instead of using `waypoint_x` and `waypoint_y`, use `waypoint.x()` and `waypoint.y()`:
+     ```python
+     curve_end = QPointF(
+         (1 - t) * (1 - t) * waypoint.x() + 2 * (1 - t) * t * second_mid_x + t * t * end.x(),
+         (1 - t) * (1 - t) * waypoint.y() + 2 * (1 - t) * t * second_mid_y + t * t * end.y()
+     )
+     ```
+   - This is cleaner since waypoint is ALWAYS defined
 
-4. **Verify all Bezier calculations have access to these variables**
-   - Check lines around 503 where waypoint_x and second_mid_x are used in Bezier formula
-   - Ensure no path can reach Bezier calculations with undefined variables
+**RECOMMENDED:** Use the alternative approach (fixing lines 503-504) as it's cleaner and more maintainable.
 
 ## Testing
 
@@ -60,13 +62,12 @@ Ensure all arrow control point variables (waypoint_x, waypoint_y, second_mid_x, 
 
 ## Success Criteria
 
-- [ ] waypoint_x is defined before all Bezier calculations
-- [ ] waypoint_y is defined before all Bezier calculations
-- [ ] second_mid_x is defined before all Bezier calculations (if used)
-- [ ] second_mid_y is defined before all Bezier calculations (if used)
-- [ ] Default values use combat midpoint when available, else midpoint between start/end
+- [ ] Lines 503-504 no longer reference undefined waypoint_x/waypoint_y variables
+- [ ] Bezier calculation uses waypoint.x() and waypoint.y() OR waypoint_x/waypoint_y are extracted after waypoint is defined
 - [ ] All arrow rendering paths work without UnboundLocalError
-- [ ] Visual appearance of arrows remains correct
+- [ ] Visual appearance of arrows remains correct (no visual regression)
+- [ ] Test with pulse.midpoint=None (uses fallback calculation) - should work
+- [ ] Test with pulse.midpoint set (uses provided midpoint) - should work (this was the crashing case)
 
 ## Notes
 
