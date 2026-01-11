@@ -352,15 +352,22 @@ class ShopItem(QFrame):
         self.setToolTip("")
 
     def enterEvent(self, event: object) -> None:
-        if self._tooltip_html:
-            stats: Stats | None = None
-            if self._get_tooltip_stats is not None:
-                try:
-                    stats = self._get_tooltip_stats(self._char_id, "shop")
-                except Exception:
-                    stats = None
+        stats: Stats | None = None
+        if self._get_tooltip_stats is not None:
+            try:
+                stats = self._get_tooltip_stats(self._char_id, "shop")
+            except Exception:
+                stats = None
+        tooltip_html = build_character_stats_tooltip(
+            name=self._display_name,
+            stars=self._stars,
+            stacks=self._stack_count if self._stack_count > 1 else None,
+            stackable=self._stack_count > 1,
+            stats=stats,
+        )
+        if tooltip_html:
             element_id = getattr(stats, "element_id", None) if stats else None
-            show_stained_tooltip(self, self._tooltip_html, element_id=element_id)
+            show_stained_tooltip(self, tooltip_html, element_id=element_id)
         try:
             super().enterEvent(event)  # type: ignore[misc]
         except Exception:

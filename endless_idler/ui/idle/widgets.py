@@ -4,6 +4,7 @@ import random
 
 from collections.abc import Callable
 
+from PySide6.QtCore import QEvent
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFrame
@@ -13,6 +14,11 @@ from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QProgressBar
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
+
+from endless_idler.combat.party_stats import build_scaled_character_stats
+from endless_idler.ui.party_builder_common import build_character_stats_tooltip
+from endless_idler.ui.tooltip import hide_stained_tooltip
+from endless_idler.ui.tooltip import show_stained_tooltip
 
 
 class IdleArena(QFrame):
@@ -129,6 +135,14 @@ class IdleOffsiteCard(QFrame):
         body.addStretch(1)
         
         # Element tint will be applied on first update_display call
+        for widget in (
+            self._portrait,
+            self._name_label,
+            self._level_label,
+            self._hp_bar,
+            self._exp_bar,
+        ):
+            widget.installEventFilter(self)
 
     def update_display(self) -> None:
         data = self._idle_state.get_char_data(self._char_id)
@@ -170,10 +184,81 @@ class IdleOffsiteCard(QFrame):
         
         # Apply element tint on each update
         self._apply_element_tint(data)
+
+    def eventFilter(self, watched: object, event: object) -> bool:  # noqa: ANN001
+        if hasattr(event, "type") and event.type() == QEvent.Type.Enter:
+            self._show_tooltip()
+        return super().eventFilter(watched, event)  # type: ignore[misc]
+
+    def _show_tooltip(self) -> None:
+        data = self._idle_state.get_char_data(self._char_id)
+        if not (data and self._plugin):
+            return
+
+        base_stats = data.get("base_stats")
+        saved_base_stats = dict(base_stats) if isinstance(base_stats, dict) else {}
+
+        try:
+            stack_count = max(1, int(data.get("stack", self._stack_count)))
+        except (TypeError, ValueError):
+            stack_count = max(1, int(self._stack_count))
+
+        party_level = 1
+        party_level_getter = getattr(self._idle_state, "get_party_level", None)
+        if callable(party_level_getter):
+            try:
+                party_level = max(1, int(party_level_getter()))
+            except Exception:
+                party_level = 1
+
+        progress: dict[str, float | int] = {
+            "level": max(1, int(data.get("level", 1))),
+            "exp": float(max(0.0, float(data.get("exp", 0.0)))),
+            "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
+            "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
+        }
+
+        stars = max(1, int(getattr(self._plugin, "stars", 1) or 1))
+        stats = build_scaled_character_stats(
+            plugin=self._plugin,
+            party_level=party_level,
+            stars=stars,
+            stacks=stack_count,
+            progress=progress,
+            saved_base_stats=saved_base_stats,
+        )
+        try:
+            stats.hp = max(0, int(float(data.get("hp", stats.hp))))
+        except (TypeError, ValueError):
+            pass
+
+        name = getattr(self._plugin, "display_name", None) or self._char_id
+        tooltip_html = build_character_stats_tooltip(
+            name=str(name),
+            stars=stars,
+            stacks=stack_count if stack_count > 1 else None,
+            stackable=stack_count > 1,
+            stats=stats,
+        )
+        if tooltip_html:
+            show_stained_tooltip(self, tooltip_html, element_id=stats.element_id)
+
+    def enterEvent(self, event: object) -> None:
+        self._show_tooltip()
+
+        try:
+            super().enterEvent(event)  # type: ignore[misc]
+        except Exception:
+            return
+
+    def leaveEvent(self, event: object) -> None:
+        hide_stained_tooltip()
+        try:
+            super().leaveEvent(event)  # type: ignore[misc]
+        except Exception:
+            return
     
     def _apply_element_tint(self, data: dict) -> None:
-        from endless_idler.combat.party_stats import build_scaled_character_stats
-        
         if not self._plugin:
             return
         

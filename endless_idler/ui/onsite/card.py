@@ -100,11 +100,13 @@ class OnsiteCharacterCardBase(QFrame):
         self._tooltip_html = ""
         self._stats_panel: StatBarsPanel | None = None
         self._stats_popup: OnsiteStatsPopup | None = None
+        self._action_button_handler: Callable[[], None] | None = None
 
         self.setObjectName("onsiteCharacterCard")
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setFixedWidth(max(220, int(card_width)))
-        self.setProperty("onsiteMode", (mode or "idle").strip().lower())
+        onsite_mode = (mode or "idle").strip().lower()
+        self.setProperty("onsiteMode", onsite_mode)
 
         root = QHBoxLayout()
         root.setContentsMargins(12, 12, 12, 12)
@@ -137,14 +139,18 @@ class OnsiteCharacterCardBase(QFrame):
 
         header.addStretch(1)
 
-        self._stats_button = QPushButton("👁")
-        self._stats_button.setObjectName("onsiteStatsButton")
-        self._stats_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._stats_button.setCheckable(True)
-        self._stats_button.setChecked(False)
-        self._stats_button.setToolTip("Stats")
-        self._stats_button.toggled.connect(self._toggle_stats_popup)
-        header.addWidget(self._stats_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        # Eye/stats popup is intentionally removed from Idle and Fight modes.
+        self._stats_button: QPushButton | None = None
+        if onsite_mode not in {"idle", "battle"}:
+            stats_button = QPushButton("👁")
+            stats_button.setObjectName("onsiteStatsButton")
+            stats_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            stats_button.setCheckable(True)
+            stats_button.setChecked(False)
+            stats_button.setToolTip("Stats")
+            stats_button.toggled.connect(self._toggle_stats_popup)
+            header.addWidget(stats_button, 0, Qt.AlignmentFlag.AlignVCenter)
+            self._stats_button = stats_button
 
         self._action_button = QPushButton("")
         self._action_button.setObjectName("onsiteActionButton")
@@ -210,12 +216,15 @@ class OnsiteCharacterCardBase(QFrame):
     ) -> None:
         self._action_button.setText(str(label))
         self._action_button.setVisible(bool(visible))
-        try:
-            self._action_button.clicked.disconnect()
-        except Exception:
-            pass
+        if self._action_button_handler is not None:
+            try:
+                self._action_button.clicked.disconnect(self._action_button_handler)
+            except (RuntimeError, TypeError):
+                pass
+            self._action_button_handler = None
         if on_click is not None:
             self._action_button.clicked.connect(on_click)
+            self._action_button_handler = on_click
 
     def set_stats(
         self,
@@ -282,6 +291,8 @@ class OnsiteCharacterCardBase(QFrame):
             return
 
     def _toggle_stats_popup(self, checked: bool) -> None:
+        if self._stats_button is None:
+            return
         if not checked:
             if self._stats_popup is not None:
                 self._stats_popup.close()
@@ -302,6 +313,8 @@ class OnsiteCharacterCardBase(QFrame):
         self._stats_popup.activateWindow()
 
     def _on_popup_closed(self) -> None:
+        if self._stats_button is None:
+            return
         if self._stats_button.isChecked():
             self._stats_button.setChecked(False)
 

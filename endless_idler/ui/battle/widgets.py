@@ -4,6 +4,7 @@ import random
 
 from dataclasses import dataclass
 
+from PySide6.QtCore import QEvent
 from PySide6.QtCore import QPointF
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import Qt
@@ -150,6 +151,11 @@ class CombatantCard(QFrame):
 
         self._refresh_tooltip()
         self._apply_element_tint()
+
+        for widget in (self._portrait, self._name, self._hp, self._exp):
+            if widget is None:
+                continue
+            widget.installEventFilter(self)
     
     def _apply_element_tint(self) -> None:
         from endless_idler.ui.battle.colors import color_for_damage_type_id
@@ -218,6 +224,13 @@ class CombatantCard(QFrame):
             super().enterEvent(event)  # type: ignore[misc]
         except Exception:
             return
+
+    def eventFilter(self, watched: object, event: object) -> bool:  # noqa: ANN001
+        if hasattr(event, "type") and event.type() == QEvent.Type.Enter:
+            if self._tooltip_html:
+                element_id = getattr(self._combatant.stats, "element_id", None)
+                show_stained_tooltip(self, self._tooltip_html, element_id=element_id)
+        return super().eventFilter(watched, event)  # type: ignore[misc]
 
     def leaveEvent(self, event: object) -> None:
         hide_stained_tooltip()

@@ -1,16 +1,28 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, Qt
-from PySide6.QtGui import QColor, QCursor, QGuiApplication
-from PySide6.QtWidgets import (
-    QFrame,
-    QGraphicsDropShadowEffect,
-    QLabel,
-    QSizePolicy,
-    QVBoxLayout,
-    QWidget,
-)
+import random
 
+from PySide6.QtCore import QPoint
+from PySide6.QtCore import QRect
+from PySide6.QtCore import Qt
+from PySide6.QtCore import QTimer
+from PySide6.QtGui import QColor
+from PySide6.QtGui import QCursor
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QImage
+from PySide6.QtGui import QPainter
+from PySide6.QtGui import QPen
+from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QScreen
+from PySide6.QtWidgets import QFrame
+from PySide6.QtWidgets import QGraphicsBlurEffect
+from PySide6.QtWidgets import QGraphicsDropShadowEffect
+from PySide6.QtWidgets import QGraphicsPixmapItem
+from PySide6.QtWidgets import QGraphicsScene
+from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QSizePolicy
+from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtWidgets import QWidget
 
 _TOOLTIP: "StainedGlassTooltip | None" = None
 
@@ -33,6 +45,25 @@ def hide_stained_tooltip() -> None:
     if _TOOLTIP is None:
         return
     _TOOLTIP.hide()
+
+
+class _TooltipBackdropFrame(QFrame):
+    def __init__(self) -> None:
+        super().__init__(None)
+        self._pixmap = QPixmap()
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAutoFillBackground(False)
+
+    def set_pixmap(self, pixmap: QPixmap) -> None:
+        self._pixmap = pixmap
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: ANN001
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        if not self._pixmap.isNull():
+            painter.drawPixmap(self.rect(), self._pixmap)
+        painter.end()
 
 
 class StainedGlassTooltip(QFrame):
@@ -59,20 +90,30 @@ class StainedGlassTooltip(QFrame):
         self._panel.setGraphicsEffect(shadow)
         layout.addWidget(self._panel)
 
-        # Content layout inside panel
         panel_layout = QVBoxLayout()
-        panel_layout.setContentsMargins(12, 10, 12, 10)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
         panel_layout.setSpacing(0)
         self._panel.setLayout(panel_layout)
+
+        self._backdrop = _TooltipBackdropFrame()
+        self._backdrop.setObjectName("stainedTooltipBackdrop")
+        panel_layout.addWidget(self._backdrop)
+
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(12, 10, 12, 10)
+        content_layout.setSpacing(0)
+        self._backdrop.setLayout(content_layout)
 
         # Text content label
         self._content = QLabel()
         self._content.setObjectName("stainedTooltipContent")
         self._content.setTextFormat(Qt.TextFormat.RichText)
         self._content.setWordWrap(True)
-        panel_layout.addWidget(self._content)
+        content_layout.addWidget(self._content)
 
         self._element_id: str | None = None
+        self._tint_color = QColor(90, 110, 140)
+        self._border_color_css = "rgba(255, 255, 255, 90)"
         self.hide()
 
     def set_html(self, html: str, *, element_id: str | None = None) -> None:
@@ -81,6 +122,10 @@ class StainedGlassTooltip(QFrame):
         self._content.adjustSize()
         self._panel.adjustSize()
         self.adjustSize()
+        if self._panel.layout() is not None:
+            self._panel.layout().activate()
+        if self.layout() is not None:
+            self.layout().activate()
         self._apply_glass_style()
 
     def show_near_cursor(self, owner: QWidget) -> None:
@@ -91,6 +136,7 @@ class StainedGlassTooltip(QFrame):
         if screen is None:
             self.move(pos + QPoint(14, 18))
             self.show()
+            QTimer.singleShot(0, lambda: self._refresh_backdrop(None))
             return
 
         geo = screen.availableGeometry()
@@ -106,35 +152,130 @@ class StainedGlassTooltip(QFrame):
 
         self.move(QPoint(x, y))
         self.show()
+        screen_to_use = screen
+        QTimer.singleShot(0, lambda: self._refresh_backdrop(screen_to_use))
 
     def _apply_glass_style(self) -> None:
         """Apply true glass morphism style with element-based tinting and enhanced readability."""
         if not self._element_id:
-            # Default glass tint - subtle blue-gray with increased opacity for better readability
-            background = "rgba(90, 110, 140, 180)"
-            border_color = "rgba(255, 255, 255, 120)"
+            self._tint_color = QColor(90, 110, 140)
+            self._border_color_css = "rgba(255, 255, 255, 90)"
         else:
             # Element-tinted glass effect
             from endless_idler.ui.battle.colors import color_for_damage_type_id
+
             color = color_for_damage_type_id(self._element_id)
-            
-            # Use element color with increased opacity for better readability while maintaining glass effect
-            background = f"rgba({color.red()}, {color.green()}, {color.blue()}, 160)"
-            
+
+            self._tint_color = QColor(color.red(), color.green(), color.blue())
+
             # Brighter border with slight element tint for enhanced glass appearance
-            border_r = min(255, color.red() + 100)
-            border_g = min(255, color.green() + 100)
-            border_b = min(255, color.blue() + 100)
-            border_color = f"rgba({border_r}, {border_g}, {border_b}, 120)"
-        
-        # Apply glass morphism stylesheet
-        # - Increased opacity background for better text readability
-        # - Square corners for stained glass aesthetic
-        # - Bright border with subtle glow effect
+            border_r = min(255, color.red() + 70)
+            border_g = min(255, color.green() + 70)
+            border_b = min(255, color.blue() + 70)
+            self._border_color_css = f"rgba({border_r}, {border_g}, {border_b}, 110)"
+
         self._panel.setStyleSheet(
             f"QFrame#stainedTooltipPanel {{ "
-            f"background-color: {background}; "
-            f"border: 1px solid {border_color}; "
+            f"background-color: rgba(0, 0, 0, 0); "
+            f"border: 1px solid {self._border_color_css}; "
             f"border-radius: 0px; "
             f"}}"
         )
+
+    def _blur_pixmap(self, pixmap: QPixmap, *, radius: float) -> QPixmap:
+        if pixmap.isNull():
+            return pixmap
+
+        margin = max(1, int(radius * 2))
+        canvas = QImage(
+            pixmap.width() + (margin * 2),
+            pixmap.height() + (margin * 2),
+            QImage.Format.Format_ARGB32_Premultiplied,
+        )
+        canvas.fill(Qt.GlobalColor.transparent)
+
+        scene = QGraphicsScene()
+        item = QGraphicsPixmapItem(pixmap)
+        item.setOffset(margin, margin)
+        blur = QGraphicsBlurEffect()
+        blur.setBlurRadius(radius)
+        item.setGraphicsEffect(blur)
+        scene.addItem(item)
+        scene.setSceneRect(0, 0, canvas.width(), canvas.height())
+
+        painter = QPainter(canvas)
+        scene.render(painter)
+        painter.end()
+
+        return QPixmap.fromImage(canvas.copy(QRect(margin, margin, pixmap.width(), pixmap.height())))
+
+    def _make_frosted_fallback(self, width: int, height: int) -> QPixmap:
+        image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(image)
+        painter.fillRect(
+            image.rect(),
+            QColor(self._tint_color.red(), self._tint_color.green(), self._tint_color.blue(), 155),
+        )
+        painter.fillRect(image.rect(), QColor(0, 0, 0, 90))
+
+        pen = QPen(QColor(255, 255, 255, 18))
+        pen.setWidth(1)
+        painter.setPen(pen)
+        step = 5
+        for i in range(-height, width, step):
+            painter.drawLine(i, 0, i + height, height)
+
+        speckle = random.Random(hash((self._element_id, width, height)) & 0xFFFFFFFF)
+        for _ in range(140):
+            x = speckle.randrange(0, width)
+            y = speckle.randrange(0, height)
+            a = speckle.randrange(6, 18)
+            painter.fillRect(x, y, 1, 1, QColor(255, 255, 255, a))
+
+        painter.end()
+
+        pixmap = self._blur_pixmap(QPixmap.fromImage(image), radius=2.8)
+
+        tinted = pixmap.toImage().convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
+        painter2 = QPainter(tinted)
+        painter2.fillRect(
+            tinted.rect(),
+            QColor(self._tint_color.red(), self._tint_color.green(), self._tint_color.blue(), 55),
+        )
+        painter2.fillRect(tinted.rect(), QColor(0, 0, 0, 70))
+        painter2.end()
+
+        return QPixmap.fromImage(tinted)
+
+    def _refresh_backdrop(self, screen: QScreen | None) -> None:
+        panel_w = self._panel.width() or self._panel.sizeHint().width()
+        panel_h = self._panel.height() or self._panel.sizeHint().height()
+        if panel_w <= 1 or panel_h <= 1:
+            self._backdrop.set_pixmap(QPixmap())
+            return
+
+        grab: QPixmap | None = None
+        if screen is not None:
+            panel_global = self.mapToGlobal(self._panel.pos())
+            screen_geo = screen.geometry()
+            x = panel_global.x() - screen_geo.x()
+            y = panel_global.y() - screen_geo.y()
+
+            if x >= 0 and y >= 0:
+                grab = screen.grabWindow(0, x, y, panel_w, panel_h)
+
+        if grab is None or grab.isNull():
+            self._backdrop.set_pixmap(self._make_frosted_fallback(panel_w, panel_h))
+            return
+
+        blurred = self._blur_pixmap(grab, radius=16.0)
+        image = blurred.toImage().convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
+
+        painter = QPainter(image)
+        painter.fillRect(image.rect(), QColor(self._tint_color.red(), self._tint_color.green(), self._tint_color.blue(), 90))
+        painter.fillRect(image.rect(), QColor(0, 0, 0, 95))
+        painter.end()
+
+        self._backdrop.set_pixmap(QPixmap.fromImage(image))
