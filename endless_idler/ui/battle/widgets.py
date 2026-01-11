@@ -500,8 +500,8 @@ class LineOverlay(QWidget):
                 # Draw arrow at the end
                 t = 0.85
                 curve_end = QPointF(
-                    (1 - t) * (1 - t) * waypoint_x + 2 * (1 - t) * t * second_mid_x + t * t * end.x(),
-                    (1 - t) * (1 - t) * waypoint_y + 2 * (1 - t) * t * second_mid_y + t * t * end.y()
+                    (1 - t) * (1 - t) * waypoint.x() + 2 * (1 - t) * t * second_mid_x + t * t * end.x(),
+                    (1 - t) * (1 - t) * waypoint.y() + 2 * (1 - t) * t * second_mid_y + t * t * end.y()
                 )
                 self._draw_arrow_head(painter, curve_end, end, color, width=pulse.width)
                 
