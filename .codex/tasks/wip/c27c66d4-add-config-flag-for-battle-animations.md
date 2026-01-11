@@ -10,11 +10,11 @@ Add a configuration flag or constant to control whether battle screen lines and 
 - Document the purpose of the flag
 
 ## Acceptance Criteria
-- [ ] Configuration flag added with clear name
-- [ ] Flag is easily accessible from battle animation code
-- [ ] Flag defaults to `False` (animations disabled)
-- [ ] Flag location is logical and well-documented
-- [ ] Code compiles without errors
+- [x] Configuration flag added with clear name
+- [x] Flag is easily accessible from battle animation code
+- [x] Flag defaults to `False` (animations disabled)
+- [x] Flag location is logical and well-documented
+- [x] Code compiles without errors
 
 ## Notes
 This flag will be used in subsequent tasks to conditionally disable line/arrow rendering. Keep it simple - just add the flag, don't implement the conditional logic yet.
@@ -23,3 +23,4 @@ Consider adding the flag near the `LinePulse` and `LineOverlay` classes in `/end
 
 ## Status Updates
 - 2025-01-11: Task created by Task Master
+- 2025-01-11: Added `SHOW_BATTLE_ANIMATIONS = False` flag at top of `endless_idler/ui/battle/widgets.py` (after imports, before LinePulse). Included documentation comments explaining purpose and scope.
