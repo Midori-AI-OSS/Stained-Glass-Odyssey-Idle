@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from PySide6.QtCore import QPointF
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPolygonF
 from PySide6.QtGui import QBrush
 from PySide6.QtGui import QColor
 from PySide6.QtGui import QPainter
@@ -561,38 +560,6 @@ class LineOverlay(QWidget):
                 return QPointF(self.mapFromGlobal(point.toPoint()))
         center = widget.mapToGlobal(widget.rect().center())
         return QPointF(self.mapFromGlobal(center))
-
-    def _draw_arrow_head(
-        self,
-        painter: QPainter,
-        start: QPointF,
-        end: QPointF,
-        color: QColor,
-        *,
-        width: int,
-    ) -> None:
-        dx = float(end.x() - start.x())
-        dy = float(end.y() - start.y())
-        length = (dx * dx + dy * dy) ** 0.5
-        if length <= 1e-6:
-            return
-
-        ux = dx / length
-        uy = dy / length
-        head_len = max(10.0, float(width) * 3.0)
-        head_w = max(6.0, float(width) * 2.0)
-
-        base = QPointF(end.x() - ux * head_len, end.y() - uy * head_len)
-        perp = QPointF(-uy, ux)
-        left = QPointF(base.x() + perp.x() * head_w, base.y() + perp.y() * head_w)
-        right = QPointF(base.x() - perp.x() * head_w, base.y() - perp.y() * head_w)
-
-        brush = QBrush(color)
-        painter.save()
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(brush)
-        painter.drawPolygon(QPolygonF([end, left, right]))
-        painter.restore()
 
 
 class Arena(QFrame):
