@@ -68,7 +68,22 @@ for char_id in self._offsite_ids:
 ```
 
 ### Also check `get_exp_gain_per_tick()` method
-Lines 545-574 calculate expected gain per tick for display. This already includes `passive_mod` (line 572) but verify it's calculating correctly for UI display.
+Lines 545-574 calculate expected gain per tick for display. This method ALSO needs to be updated to include `exp_multiplier` for offsite characters.
+
+**Current code at line 572-573:**
+```python
+passive_mod = data.get("passive_modifier", 1.0)
+return total_gain * self._death_exp_debuff_multiplier(data) * passive_mod
+```
+
+**Should be changed to:**
+```python
+exp_mult = float(data.get("exp_multiplier", 1.0))
+passive_mod = float(data.get("passive_modifier", 1.0))
+return total_gain * exp_mult * passive_mod * self._death_exp_debuff_multiplier(data)
+```
+
+This ensures the displayed "+X.XX/s" rate matches the actual experience gain.
 
 ## Testing
 1. Set up two off-site characters with different `exp_multiplier` values (e.g., 1.0 and 2.0)
