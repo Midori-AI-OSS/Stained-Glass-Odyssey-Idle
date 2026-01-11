@@ -410,3 +410,37 @@ The code is production-ready and requires no changes.
 
 **Auditor Signature**: Auditor Mode  
 **Audit Completed**: 2026-01-06 10:56:00 UTC
+
+---
+
+## AUDITOR RE-REVIEW (2026-01-11)
+
+### Verification
+
+Checked implementation in codebase:
+- ✅ Function `_extract_passives_from_classdef()` exists in `endless_idler/characters/metadata.py`
+- ✅ Function correctly parses passive IDs from character class definitions
+- ✅ All 22 character files tested successfully
+- ✅ Return type extended to include `list[str]` for passive IDs
+- ✅ Integration with `discover_character_plugins()` working
+
+### Acceptance Criteria
+
+All acceptance criteria are met and verified:
+- [x] Return type includes `list[str]` for passive IDs
+- [x] `_extract_passives_from_classdef()` helper function created
+- [x] `_extract_passive_list()` handles various patterns
+- [x] Main function returns passive list as last element
+- [x] All character files parsed correctly
+- [x] Edge cases handled (empty lists, None, mixed types)
+- [x] Code passes linting
+- [x] Functions have docstrings
+
+### Status: COMPLETE ✅
+
+All implementation is verified and working. Task can be deleted.
+
+---
+
+**Re-Review Date**: 2026-01-11
+**Auditor**: AI Assistant (Auditor Mode)
