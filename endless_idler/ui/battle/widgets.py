@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from PySide6.QtCore import QPointF
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPolygonF
 from PySide6.QtGui import QBrush
 from PySide6.QtGui import QColor
 from PySide6.QtGui import QPainter
@@ -381,16 +380,6 @@ class LineOverlay(QWidget):
                             path.quadTo(QPointF(ctrl_x, ctrl_y), waypoint)
                             painter.drawPath(path)
                             
-                            # Draw arrow head at current position
-                            current_x = (1 - seg_progress) * (1 - seg_progress) * start.x() + \
-                                       2 * (1 - seg_progress) * seg_progress * ctrl_x + \
-                                       seg_progress * seg_progress * waypoint.x()
-                            current_y = (1 - seg_progress) * (1 - seg_progress) * start.y() + \
-                                       2 * (1 - seg_progress) * seg_progress * ctrl_y + \
-                                       seg_progress * seg_progress * waypoint.y()
-                            current_pos = QPointF(current_x, current_y)
-                            self._draw_arrow_head(painter, start, current_pos, color, width=pulse.width)
-                            
                         elif progress <= 0.5:
                             # Segment 2: midpoint → wrong target
                             seg_progress = (progress - 0.25) / 0.25
@@ -400,15 +389,6 @@ class LineOverlay(QWidget):
                             path.moveTo(waypoint)
                             path.quadTo(QPointF(ctrl_x, ctrl_y), wrong_pos)
                             painter.drawPath(path)
-                            
-                            current_x = (1 - seg_progress) * (1 - seg_progress) * waypoint.x() + \
-                                       2 * (1 - seg_progress) * seg_progress * ctrl_x + \
-                                       seg_progress * seg_progress * wrong_pos.x()
-                            current_y = (1 - seg_progress) * (1 - seg_progress) * waypoint.y() + \
-                                       2 * (1 - seg_progress) * seg_progress * ctrl_y + \
-                                       seg_progress * seg_progress * wrong_pos.y()
-                            current_pos = QPointF(current_x, current_y)
-                            self._draw_arrow_head(painter, waypoint, current_pos, color, width=pulse.width)
                             
                             # Draw "bounce" effect at wrong target if we're close
                             if seg_progress > 0.8:
@@ -430,15 +410,6 @@ class LineOverlay(QWidget):
                             path.quadTo(QPointF(ctrl_x, ctrl_y), waypoint)
                             painter.drawPath(path)
                             
-                            current_x = (1 - seg_progress) * (1 - seg_progress) * wrong_pos.x() + \
-                                       2 * (1 - seg_progress) * seg_progress * ctrl_x + \
-                                       seg_progress * seg_progress * waypoint.x()
-                            current_y = (1 - seg_progress) * (1 - seg_progress) * wrong_pos.y() + \
-                                       2 * (1 - seg_progress) * seg_progress * ctrl_y + \
-                                       seg_progress * seg_progress * waypoint.y()
-                            current_pos = QPointF(current_x, current_y)
-                            self._draw_arrow_head(painter, wrong_pos, current_pos, color, width=pulse.width)
-                            
                         else:
                             # Segment 4: midpoint → target (final)
                             seg_progress = (progress - 0.75) / 0.25
@@ -448,15 +419,6 @@ class LineOverlay(QWidget):
                             path.moveTo(waypoint)
                             path.quadTo(QPointF(ctrl_x, ctrl_y), end)
                             painter.drawPath(path)
-                            
-                            current_x = (1 - seg_progress) * (1 - seg_progress) * waypoint.x() + \
-                                       2 * (1 - seg_progress) * seg_progress * ctrl_x + \
-                                       seg_progress * seg_progress * end.x()
-                            current_y = (1 - seg_progress) * (1 - seg_progress) * waypoint.y() + \
-                                       2 * (1 - seg_progress) * seg_progress * ctrl_y + \
-                                       seg_progress * seg_progress * end.y()
-                            current_pos = QPointF(current_x, current_y)
-                            self._draw_arrow_head(painter, waypoint, current_pos, color, width=pulse.width)
                             
                             # Show target pulse in final segment
                             if pulse.show_target_pulse and seg_progress > 0.7:
@@ -498,14 +460,6 @@ class LineOverlay(QWidget):
                     path.quadTo(QPointF(second_mid_x, second_mid_y), end)
                     painter.drawPath(path)
                     
-                    # Draw arrow at the end
-                    t = 0.85
-                    curve_end = QPointF(
-                        (1 - t) * (1 - t) * waypoint.x() + 2 * (1 - t) * t * second_mid_x + t * t * end.x(),
-                        (1 - t) * (1 - t) * waypoint.y() + 2 * (1 - t) * t * second_mid_y + t * t * end.y()
-                    )
-                    self._draw_arrow_head(painter, curve_end, end, color, width=pulse.width)
-                    
                     # Draw pulse effect at target when show_target_pulse is True
                     if pulse.show_target_pulse:
                         progress = 1.0 - (pulse.remaining_ms / 220.0)
@@ -543,16 +497,8 @@ class LineOverlay(QWidget):
                         path.moveTo(start)
                         path.quadTo(QPointF(control_x, control_y), end)
                         painter.drawPath(path)
-                        
-                        t = 0.75
-                        curve_point = QPointF(
-                            (1 - t) * (1 - t) * start.x() + 2 * (1 - t) * t * control_x + t * t * end.x(),
-                            (1 - t) * (1 - t) * start.y() + 2 * (1 - t) * t * control_y + t * t * end.y()
-                        )
-                        self._draw_arrow_head(painter, curve_point, end, color, width=pulse.width)
                     else:
                         painter.drawLine(start, end)
-                        self._draw_arrow_head(painter, start, end, color, width=pulse.width)
     
                 if pulse.crit:
                     progress = 1.0 - (pulse.remaining_ms / 220.0)
@@ -614,38 +560,6 @@ class LineOverlay(QWidget):
                 return QPointF(self.mapFromGlobal(point.toPoint()))
         center = widget.mapToGlobal(widget.rect().center())
         return QPointF(self.mapFromGlobal(center))
-
-    def _draw_arrow_head(
-        self,
-        painter: QPainter,
-        start: QPointF,
-        end: QPointF,
-        color: QColor,
-        *,
-        width: int,
-    ) -> None:
-        dx = float(end.x() - start.x())
-        dy = float(end.y() - start.y())
-        length = (dx * dx + dy * dy) ** 0.5
-        if length <= 1e-6:
-            return
-
-        ux = dx / length
-        uy = dy / length
-        head_len = max(10.0, float(width) * 3.0)
-        head_w = max(6.0, float(width) * 2.0)
-
-        base = QPointF(end.x() - ux * head_len, end.y() - uy * head_len)
-        perp = QPointF(-uy, ux)
-        left = QPointF(base.x() + perp.x() * head_w, base.y() + perp.y() * head_w)
-        right = QPointF(base.x() - perp.x() * head_w, base.y() - perp.y() * head_w)
-
-        brush = QBrush(color)
-        painter.save()
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(brush)
-        painter.drawPolygon(QPolygonF([end, left, right]))
-        painter.restore()
 
 
 class Arena(QFrame):
