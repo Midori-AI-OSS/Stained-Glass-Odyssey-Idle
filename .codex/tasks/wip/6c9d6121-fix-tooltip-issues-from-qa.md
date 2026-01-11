@@ -1,9 +1,17 @@
 # Task: Fix Tooltip Issues from QA (If Needed)
 
-**Status**: Work In Progress  
+**Status**: BLOCKED - Waiting on QA (Task 10422986)  
 **Priority**: Medium  
 **Category**: UI/Tooltips/Bug Fix  
 **Task ID**: 6c9d6121
+
+## Auditor Update (2025-01-11)
+
+⚠️ **This task may not be needed!** QA testing (task 10422986) passed with no critical or high-priority issues. Only a minor testing script issue was found (not a UI bug). 
+
+**Recommendation**: Mark this task as COMPLETE/NOT NEEDED and close it once Task Master reviews the QA findings.
+
+---
 
 ## Objective
 
@@ -119,10 +127,31 @@ This task covers fixes for:
 
 ## Related Files
 
-- `endless_idler/ui/tooltip.py` - StainedGlassTooltip implementation (class at lines 44-192)
-  - Key methods: `_apply_element_tint()` (lines 168-191), `_refresh_background()` (lines 123-136)
+- `endless_idler/ui/tooltip.py` - StainedGlassTooltip implementation (lines 44-192)
+  - Class definition: line 44
+  - Key methods: 
+    - `show_near_cursor()` (lines 86-108) - positioning logic with screen boundary checks
+    - `_apply_element_tint()` (lines 168-191) - element-based color tinting
+    - `_refresh_background()` (lines 123-136) - background styling
 - `endless_idler/ui/theme.py` - QToolTip stylesheet (lines 383-389)
-- `.codex/tasks/wip/10422986-tooltip-qa-findings.md` - QA results (to be created by QA task)
+  - Global QToolTip CSS styling applied application-wide
+- `.codex/tasks/wip/10422986-tooltip-qa-findings.md` - QA results ✅ PASSED (no issues found)
+
+## Locations Using StainedGlassTooltip
+1. `party_builder_slot.py:419` - Character drag/drop tiles
+2. `party_builder_bar.py:363` - Party level tiles
+3. `onsite/card.py:271` - Character portraits
+4. `battle/widgets.py:211` - Combatant cards
+
+## Locations Using QToolTip
+1. `party_builder_slot.py:360,401` - Placeholder tooltips
+2. `party_builder_idle_bar.py:23,58,64` - Idle bar messages
+3. `party_builder_fight_bar.py:21,55,61` - Fight bar messages
+4. `party_builder_bar.py:352` - General bar elements
+5. `onsite/stat_bars.py:127` - Dynamic stat tooltips
+6. `onsite/card.py:145` - Stats button tooltip
+7. `battle/widgets.py:258` - Stat label tooltips
+8. `battle/screen.py:721` - Status messages
 
 ## Estimated Effort
 
