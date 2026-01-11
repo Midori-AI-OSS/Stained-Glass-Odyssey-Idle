@@ -1,21 +1,15 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from PySide6.QtCore import QPoint, Qt
-from PySide6.QtGui import QColor, QCursor, QGuiApplication, QPainter, QPixmap
+from PySide6.QtGui import QColor, QCursor, QGuiApplication
 from PySide6.QtWidgets import (
     QFrame,
-    QGraphicsBlurEffect,
     QGraphicsDropShadowEffect,
-    QGridLayout,
     QLabel,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
-
-from endless_idler.ui.assets import asset_path
 
 
 _TOOLTIP: "StainedGlassTooltip | None" = None
@@ -49,35 +43,29 @@ class StainedGlassTooltip(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
-        self._base_pixmap = self._load_background()
-
-        layout = QGridLayout()
+        # Main layout for the tooltip
+        layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         self.setLayout(layout)
 
-        self._bg = QLabel()
-        self._bg.setObjectName("stainedTooltipBackground")
-        self._bg.setScaledContents(True)
-        blur = QGraphicsBlurEffect(self._bg)
-        blur.setBlurRadius(14)
-        self._bg.setGraphicsEffect(blur)
-        layout.addWidget(self._bg, 0, 0, 1, 1)
-
+        # Panel with drop shadow for depth
         self._panel = QFrame()
         self._panel.setObjectName("stainedTooltipPanel")
         shadow = QGraphicsDropShadowEffect(self._panel)
-        shadow.setBlurRadius(26)
-        shadow.setOffset(0, 8)
-        shadow.setColor(QColor(0, 0, 0, 180))
+        shadow.setBlurRadius(28)
+        shadow.setOffset(0, 6)
+        shadow.setColor(QColor(0, 0, 0, 200))
         self._panel.setGraphicsEffect(shadow)
-        layout.addWidget(self._panel, 0, 0, 1, 1)
+        layout.addWidget(self._panel)
 
+        # Content layout inside panel
         panel_layout = QVBoxLayout()
-        panel_layout.setContentsMargins(10, 10, 10, 10)
+        panel_layout.setContentsMargins(12, 10, 12, 10)
         panel_layout.setSpacing(0)
         self._panel.setLayout(panel_layout)
 
+        # Text content label
         self._content = QLabel()
         self._content.setObjectName("stainedTooltipContent")
         self._content.setTextFormat(Qt.TextFormat.RichText)
@@ -93,8 +81,7 @@ class StainedGlassTooltip(QFrame):
         self._content.adjustSize()
         self._panel.adjustSize()
         self.adjustSize()
-        self._refresh_background()
-        self._apply_element_tint()
+        self._apply_glass_style()
 
     def show_near_cursor(self, owner: QWidget) -> None:
         pos = QCursor.pos()
@@ -120,72 +107,34 @@ class StainedGlassTooltip(QFrame):
         self.move(QPoint(x, y))
         self.show()
 
-    def _refresh_background(self) -> None:
-        if self._base_pixmap.isNull():
-            return
-        size = self.size()
-        if size.width() <= 0 or size.height() <= 0:
-            return
-        scaled = self._base_pixmap.scaled(
-            size,
-            Qt.AspectRatioMode.IgnoreAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        scaled = self._apply_stained_glass_overlay(scaled)
-        self._bg.setPixmap(scaled)
-
-    def _load_background(self) -> QPixmap:
-        path = Path(asset_path("backgrounds", "main_menu_cityscape.png"))
-        pixmap = QPixmap(str(path))
-        return pixmap if not pixmap.isNull() else QPixmap()
-
-    def _apply_stained_glass_overlay(self, pixmap: QPixmap) -> QPixmap:
-        tinted = QPixmap(pixmap)
-        painter = QPainter(tinted)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-
-        width = tinted.width()
-        height = tinted.height()
-        cell = 32
-
-        for y in range(0, height, cell):
-            for x in range(0, width, cell):
-                seed = (x * 73856093) ^ (y * 19349663) ^ 0xA5A5A5
-                r = 80 + (seed & 0x3F)
-                g = 70 + ((seed >> 7) & 0x3F)
-                b = 95 + ((seed >> 14) & 0x3F)
-                painter.fillRect(x, y, cell, cell, QColor(r, g, b, 38))
-
-        painter.setPen(QColor(0, 0, 0, 55))
-        for x in range(0, width + 1, cell):
-            painter.drawLine(x, 0, x, height)
-        for y in range(0, height + 1, cell):
-            painter.drawLine(0, y, width, y)
-
-        painter.end()
-        return tinted
-
-    def _apply_element_tint(self) -> None:
+    def _apply_glass_style(self) -> None:
+        """Apply true glass morphism style with element-based tinting."""
         if not self._element_id:
-            # No element ID, use subtle default glass tint
-            default_tint = "rgba(100, 120, 150, 30)"
-            self._panel.setStyleSheet(
-                f"QFrame#stainedTooltipPanel {{ "
-                f"background-color: {default_tint}; "
-                f"border: 1px solid rgba(255, 255, 255, 60); "
-                f"}}"
-            )
-            return
+            # Default glass tint - subtle blue-gray
+            background = "rgba(90, 110, 140, 32)"
+            border_color = "rgba(255, 255, 255, 90)"
+        else:
+            # Element-tinted glass effect
+            from endless_idler.ui.battle.colors import color_for_damage_type_id
+            color = color_for_damage_type_id(self._element_id)
+            
+            # Use element color with very low opacity for true glass effect
+            background = f"rgba({color.red()}, {color.green()}, {color.blue()}, 38)"
+            
+            # Brighter border with slight element tint for enhanced glass appearance
+            border_r = min(255, color.red() + 100)
+            border_g = min(255, color.green() + 100)
+            border_b = min(255, color.blue() + 100)
+            border_color = f"rgba({border_r}, {border_g}, {border_b}, 100)"
         
-        from endless_idler.ui.battle.colors import color_for_damage_type_id
-        color = color_for_damage_type_id(self._element_id)
-        
-        # Glass morphism: semi-transparent tint for the glass effect
-        # Reduced opacity for proper glass appearance
-        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 35)"
+        # Apply glass morphism stylesheet
+        # - Very low opacity background for transparency
+        # - Rounded corners for modern glass appearance
+        # - Bright border with subtle glow effect
         self._panel.setStyleSheet(
             f"QFrame#stainedTooltipPanel {{ "
-            f"background-color: {tint_color}; "
-            f"border: 1px solid rgba(255, 255, 255, 60); "
+            f"background-color: {background}; "
+            f"border: 1px solid {border_color}; "
+            f"border-radius: 6px; "
             f"}}"
         )
