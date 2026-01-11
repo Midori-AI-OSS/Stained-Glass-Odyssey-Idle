@@ -13,10 +13,20 @@ Off-site characters (reserves) in Fight mode have no tooltips when hovering over
 - Tooltips work for on-site characters but may not work correctly for off-site (variant="offsite")
 - Line 98: `self.setProperty("battleVariant", self._variant)` distinguishes offsite cards
 
-## Investigation Required
-Check if the existing tooltip logic in `CombatantCard` properly handles the "offsite" variant:
-- Line 215-216: Tooltip is only shown `if self._tooltip_html`
-- Need to verify if `_tooltip_html` is being populated for offsite combatants
+## Auditor's Investigation Results (Pre-Implementation)
+
+**Finding:** The existing tooltip infrastructure in `CombatantCard` SHOULD already work for offsite variants!
+
+**Evidence:**
+1. Line 203: Tooltips are disabled only for `compact=True` mode
+2. Line 233 in `battle/screen.py`: Offsite cards use `variant="offsite"` but NOT `compact=True`
+3. Line 260 in `battle/screen.py`: Only enemy foes use `compact=True`
+4. Line 151 & 175: `_refresh_tooltip()` is called in `__init__` and `refresh()` for ALL variants
+
+**Conclusion:** Tooltips should already be functional for offsite cards. This task may require:
+- Manual testing to confirm tooltips work
+- If tooltips DON'T work, investigate WHY (might be a display/visibility issue, not a tooltip generation issue)
+- If they DO work, this task can be closed immediately
 
 ## Current Code Analysis
 ```python

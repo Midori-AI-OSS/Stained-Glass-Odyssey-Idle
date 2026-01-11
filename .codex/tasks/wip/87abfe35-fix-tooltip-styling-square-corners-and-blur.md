@@ -29,10 +29,14 @@ In `endless_idler/ui/tooltip.py` in the `StainedGlassTooltip._apply_glass_style(
    f"border-radius: 0px; "
    ```
 
-2. For background blur, consider one of these approaches:
-   - Add a QGraphicsBlurEffect to a background widget layer behind the panel
-   - Use Qt's native blur capabilities with QGraphicsEffect
-   - Note: CSS `backdrop-filter` may not be fully supported in Qt, so use Qt native blur
+2. For background blur:
+   - **Note:** There's already a drop shadow effect (line 55-59) but this blurs the SHADOW, not the background
+   - Need to add a backdrop blur that blurs content BEHIND the tooltip for better readability
+   - Consider these approaches:
+     * Add a semi-transparent background layer with QGraphicsBlurEffect
+     * Capture the screen area behind the tooltip, blur it, and use as background
+     * Note: Qt doesn't support CSS `backdrop-filter`, so need Qt-native solution
+   - **Alternative simpler approach:** Increase the opacity of the background color to make text more readable without implementing complex backdrop blur
 
 ## Testing
 1. Test tooltips in all screens (Shop, Party Management, Battle, Idle)
