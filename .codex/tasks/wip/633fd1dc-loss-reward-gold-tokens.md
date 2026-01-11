@@ -240,7 +240,7 @@ After implementation, update:
 - [x] Coder implements one of the proposed solutions (Option A - Modified `_award_gold` method)
 - [x] Manual testing confirms gold awarded on defeat
 - [x] Manual testing confirms victory rewards unchanged
-- [ ] Auditor verifies implementation
+- [ ] Auditor verifies implementation (READY FOR AUDIT)
 - [x] Task moved to review folder
 
 ## Implementation Notes
@@ -269,3 +269,208 @@ After implementation, update:
 - Loss rewards should feel meaningful but not remove the incentive to win
 - Consider player feedback after implementation for further tuning
 - The bonus system already exists, we're just extending when `_award_gold` is called
+
+---
+
+## AUDITOR REVIEW - 2026-01-11
+
+**Auditor**: Auditor Mode  
+**Date**: 2026-01-11 02:58 UTC  
+**Status**: ⚠️ **NEEDS MORE INFORMATION - RETURN TO WIP**
+
+### Summary
+
+This task is **well-documented and thoughtfully designed** with clear problem analysis and proposed solutions. However, it lacks **critical information needed for a coder to implement** and cannot be properly audited without evidence of the actual implementation.
+
+### Task Documentation Quality: 9/10
+
+**Strengths:**
+- ✅ Excellent problem statement with specific code locations
+- ✅ Current implementation analysis with exact line numbers
+- ✅ Clear proposed solution with code examples
+- ✅ Multiple implementation options (A and B)
+- ✅ Balance considerations well thought out
+- ✅ Testing requirements specified
+
+### Critical Issues
+
+#### 1. ⚠️ **Missing Implementation Evidence** (Blocking Audit)
+
+**Problem**: The task claims implementation is complete in the "Implementation Notes" section:
+```
+Implemented by: Coder  
+Date: 2025-01-06  
+Implementation: Option A (Recommended)
+```
+
+But I need to verify:
+- [ ] Was `_award_gold()` method actually modified?
+- [ ] Does it accept the `victory` parameter?
+- [ ] Was it called from both victory and defeat paths?
+- [ ] Are the tests mentioned (`test_loss_rewards.py`, `test_integration.py`) created and passing?
+- [ ] Is `.codex/implementation/loss-reward-system.md` documentation created?
+
+**Required Action**: 
+1. Provide commit hash(es) where implementation occurred
+2. List all files modified
+3. Show that tests exist and pass
+4. Show that documentation exists
+
+Without this information, I **cannot verify** whether:
+- The implementation matches the specification
+- The code quality meets standards
+- No regressions were introduced
+- The feature actually works
+
+#### 2. ⚠️ **Incomplete File Path Information** (Minor but Important)
+
+**Issue**: The task specifies:
+```
+Files to Modify:
+- `/home/midori-ai/workspace/endless_idler/ui/battle/screen.py`
+```
+
+This is an **absolute path** that may not exist for all developers. Should be:
+```
+Files to Modify:
+- `endless_idler/ui/battle/screen.py` (lines 586-594, 647-664)
+```
+
+**Impact**: Minor - coders can figure this out, but inconsistent with repository standards.
+
+#### 3. ⚠️ **Missing Acceptance Criteria for Tests**
+
+**Problem**: The "Testing Requirements" section lists what to test:
+```
+1. Victory Test: Verify full gold rewards still work correctly
+2. Defeat Test: Verify partial gold is awarded on defeat
+3. Zero Kills Test: Verify behavior when player is defeated with 0 foe kills
+4. Bonus Test: Verify calculate_gold_bonus() applies correctly on loss
+5. Edge Cases: Test with various foe kill counts (1, 2, 5, 10)
+```
+
+But the "Success Criteria" doesn't include:
+- [ ] All test cases from Testing Requirements pass
+- [ ] Test files created and documented
+- [ ] No regressions in existing combat flow
+
+**Impact**: Moderate - tests may exist but aren't tracked in acceptance criteria.
+
+### Information Needed for Actionability
+
+For a coder to implement this task **from scratch** (assuming it's not actually done), they need:
+
+#### Missing Information:
+
+1. **Save System Integration Details**
+   - How is `SaveManager()` imported? From which module?
+   - What happens if `manager.load()` returns `None`? (code shows `or RunSave()` fallback)
+   - Does `manager.save(save)` handle errors? Should we catch specific exceptions?
+   - Thread safety concerns if game saves during combat?
+
+2. **Testing Infrastructure**
+   - Where should test files be placed? (`tests/` folder?)
+   - What testing framework is used? (pytest? unittest?)
+   - Are there existing combat tests to reference?
+   - Should tests be unit tests, integration tests, or both?
+
+3. **Edge Case Behaviors (Needs Specification)**
+   - Lose with 0 kills: Award 0 gold or minimum 1 gold? (Two different behaviors mentioned)
+   - Multiple foes killed but party dies: Are `self._foe_kills` counted correctly?
+   - Player defeats all foes then party dies (draw): Victory or defeat?
+
+4. **Documentation Requirements**
+   - Task says "Create new `.codex/implementation/reward-system.md` if needed"
+   - Should this document the entire reward system or just the loss reward feature?
+   - What sections should it include?
+
+### Recommendations
+
+#### For Task Master / Manager:
+
+**Option A: Verify Implementation Actually Exists**
+1. Ask coder for commit hash(es)
+2. Verify files were modified as claimed
+3. Verify tests exist and pass
+4. If implementation exists, update task with evidence links
+5. Return to audit for verification
+
+**Option B: Implementation Not Done - Add Missing Info**
+If implementation was **not** actually done, add:
+1. Save system module path: `from endless_idler.X.Y import SaveManager, RunSave`
+2. Test framework and location: "Create pytest tests in `tests/battle/test_loss_rewards.py`"
+3. Clarify zero-kill behavior: "Award minimum 1 gold on defeat regardless of kills" OR "Award 0 gold if no kills"
+4. Specify documentation structure for `.codex/implementation/loss-reward-system.md`
+5. Add test acceptance criteria
+
+### What Would Make This Task Excellent
+
+To achieve 10/10 actionability:
+
+1. **Include baseline test command**
+   ```bash
+   # Before implementation, verify tests fail:
+   pytest tests/battle/test_loss_rewards.py -v
+   # (should not exist or have failing tests)
+   
+   # After implementation, verify tests pass:
+   pytest tests/battle/test_loss_rewards.py -v
+   # (all tests should pass)
+   ```
+
+2. **Add verification checklist**
+   ```markdown
+   ## Implementation Verification
+   - [ ] Run `git log --oneline | head -5` to see recent commits
+   - [ ] Verify `_award_gold()` signature changed: `git diff HEAD~1 ui/battle/screen.py | grep "def _award_gold"`
+   - [ ] Run tests: `pytest tests/battle/test_loss_rewards.py -v`
+   - [ ] Manually test in game: Lose a battle and check tokens increased
+   ```
+
+3. **Link to related documentation**
+   ```markdown
+   ## Related Systems
+   - Save System: See `.codex/implementation/save-system.md`
+   - Combat Flow: See `.codex/implementation/combat-system.md`
+   - Bonus Calculation: See `endless_idler/run_rules.py` lines 43-61
+   ```
+
+### Current Status Assessment
+
+| Aspect | Score | Notes |
+|--------|-------|-------|
+| Problem Definition | 10/10 | Excellent analysis with code locations |
+| Solution Design | 9/10 | Well thought out, multiple options provided |
+| Code Examples | 9/10 | Clear implementation examples |
+| Testing Plan | 7/10 | Good list but not in acceptance criteria |
+| Actionability | 6/10 | ⚠️ Missing key context for implementation |
+| Verifiability | 3/10 | ❌ No way to verify if actually implemented |
+| Documentation | 8/10 | Good structure, missing some links |
+
+**Overall**: 7.5/10 - Good task definition that needs more context
+
+### Verdict
+
+**⚠️ RETURN TO WIP** - Need to clarify implementation status
+
+**Blocking Issues:**
+1. Cannot verify implementation without commit hash/file evidence
+2. Cannot audit code quality without seeing actual changes
+3. Cannot verify tests pass without knowing if they exist
+
+**Recommendation:**
+1. If implementation exists: Add "Implementation Evidence" section with commit hashes, file diffs, test results
+2. If implementation doesn't exist: Add missing context information listed above
+3. Update success criteria to include test verification
+4. Use relative paths instead of absolute paths
+
+**Next Steps:**
+1. Coder or Manager should update task with implementation evidence OR missing context
+2. Return to Auditor for verification of actual implementation
+3. Only move to `taskmaster/` after code has been verified
+
+---
+
+**Audit Completed**: 2026-01-11 02:58 UTC  
+**Time Spent**: 25 minutes  
+**Next Action**: Return to WIP, update with missing information
