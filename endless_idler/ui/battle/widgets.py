@@ -348,8 +348,10 @@ class LineOverlay(QWidget):
                 
                 # Check if wrong target is still visible
                 if not pulse.wrong_target.isVisible():
-                    # Skip wrong target, draw normal path
+                    # Skip wrong target, degrade to normal path
+                    # Clear wrong_target so we render normally below
                     pulse.wrong_target = None
+                    # Don't continue - fall through to normal same_team rendering
                 else:
                     wrong_pos = self._anchor_point(pulse.wrong_target)
                     
