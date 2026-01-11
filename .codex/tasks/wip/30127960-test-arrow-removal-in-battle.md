@@ -10,6 +10,13 @@ Manually test the battle screen to verify that targeting animations work correct
 - Observe special animations (wrong-way healing, critical hits, elemental effects)
 - Verify that the animated lines/paths still show but without arrow heads
 
+## How to Run
+```bash
+# From project root
+python main.py
+# Navigate to battle screen and observe animations
+```
+
 ## Acceptance Criteria
 - [ ] Attack animation lines render without arrow heads
 - [ ] Healing animation arcs render without arrow heads
@@ -20,6 +27,8 @@ Manually test the battle screen to verify that targeting animations work correct
 - [ ] Animation timing and flow remains smooth
 
 ## Notes
+**⚠️ IMPORTANT**: This task should only be performed AFTER both code modification tasks (47bddb69 and 83418a6c) are complete.
+
 This is a visual/functional test. Take screenshots or notes if any issues are found. The animations should look like flowing lines or curves without any triangular points at the ends.
 
 If issues are found:
