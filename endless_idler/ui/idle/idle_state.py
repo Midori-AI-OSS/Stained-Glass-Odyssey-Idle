@@ -520,8 +520,7 @@ class IdleGameState(QObject):
         stat_keys = (
             "atk",
             "defense",
-            "crit_rate",
-            "crit_damage",
+            "crit_mod",
             "dodge_odds",
             "regain",
         )
@@ -529,10 +528,10 @@ class IdleGameState(QObject):
         weights: list[float] = []
         for key in stat_keys:
             value = float(base_stats.get(key, 0.1))
-            if key in {"crit_rate", "dodge_odds", "mitigation"}:
+            if key == "crit_mod":
+                weight = value / 10.0  # crit_mod values are higher (100+), scale down
+            elif key in {"dodge_odds", "mitigation"}:
                 weight = value * 100.0
-            elif key == "crit_damage":
-                weight = value * 10.0
             else:
                 weight = value
 

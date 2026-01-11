@@ -5,6 +5,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from dataclasses import field
 
+from endless_idler.combat.crit_mod import calculate_crit_chance
+from endless_idler.combat.crit_mod import calculate_crit_damage
 from endless_idler.combat.damage_types import DamageTypeBase
 from endless_idler.combat.damage_types import Generic
 from endless_idler.combat.stat_effect import StatEffect
@@ -33,8 +35,7 @@ class Stats:
     _base_max_hp: int = field(default=1000, init=False)
     _base_atk: int = field(default=200, init=False)
     _base_defense: int = field(default=200, init=False)
-    _base_crit_rate: float = field(default=0.05, init=False)
-    _base_crit_damage: float = field(default=2.0, init=False)
+    _base_crit_mod: float = field(default=100.0, init=False)
     _base_effect_hit_rate: float = field(default=1.0, init=False)
     _base_mitigation: float = field(default=1.0, init=False)
     _base_regain: int = field(default=100, init=False)
@@ -122,20 +123,33 @@ class Stats:
         self._base_defense = int(value)
 
     @property
+    def crit_mod(self) -> float:
+        return max(0.0, self._base_crit_mod + self._calculate_stat_modifier("crit_mod"))
+
+    @crit_mod.setter
+    def crit_mod(self, value: float) -> None:
+        self._base_crit_mod = float(value)
+
+    @property
     def crit_rate(self) -> float:
-        return max(0.0, self._base_crit_rate + self._calculate_stat_modifier("crit_rate"))
+        return calculate_crit_chance(self.crit_mod)
 
     @crit_rate.setter
     def crit_rate(self, value: float) -> None:
-        self._base_crit_rate = float(value)
+        # For backward compatibility: setting crit_rate directly sets a rough crit_mod equivalent
+        # Each 1% crit rate roughly needs 100-200 points, use 150 as average
+        self._base_crit_mod = max(0.0, value * 100.0 * 150.0)
 
     @property
     def crit_damage(self) -> float:
-        return max(1.0, self._base_crit_damage + self._calculate_stat_modifier("crit_damage"))
+        return calculate_crit_damage(self.crit_mod)
 
     @crit_damage.setter
     def crit_damage(self, value: float) -> None:
-        self._base_crit_damage = float(value)
+        # For backward compatibility: setting crit_damage directly sets a rough crit_mod equivalent
+        # Each 0.05x above 1.0 roughly needs 20-40 points, use 30 as average
+        damage_above_base = max(0.0, value - 1.0)
+        self._base_crit_mod = (damage_above_base / 0.05) * 30.0
 
     @property
     def effect_hit_rate(self) -> float:

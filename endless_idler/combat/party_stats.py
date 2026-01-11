@@ -8,8 +8,7 @@ STAT_SHARE_KEYS: tuple[str, ...] = (
     "atk",
     "defense",
     "regain",
-    "crit_rate",
-    "crit_damage",
+    "crit_mod",
     "effect_hit_rate",
     "mitigation",
     "dodge_odds",
@@ -50,8 +49,7 @@ def apply_scaled_bases(
     stats.set_base_stat("regain", int(regain * scale))
 
     for key in (
-        "crit_rate",
-        "crit_damage",
+        "crit_mod",
         "effect_hit_rate",
         "mitigation",
         "dodge_odds",

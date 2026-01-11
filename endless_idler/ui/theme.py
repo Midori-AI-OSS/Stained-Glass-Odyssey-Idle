@@ -530,7 +530,7 @@ QProgressBar#onsiteStatBar[statKey="spd"]::chunk {
     background-color: rgba(46, 204, 113, 175);
 }
 
-QProgressBar#onsiteStatBar[statKey="crit_rate"]::chunk {
+QProgressBar#onsiteStatBar[statKey="crit_mod"]::chunk {
     background-color: rgba(241, 196, 15, 185);
 }
 
@@ -666,7 +666,7 @@ QProgressBar#battleStatBar[statKey="spd"]::chunk {
     background-color: rgba(46, 204, 113, 175);
 }
 
-QProgressBar#battleStatBar[statKey="crit_rate"]::chunk {
+QProgressBar#battleStatBar[statKey="crit_mod"]::chunk {
     background-color: rgba(241, 196, 15, 185);
 }
 
