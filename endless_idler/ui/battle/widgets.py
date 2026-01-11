@@ -323,253 +323,207 @@ class LineOverlay(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
-        for pulse in list(self._pulses):
-            if pulse.remaining_ms <= 0:
-                continue
-            if not pulse.source.isVisible() or not pulse.target.isVisible():
-                continue
-
-            start = self._anchor_point(pulse.source)
-            end = self._anchor_point(pulse.target)
-            if start == end:
-                continue
-
-            alpha = max(0, min(255, int(255 * (pulse.remaining_ms / float(pulse.total_duration_ms)))))
-            color = QColor(pulse.color)
-            color.setAlpha(alpha)
-            pen = QPen(color)
-            pen.setWidth(max(1, int(pulse.width)))
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            painter.setPen(pen)
-            
-            # Handle wrong-way healing animation (4-segment path)
-            if pulse.wrong_target is not None and pulse.same_team:
-                from PySide6.QtGui import QPainterPath
+        try:
+            for pulse in list(self._pulses):
+                if pulse.remaining_ms <= 0:
+                    continue
+                if not pulse.source.isVisible() or not pulse.target.isVisible():
+                    continue
+    
+                start = self._anchor_point(pulse.source)
+                end = self._anchor_point(pulse.target)
+                if start == end:
+                    continue
+    
+                alpha = max(0, min(255, int(255 * (pulse.remaining_ms / float(pulse.total_duration_ms)))))
+                color = QColor(pulse.color)
+                color.setAlpha(alpha)
+                pen = QPen(color)
+                pen.setWidth(max(1, int(pulse.width)))
+                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+                painter.setPen(pen)
                 
-                # Check if wrong target is still visible
-                if not pulse.wrong_target.isVisible():
-                    # Skip wrong target, degrade to normal path
-                    # Clear wrong_target so we render normally below
-                    pulse.wrong_target = None
-                    # Don't continue - fall through to normal same_team rendering
-                else:
-                    wrong_pos = self._anchor_point(pulse.wrong_target)
+                # Handle wrong-way healing animation (4-segment path)
+                if pulse.wrong_target is not None and pulse.same_team:
+                    from PySide6.QtGui import QPainterPath
+                    
+                    # Check if wrong target is still visible
+                    if not pulse.wrong_target.isVisible():
+                        # Skip wrong target, degrade to normal path
+                        # Clear wrong_target so we render normally below
+                        pulse.wrong_target = None
+                        # Don't continue - fall through to normal same_team rendering
+                    else:
+                        wrong_pos = self._anchor_point(pulse.wrong_target)
+                        
+                        # Use provided midpoint or calculate fallback
+                        if pulse.midpoint is not None:
+                            waypoint = pulse.midpoint
+                        else:
+                            waypoint_x = start.x() + (end.x() - start.x()) * 0.5
+                            waypoint_y = min(start.y(), end.y()) - 80.0
+                            waypoint = QPointF(waypoint_x, waypoint_y)
+                        
+                        # Calculate which segment we're in based on progress
+                        progress = 1.0 - (pulse.remaining_ms / float(pulse.total_duration_ms))
+                        
+                        # Four segments: source→midpoint, midpoint→wrong, wrong→midpoint, midpoint→target
+                        # Each segment is 25% of total animation (110ms each for 440ms total)
+                        path = QPainterPath()
+                        
+                        if progress <= 0.25:
+                            # Segment 1: source → midpoint
+                            seg_progress = progress / 0.25
+                            ctrl_x = (start.x() + waypoint.x()) / 2.0
+                            ctrl_y = (start.y() + waypoint.y()) / 2.0 - 30.0
+                            
+                            path.moveTo(start)
+                            path.quadTo(QPointF(ctrl_x, ctrl_y), waypoint)
+                            painter.drawPath(path)
+                            
+                            # Draw arrow head at current position
+                            current_x = (1 - seg_progress) * (1 - seg_progress) * start.x() + \
+                                       2 * (1 - seg_progress) * seg_progress * ctrl_x + \
+                                       seg_progress * seg_progress * waypoint.x()
+                            current_y = (1 - seg_progress) * (1 - seg_progress) * start.y() + \
+                                       2 * (1 - seg_progress) * seg_progress * ctrl_y + \
+                                       seg_progress * seg_progress * waypoint.y()
+                            current_pos = QPointF(current_x, current_y)
+                            self._draw_arrow_head(painter, start, current_pos, color, width=pulse.width)
+                            
+                        elif progress <= 0.5:
+                            # Segment 2: midpoint → wrong target
+                            seg_progress = (progress - 0.25) / 0.25
+                            ctrl_x = (waypoint.x() + wrong_pos.x()) / 2.0
+                            ctrl_y = (waypoint.y() + wrong_pos.y()) / 2.0 - 30.0
+                            
+                            path.moveTo(waypoint)
+                            path.quadTo(QPointF(ctrl_x, ctrl_y), wrong_pos)
+                            painter.drawPath(path)
+                            
+                            current_x = (1 - seg_progress) * (1 - seg_progress) * waypoint.x() + \
+                                       2 * (1 - seg_progress) * seg_progress * ctrl_x + \
+                                       seg_progress * seg_progress * wrong_pos.x()
+                            current_y = (1 - seg_progress) * (1 - seg_progress) * waypoint.y() + \
+                                       2 * (1 - seg_progress) * seg_progress * ctrl_y + \
+                                       seg_progress * seg_progress * wrong_pos.y()
+                            current_pos = QPointF(current_x, current_y)
+                            self._draw_arrow_head(painter, waypoint, current_pos, color, width=pulse.width)
+                            
+                            # Draw "bounce" effect at wrong target if we're close
+                            if seg_progress > 0.8:
+                                bounce_alpha = int(alpha * (1.0 - (seg_progress - 0.8) / 0.2))
+                                bounce_color = QColor(255, 150, 150)  # Reddish color for "wrong"
+                                bounce_color.setAlpha(bounce_alpha)
+                                painter.setPen(Qt.PenStyle.NoPen)
+                                painter.setBrush(QBrush(bounce_color))
+                                radius = 8.0 + 8.0 * (seg_progress - 0.8) / 0.2
+                                painter.drawEllipse(wrong_pos, radius, radius)
+                            
+                        elif progress <= 0.75:
+                            # Segment 3: wrong target → midpoint (return)
+                            seg_progress = (progress - 0.5) / 0.25
+                            ctrl_x = (wrong_pos.x() + waypoint.x()) / 2.0
+                            ctrl_y = (wrong_pos.y() + waypoint.y()) / 2.0 - 30.0
+                            
+                            path.moveTo(wrong_pos)
+                            path.quadTo(QPointF(ctrl_x, ctrl_y), waypoint)
+                            painter.drawPath(path)
+                            
+                            current_x = (1 - seg_progress) * (1 - seg_progress) * wrong_pos.x() + \
+                                       2 * (1 - seg_progress) * seg_progress * ctrl_x + \
+                                       seg_progress * seg_progress * waypoint.x()
+                            current_y = (1 - seg_progress) * (1 - seg_progress) * wrong_pos.y() + \
+                                       2 * (1 - seg_progress) * seg_progress * ctrl_y + \
+                                       seg_progress * seg_progress * waypoint.y()
+                            current_pos = QPointF(current_x, current_y)
+                            self._draw_arrow_head(painter, wrong_pos, current_pos, color, width=pulse.width)
+                            
+                        else:
+                            # Segment 4: midpoint → target (final)
+                            seg_progress = (progress - 0.75) / 0.25
+                            ctrl_x = (waypoint.x() + end.x()) / 2.0
+                            ctrl_y = (waypoint.y() + end.y()) / 2.0 - 30.0
+                            
+                            path.moveTo(waypoint)
+                            path.quadTo(QPointF(ctrl_x, ctrl_y), end)
+                            painter.drawPath(path)
+                            
+                            current_x = (1 - seg_progress) * (1 - seg_progress) * waypoint.x() + \
+                                       2 * (1 - seg_progress) * seg_progress * ctrl_x + \
+                                       seg_progress * seg_progress * end.x()
+                            current_y = (1 - seg_progress) * (1 - seg_progress) * waypoint.y() + \
+                                       2 * (1 - seg_progress) * seg_progress * ctrl_y + \
+                                       seg_progress * seg_progress * end.y()
+                            current_pos = QPointF(current_x, current_y)
+                            self._draw_arrow_head(painter, waypoint, current_pos, color, width=pulse.width)
+                            
+                            # Show target pulse in final segment
+                            if pulse.show_target_pulse and seg_progress > 0.7:
+                                pulse_alpha = int(alpha * (1.0 - (seg_progress - 0.7) / 0.3))
+                                pulse_color = QColor(color)
+                                pulse_color.setAlpha(pulse_alpha)
+                                painter.setPen(Qt.PenStyle.NoPen)
+                                painter.setBrush(QBrush(pulse_color))
+                                radius = 8.0 + 12.0 * (seg_progress - 0.7) / 0.3
+                                painter.drawEllipse(end, radius, radius)
+                        
+                        # Skip the normal same_team rendering
+                        continue
+                
+                if pulse.same_team:
+                    from PySide6.QtGui import QPainterPath
                     
                     # Use provided midpoint or calculate fallback
                     if pulse.midpoint is not None:
                         waypoint = pulse.midpoint
                     else:
+                        # Fallback: Calculate waypoint as 50% towards the opposite side (horizontally)
                         waypoint_x = start.x() + (end.x() - start.x()) * 0.5
                         waypoint_y = min(start.y(), end.y()) - 80.0
                         waypoint = QPointF(waypoint_x, waypoint_y)
                     
-                    # Calculate which segment we're in based on progress
-                    progress = 1.0 - (pulse.remaining_ms / float(pulse.total_duration_ms))
+                    # First arc: from attacker to midpoint
+                    first_mid_x = (start.x() + waypoint.x()) / 2.0
+                    first_mid_y = (start.y() + waypoint.y()) / 2.0 - 30.0
                     
-                    # Four segments: source→midpoint, midpoint→wrong, wrong→midpoint, midpoint→target
-                    # Each segment is 25% of total animation (110ms each for 440ms total)
+                    # Second arc: from midpoint to target
+                    second_mid_x = (waypoint.x() + end.x()) / 2.0
+                    second_mid_y = (waypoint.y() + end.y()) / 2.0 - 30.0
+                    
+                    # Draw double-curved path through midpoint
                     path = QPainterPath()
+                    path.moveTo(start)
+                    path.quadTo(QPointF(first_mid_x, first_mid_y), waypoint)
+                    path.quadTo(QPointF(second_mid_x, second_mid_y), end)
+                    painter.drawPath(path)
                     
-                    if progress <= 0.25:
-                        # Segment 1: source → midpoint
-                        seg_progress = progress / 0.25
-                        ctrl_x = (start.x() + waypoint.x()) / 2.0
-                        ctrl_y = (start.y() + waypoint.y()) / 2.0 - 30.0
-                        
-                        path.moveTo(start)
-                        path.quadTo(QPointF(ctrl_x, ctrl_y), waypoint)
-                        painter.drawPath(path)
-                        
-                        # Draw arrow head at current position
-                        current_x = (1 - seg_progress) * (1 - seg_progress) * start.x() + \
-                                   2 * (1 - seg_progress) * seg_progress * ctrl_x + \
-                                   seg_progress * seg_progress * waypoint.x()
-                        current_y = (1 - seg_progress) * (1 - seg_progress) * start.y() + \
-                                   2 * (1 - seg_progress) * seg_progress * ctrl_y + \
-                                   seg_progress * seg_progress * waypoint.y()
-                        current_pos = QPointF(current_x, current_y)
-                        self._draw_arrow_head(painter, start, current_pos, color, width=pulse.width)
-                        
-                    elif progress <= 0.5:
-                        # Segment 2: midpoint → wrong target
-                        seg_progress = (progress - 0.25) / 0.25
-                        ctrl_x = (waypoint.x() + wrong_pos.x()) / 2.0
-                        ctrl_y = (waypoint.y() + wrong_pos.y()) / 2.0 - 30.0
-                        
-                        path.moveTo(waypoint)
-                        path.quadTo(QPointF(ctrl_x, ctrl_y), wrong_pos)
-                        painter.drawPath(path)
-                        
-                        current_x = (1 - seg_progress) * (1 - seg_progress) * waypoint.x() + \
-                                   2 * (1 - seg_progress) * seg_progress * ctrl_x + \
-                                   seg_progress * seg_progress * wrong_pos.x()
-                        current_y = (1 - seg_progress) * (1 - seg_progress) * waypoint.y() + \
-                                   2 * (1 - seg_progress) * seg_progress * ctrl_y + \
-                                   seg_progress * seg_progress * wrong_pos.y()
-                        current_pos = QPointF(current_x, current_y)
-                        self._draw_arrow_head(painter, waypoint, current_pos, color, width=pulse.width)
-                        
-                        # Draw "bounce" effect at wrong target if we're close
-                        if seg_progress > 0.8:
-                            bounce_alpha = int(alpha * (1.0 - (seg_progress - 0.8) / 0.2))
-                            bounce_color = QColor(255, 150, 150)  # Reddish color for "wrong"
-                            bounce_color.setAlpha(bounce_alpha)
-                            painter.setPen(Qt.PenStyle.NoPen)
-                            painter.setBrush(QBrush(bounce_color))
-                            radius = 8.0 + 8.0 * (seg_progress - 0.8) / 0.2
-                            painter.drawEllipse(wrong_pos, radius, radius)
-                        
-                    elif progress <= 0.75:
-                        # Segment 3: wrong target → midpoint (return)
-                        seg_progress = (progress - 0.5) / 0.25
-                        ctrl_x = (wrong_pos.x() + waypoint.x()) / 2.0
-                        ctrl_y = (wrong_pos.y() + waypoint.y()) / 2.0 - 30.0
-                        
-                        path.moveTo(wrong_pos)
-                        path.quadTo(QPointF(ctrl_x, ctrl_y), waypoint)
-                        painter.drawPath(path)
-                        
-                        current_x = (1 - seg_progress) * (1 - seg_progress) * wrong_pos.x() + \
-                                   2 * (1 - seg_progress) * seg_progress * ctrl_x + \
-                                   seg_progress * seg_progress * waypoint.x()
-                        current_y = (1 - seg_progress) * (1 - seg_progress) * wrong_pos.y() + \
-                                   2 * (1 - seg_progress) * seg_progress * ctrl_y + \
-                                   seg_progress * seg_progress * waypoint.y()
-                        current_pos = QPointF(current_x, current_y)
-                        self._draw_arrow_head(painter, wrong_pos, current_pos, color, width=pulse.width)
-                        
-                    else:
-                        # Segment 4: midpoint → target (final)
-                        seg_progress = (progress - 0.75) / 0.25
-                        ctrl_x = (waypoint.x() + end.x()) / 2.0
-                        ctrl_y = (waypoint.y() + end.y()) / 2.0 - 30.0
-                        
-                        path.moveTo(waypoint)
-                        path.quadTo(QPointF(ctrl_x, ctrl_y), end)
-                        painter.drawPath(path)
-                        
-                        current_x = (1 - seg_progress) * (1 - seg_progress) * waypoint.x() + \
-                                   2 * (1 - seg_progress) * seg_progress * ctrl_x + \
-                                   seg_progress * seg_progress * end.x()
-                        current_y = (1 - seg_progress) * (1 - seg_progress) * waypoint.y() + \
-                                   2 * (1 - seg_progress) * seg_progress * ctrl_y + \
-                                   seg_progress * seg_progress * end.y()
-                        current_pos = QPointF(current_x, current_y)
-                        self._draw_arrow_head(painter, waypoint, current_pos, color, width=pulse.width)
-                        
-                        # Show target pulse in final segment
-                        if pulse.show_target_pulse and seg_progress > 0.7:
-                            pulse_alpha = int(alpha * (1.0 - (seg_progress - 0.7) / 0.3))
+                    # Draw arrow at the end
+                    t = 0.85
+                    curve_end = QPointF(
+                        (1 - t) * (1 - t) * waypoint.x() + 2 * (1 - t) * t * second_mid_x + t * t * end.x(),
+                        (1 - t) * (1 - t) * waypoint.y() + 2 * (1 - t) * t * second_mid_y + t * t * end.y()
+                    )
+                    self._draw_arrow_head(painter, curve_end, end, color, width=pulse.width)
+                    
+                    # Draw pulse effect at target when show_target_pulse is True
+                    if pulse.show_target_pulse:
+                        progress = 1.0 - (pulse.remaining_ms / 220.0)
+                        if progress > 0.7:
+                            pulse_alpha = int(alpha * (1.0 - (progress - 0.7) / 0.3))
                             pulse_color = QColor(color)
                             pulse_color.setAlpha(pulse_alpha)
                             painter.setPen(Qt.PenStyle.NoPen)
                             painter.setBrush(QBrush(pulse_color))
-                            radius = 8.0 + 12.0 * (seg_progress - 0.7) / 0.3
+                            radius = 8.0 + 12.0 * (progress - 0.7) / 0.3
                             painter.drawEllipse(end, radius, radius)
-                    
-                    # Skip the normal same_team rendering
-                    continue
-            
-            if pulse.same_team:
-                from PySide6.QtGui import QPainterPath
-                
-                # Use provided midpoint or calculate fallback
-                if pulse.midpoint is not None:
-                    waypoint = pulse.midpoint
-                else:
-                    # Fallback: Calculate waypoint as 50% towards the opposite side (horizontally)
-                    waypoint_x = start.x() + (end.x() - start.x()) * 0.5
-                    waypoint_y = min(start.y(), end.y()) - 80.0
-                    waypoint = QPointF(waypoint_x, waypoint_y)
-                
-                # First arc: from attacker to midpoint
-                first_mid_x = (start.x() + waypoint.x()) / 2.0
-                first_mid_y = (start.y() + waypoint.y()) / 2.0 - 30.0
-                
-                # Second arc: from midpoint to target
-                second_mid_x = (waypoint.x() + end.x()) / 2.0
-                second_mid_y = (waypoint.y() + end.y()) / 2.0 - 30.0
-                
-                # Draw double-curved path through midpoint
-                path = QPainterPath()
-                path.moveTo(start)
-                path.quadTo(QPointF(first_mid_x, first_mid_y), waypoint)
-                path.quadTo(QPointF(second_mid_x, second_mid_y), end)
-                painter.drawPath(path)
-                
-                # Draw arrow at the end
-                t = 0.85
-                curve_end = QPointF(
-                    (1 - t) * (1 - t) * waypoint_x + 2 * (1 - t) * t * second_mid_x + t * t * end.x(),
-                    (1 - t) * (1 - t) * waypoint_y + 2 * (1 - t) * t * second_mid_y + t * t * end.y()
-                )
-                self._draw_arrow_head(painter, curve_end, end, color, width=pulse.width)
-                
-                # Draw pulse effect at target when show_target_pulse is True
-                if pulse.show_target_pulse:
-                    progress = 1.0 - (pulse.remaining_ms / 220.0)
-                    if progress > 0.7:
-                        pulse_alpha = int(alpha * (1.0 - (progress - 0.7) / 0.3))
-                        pulse_color = QColor(color)
-                        pulse_color.setAlpha(pulse_alpha)
-                        painter.setPen(Qt.PenStyle.NoPen)
-                        painter.setBrush(QBrush(pulse_color))
-                        radius = 8.0 + 12.0 * (progress - 0.7) / 0.3
-                        painter.drawEllipse(end, radius, radius)
-            else:
-                dx = float(end.x() - start.x())
-                dy = float(end.y() - start.y())
-                dist = (dx * dx + dy * dy) ** 0.5
-                
-                if dist > 10:
-                    
-                    seed = int((start.x() + start.y() + end.x() + end.y()) * 1000) % 10000
-                    rng = random.Random(seed)
-                    curve_offset = rng.uniform(10, 30)
-                    curve_dir = 1 if rng.random() > 0.5 else -1
-                    
-                    mid_x = (start.x() + end.x()) / 2.0
-                    mid_y = (start.y() + end.y()) / 2.0
-                    
-                    perp_x = -dy / dist
-                    perp_y = dx / dist
-                    
-                    control_x = mid_x + perp_x * curve_offset * curve_dir
-                    control_y = mid_y + perp_y * curve_offset * curve_dir
-                    
-                    from PySide6.QtGui import QPainterPath
-                    path = QPainterPath()
-                    path.moveTo(start)
-                    path.quadTo(QPointF(control_x, control_y), end)
-                    painter.drawPath(path)
-                    
-                    t = 0.75
-                    curve_point = QPointF(
-                        (1 - t) * (1 - t) * start.x() + 2 * (1 - t) * t * control_x + t * t * end.x(),
-                        (1 - t) * (1 - t) * start.y() + 2 * (1 - t) * t * control_y + t * t * end.y()
-                    )
-                    self._draw_arrow_head(painter, curve_point, end, color, width=pulse.width)
-                else:
-                    painter.drawLine(start, end)
-                    self._draw_arrow_head(painter, start, end, color, width=pulse.width)
-
-            if pulse.crit:
-                progress = 1.0 - (pulse.remaining_ms / 220.0)
-                progress = max(0.0, min(1.0, float(progress)))
-                
-                if pulse.same_team:
-                    mid_x = (start.x() + end.x()) / 2.0
-                    mid_y = min(start.y(), end.y()) - 50.0
-                    point = QPointF(
-                        (1 - progress) * (1 - progress) * start.x() + 2 * (1 - progress) * progress * mid_x + progress * progress * end.x(),
-                        (1 - progress) * (1 - progress) * start.y() + 2 * (1 - progress) * progress * mid_y + progress * progress * end.y()
-                    )
                 else:
                     dx = float(end.x() - start.x())
                     dy = float(end.y() - start.y())
                     dist = (dx * dx + dy * dy) ** 0.5
                     
                     if dist > 10:
+                        
                         seed = int((start.x() + start.y() + end.x() + end.y()) * 1000) % 10000
                         rng = random.Random(seed)
                         curve_offset = rng.uniform(10, 30)
@@ -577,29 +531,77 @@ class LineOverlay(QWidget):
                         
                         mid_x = (start.x() + end.x()) / 2.0
                         mid_y = (start.y() + end.y()) / 2.0
+                        
                         perp_x = -dy / dist
                         perp_y = dx / dist
+                        
                         control_x = mid_x + perp_x * curve_offset * curve_dir
                         control_y = mid_y + perp_y * curve_offset * curve_dir
                         
+                        from PySide6.QtGui import QPainterPath
+                        path = QPainterPath()
+                        path.moveTo(start)
+                        path.quadTo(QPointF(control_x, control_y), end)
+                        painter.drawPath(path)
+                        
+                        t = 0.75
+                        curve_point = QPointF(
+                            (1 - t) * (1 - t) * start.x() + 2 * (1 - t) * t * control_x + t * t * end.x(),
+                            (1 - t) * (1 - t) * start.y() + 2 * (1 - t) * t * control_y + t * t * end.y()
+                        )
+                        self._draw_arrow_head(painter, curve_point, end, color, width=pulse.width)
+                    else:
+                        painter.drawLine(start, end)
+                        self._draw_arrow_head(painter, start, end, color, width=pulse.width)
+    
+                if pulse.crit:
+                    progress = 1.0 - (pulse.remaining_ms / 220.0)
+                    progress = max(0.0, min(1.0, float(progress)))
+                    
+                    if pulse.same_team:
+                        mid_x = (start.x() + end.x()) / 2.0
+                        mid_y = min(start.y(), end.y()) - 50.0
                         point = QPointF(
-                            (1 - progress) * (1 - progress) * start.x() + 2 * (1 - progress) * progress * control_x + progress * progress * end.x(),
-                            (1 - progress) * (1 - progress) * start.y() + 2 * (1 - progress) * progress * control_y + progress * progress * end.y()
+                            (1 - progress) * (1 - progress) * start.x() + 2 * (1 - progress) * progress * mid_x + progress * progress * end.x(),
+                            (1 - progress) * (1 - progress) * start.y() + 2 * (1 - progress) * progress * mid_y + progress * progress * end.y()
                         )
                     else:
-                        point = QPointF(
-                            start.x() + (end.x() - start.x()) * progress,
-                            start.y() + (end.y() - start.y()) * progress,
-                        )
-                
-                gold = QColor(255, 215, 0)
-                gold.setAlpha(alpha)
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(QBrush(gold))
-                radius = 6.0 + 4.0 * (1.0 - (alpha / 255.0))
-                painter.drawEllipse(point, radius, radius)
-
-        painter.end()
+                        dx = float(end.x() - start.x())
+                        dy = float(end.y() - start.y())
+                        dist = (dx * dx + dy * dy) ** 0.5
+                        
+                        if dist > 10:
+                            seed = int((start.x() + start.y() + end.x() + end.y()) * 1000) % 10000
+                            rng = random.Random(seed)
+                            curve_offset = rng.uniform(10, 30)
+                            curve_dir = 1 if rng.random() > 0.5 else -1
+                            
+                            mid_x = (start.x() + end.x()) / 2.0
+                            mid_y = (start.y() + end.y()) / 2.0
+                            perp_x = -dy / dist
+                            perp_y = dx / dist
+                            control_x = mid_x + perp_x * curve_offset * curve_dir
+                            control_y = mid_y + perp_y * curve_offset * curve_dir
+                            
+                            point = QPointF(
+                                (1 - progress) * (1 - progress) * start.x() + 2 * (1 - progress) * progress * control_x + progress * progress * end.x(),
+                                (1 - progress) * (1 - progress) * start.y() + 2 * (1 - progress) * progress * control_y + progress * progress * end.y()
+                            )
+                        else:
+                            point = QPointF(
+                                start.x() + (end.x() - start.x()) * progress,
+                                start.y() + (end.y() - start.y()) * progress,
+                            )
+                    
+                    gold = QColor(255, 215, 0)
+                    gold.setAlpha(alpha)
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(QBrush(gold))
+                    radius = 6.0 + 4.0 * (1.0 - (alpha / 255.0))
+                    painter.drawEllipse(point, radius, radius)
+    
+        finally:
+            painter.end()
 
     def _anchor_point(self, widget: QWidget) -> QPointF:
         anchor = getattr(widget, "pulse_anchor_global", None)
