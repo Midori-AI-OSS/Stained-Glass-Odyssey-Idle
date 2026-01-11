@@ -167,10 +167,25 @@ class StainedGlassTooltip(QFrame):
 
     def _apply_element_tint(self) -> None:
         if not self._element_id:
+            # No element ID, use subtle default glass tint
+            default_tint = "rgba(100, 120, 150, 30)"
+            self._panel.setStyleSheet(
+                f"QFrame#stainedTooltipPanel {{ "
+                f"background-color: {default_tint}; "
+                f"border: 1px solid rgba(255, 255, 255, 60); "
+                f"}}"
+            )
             return
         
         from endless_idler.ui.battle.colors import color_for_damage_type_id
         color = color_for_damage_type_id(self._element_id)
         
-        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 60)"
-        self._panel.setStyleSheet(f"QFrame#stainedTooltipPanel {{ background-color: {tint_color} !important; }}")
+        # Glass morphism: semi-transparent tint for the glass effect
+        # Reduced opacity for proper glass appearance
+        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 35)"
+        self._panel.setStyleSheet(
+            f"QFrame#stainedTooltipPanel {{ "
+            f"background-color: {tint_color}; "
+            f"border: 1px solid rgba(255, 255, 255, 60); "
+            f"}}"
+        )

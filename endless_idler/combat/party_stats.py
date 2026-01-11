@@ -134,7 +134,9 @@ def build_scaled_character_stats(
     spd_value = int(spd if spd is not None else (2 + stars))
 
     stats = Stats()
-    stats.passive_modifier = 1.5 ** max(0, stacks - 1)
+    # Passive modifier formula: (stacks * 0.05) + 1
+    # Provides 5% bonus per stack, starting at 1.0 (neutral) with 0 stacks
+    stats.passive_modifier = (stacks * 0.05) + 1.0
 
     merged = merged_base_stats(
         plugin_base_stats=getattr(plugin, "base_stats", None) if plugin else None,

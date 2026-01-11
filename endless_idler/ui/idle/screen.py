@@ -160,6 +160,7 @@ class IdleScreenWidget(QWidget):
                 rng=self._rng,
                 stack_count=stack_count,
                 on_rebirth=self._rebirth_character,
+                on_prestige=self._prestige_character,
             )
             self._onsite_cards.append(card)
             left_layout.addWidget(card, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -186,6 +187,7 @@ class IdleScreenWidget(QWidget):
                 rng=self._rng,
                 stack_count=stack_count,
                 on_rebirth=self._rebirth_character,
+                on_prestige=self._prestige_character,
             )
             self._offsite_cards.append(card)
             reserves_layout.addWidget(card, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -408,6 +410,93 @@ class IdleScreenWidget(QWidget):
         except Exception:
             return
 
+        self._refresh_character_cards()
+
+    def _prestige_character(self, char_id: str) -> None:
+        """
+        Apply prestige to a character with confirmation dialog.
+        
+        Shows the player what will happen before they commit to the prestige.
+        """
+        # Get current character data
+        data = self._idle_state.get_char_data(char_id)
+        if not data:
+            return
+        
+        # Check if prestige is available
+        exp_multiplier = float(data.get("exp_multiplier", 1.0))
+        if exp_multiplier < 10.0:
+            return
+        
+        # Get current prestige count
+        prestige_count = max(0, int(data.get("prestige_count", 0)))
+        new_prestige_count = prestige_count + 1
+        
+        # Calculate new values after prestige
+        new_exp_mult = 0.5 * (0.5 ** prestige_count)
+        new_exp_mult = max(0.01, new_exp_mult)
+        
+        # Calculate stat multiplier
+        new_stat_mult = 2.0 ** new_prestige_count
+        
+        # Show confirmation dialog
+        from PySide6.QtWidgets import QMessageBox
+        
+        plugin = self._plugin_by_id.get(char_id)
+        display_name = getattr(plugin, "display_name", char_id) if plugin else char_id
+        
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Prestige Confirmation")
+        msg_box.setIcon(QMessageBox.Icon.Question)
+        
+        message = f"<b>Prestige {display_name}?</b><br><br>"
+        message += f"Current Prestige Level: {prestige_count}<br>"
+        message += f"New Prestige Level: {new_prestige_count}<br><br>"
+        message += f"<b>Effects:</b><br>"
+        message += f"• EXP Multiplier: {exp_multiplier:.2f} → {new_exp_mult:.2f}<br>"
+        message += f"• Stat Gain Multiplier: x{2.0 ** prestige_count:.1f} → x{new_stat_mult:.1f}<br>"
+        
+        # Check if we're at or past the floor
+        if new_exp_mult <= 0.01 and new_prestige_count >= 5:
+            prestiges_past_floor = new_prestige_count - 4
+            penalty_multiplier = 2.0 ** prestiges_past_floor
+            message += f"<br><b>⚠️ Warning:</b> EXP requirement penalty applied (x{penalty_multiplier:.1f})<br>"
+        
+        message += f"<br>Your stat gains per level will <b>double</b>, but EXP gain rate will be <b>reduced</b>."
+        
+        msg_box.setText(message)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg_box.setDefaultButton(QMessageBox.StandardButton.No)
+        
+        result = msg_box.exec()
+        if result != QMessageBox.StandardButton.Yes:
+            return
+        
+        # Apply prestige
+        if not self._idle_state.prestige_character(char_id):
+            return
+        
+        # Save the game state
+        try:
+            save = self._save
+            progress = dict(save.character_progress)
+            progress.update(self._idle_state.export_progress())
+            save.character_progress = progress
+            stats = dict(save.character_stats)
+            stats.update(self._idle_state.export_character_stats())
+            save.character_stats = stats
+            initial_stats = dict(getattr(save, "character_initial_stats", {}) or {})
+            initial_stats.update(self._idle_state.export_initial_stats())
+            save.character_initial_stats = initial_stats
+            bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
+            save.idle_exp_bonus_seconds = bonus_seconds
+            save.idle_exp_penalty_seconds = penalty_seconds
+            save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
+            save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
+            self._save_manager.save(save)
+        except Exception:
+            return
+        
         self._refresh_character_cards()
 
     def _autosave(self) -> None:

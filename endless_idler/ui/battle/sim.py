@@ -296,8 +296,10 @@ def calculate_damage(
     if rng.random() < dodge_odds:
         return 0, False, True
 
-    atk = attacker.atk
-    defense = max(0, target.defense)
+    # Apply passive modifier to attack and defense stats
+    # This scales stat effectiveness based on stack count
+    atk = int(attacker.atk * attacker.passive_modifier)
+    defense = max(0, int(target.defense * target.passive_modifier))
     
     # Apply PRE_DAMAGE passives if context is provided
     passive_damage_mult = 1.0
