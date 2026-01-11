@@ -60,8 +60,9 @@ class LadyLightRadiantAegis(Passive):
                 - total_healing: sum of all healing done
                 - base_heal_amount: the base heal calculated
         """
-        # Calculate heal amount based on Lady Light's regain
-        base_heal = int(context.owner_stats.regain * self.heal_multiplier)
+        # Calculate heal amount based on Lady Light's regain with passive modifier applied
+        effective_regain = int(context.owner_stats.regain * context.owner_stats.passive_modifier)
+        base_heal = int(effective_regain * self.heal_multiplier)
 
         healed_targets = []
         total_healing = 0
