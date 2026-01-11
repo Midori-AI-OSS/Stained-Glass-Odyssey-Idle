@@ -121,9 +121,46 @@ If the standard QToolTip stylesheet doesn't provide sufficient glass effect:
 
 ## Related Files
 
-- `endless_idler/ui/theme.py` - Contains QToolTip stylesheet (lines 383-389)
-- `endless_idler/ui/tooltip.py` - StainedGlassTooltip for visual reference
-- Audit document: `.codex/implementation/tooltip-audit.md` (from task 9be68a50)
+- `endless_idler/ui/theme.py` - Contains QToolTip stylesheet at **lines 383-389** (exact location confirmed)
+- `endless_idler/ui/tooltip.py` - StainedGlassTooltip for visual reference (class at lines 44-192, `_apply_element_tint()` at lines 168-191)
+- Audit document: `.codex/implementation/tooltip-audit.md` (to be created by task 9be68a50)
+
+## Current QToolTip Stylesheet (lines 383-389)
+
+```css
+QToolTip {
+    background-color: rgba(10, 14, 26, 238);
+    color: rgba(255, 255, 255, 235);
+    border: 1px solid rgba(255, 255, 255, 52);
+    padding: 8px 10px;
+    font-size: 12px;
+}
+```
+
+**Current Issues:**
+- Alpha 238/255 = Very opaque (93% opacity)
+- Dark blue-gray `(10, 14, 26)` matches main menu panel
+- Border alpha 52 is very subtle
+- No border-radius (sharp corners)
+
+## Target Reference from StainedGlassTooltip
+
+For consistency, reference these values from `tooltip.py`:
+- Element tint alpha: **35** (line 185)
+- Default tint: **`rgba(100, 120, 150, 30)`** (line 171)
+- Border: **`1px solid rgba(255, 255, 255, 60)`** (lines 175, 189)
+
+## Files That Use .setToolTip() (8 locations confirmed)
+
+These will be affected by the stylesheet change:
+1. `endless_idler/ui/party_builder_slot.py` (lines 360, 401)
+2. `endless_idler/ui/party_builder_idle_bar.py` (lines 23, 58, 64)
+3. `endless_idler/ui/party_builder_fight_bar.py` (lines 21, 55, 61)
+4. `endless_idler/ui/party_builder_bar.py` (line 352)
+5. `endless_idler/ui/onsite/stat_bars.py` (line 127)
+6. `endless_idler/ui/onsite/card.py` (line 145)
+7. `endless_idler/ui/battle/widgets.py` (line 258)
+8. `endless_idler/ui/battle/screen.py` (line 721)
 
 ## Estimated Effort
 

@@ -66,12 +66,54 @@ Before making styling changes, we need a complete audit to ensure we don't miss 
 
 ## Related Files
 
-- `endless_idler/ui/tooltip.py` - Custom StainedGlassTooltip implementation
+- `endless_idler/ui/tooltip.py` - Custom StainedGlassTooltip implementation (lines 24, 44-192)
 - `endless_idler/ui/theme.py` - QToolTip stylesheet (lines 383-389)
 - `endless_idler/ui/party_builder*.py` - Party builder components
 - `endless_idler/ui/battle/*.py` - Battle screen components
 - `endless_idler/ui/onsite/*.py` - Onsite card components
 - `endless_idler/ui/idle/*.py` - Idle screen components (if exists)
+
+## Search Commands
+
+Use these grep commands to find all tooltip usage:
+
+```bash
+# Find all show_stained_tooltip calls
+grep -rn "show_stained_tooltip" endless_idler/ui/
+
+# Find all .setToolTip calls
+grep -rn "\.setToolTip(" endless_idler/ui/
+```
+
+## Known Usage (Confirmed via grep)
+
+### StainedGlassTooltip (`show_stained_tooltip`) - 4 files
+1. **`endless_idler/ui/party_builder_slot.py`** (lines 29, 419)
+   - Import and usage in character tile hover
+2. **`endless_idler/ui/party_builder_bar.py`** (lines 34, 363)
+   - Import and usage in party level tile hover
+3. **`endless_idler/ui/onsite/card.py`** (lines 24, 271)
+   - Import and usage in character card hover
+4. **`endless_idler/ui/battle/widgets.py`** (lines 27, 211)
+   - Import and usage in combatant card hover
+
+### QToolTip (`.setToolTip()`) - 7 files, 13 locations
+1. **`endless_idler/ui/party_builder_slot.py`** (lines 360, 401)
+   - Empty tooltip clearing
+2. **`endless_idler/ui/party_builder_idle_bar.py`** (lines 23, 58, 64)
+   - Empty clearing and "Add at least 1 OnSite character to idle." message
+3. **`endless_idler/ui/party_builder_fight_bar.py`** (lines 21, 55, 61)
+   - Empty clearing and "Add at least 1 OnSite character to fight." message
+4. **`endless_idler/ui/party_builder_bar.py`** (line 352)
+   - Empty tooltip clearing
+5. **`endless_idler/ui/onsite/stat_bars.py`** (line 127)
+   - Dynamic tooltip for stat bars
+6. **`endless_idler/ui/onsite/card.py`** (line 145)
+   - "Stats" button tooltip
+7. **`endless_idler/ui/battle/widgets.py`** (line 258)
+   - Stat label tooltips
+8. **`endless_idler/ui/battle/screen.py`** (line 721)
+   - Status message tooltip
 
 ## Estimated Effort
 

@@ -166,9 +166,37 @@ Create `.codex/tasks/wip/10422986-tooltip-qa-findings.md` with:
 
 ## Related Files
 
-- `endless_idler/ui/tooltip.py` - StainedGlassTooltip implementation
-- `endless_idler/ui/theme.py` - QToolTip stylesheet
-- `.codex/implementation/tooltip-audit.md` - Audit findings (task 9be68a50)
+- `endless_idler/ui/tooltip.py` - StainedGlassTooltip implementation (class at lines 44-192)
+- `endless_idler/ui/theme.py` - QToolTip stylesheet (lines 383-389)
+- `.codex/implementation/tooltip-audit.md` - Audit findings (created by task 9be68a50)
+
+## Test Locations (Confirmed via Code Audit)
+
+### A) StainedGlassTooltip Locations (4 files)
+1. **Party Builder** (`endless_idler/ui/party_builder_slot.py`, line 419)
+   - Character drag/drop tiles
+2. **Party Builder** (`endless_idler/ui/party_builder_bar.py`, line 363)
+   - Party level tiles
+3. **Onsite Cards** (`endless_idler/ui/onsite/card.py`, line 271)
+   - Character portraits
+4. **Battle Screen** (`endless_idler/ui/battle/widgets.py`, line 211)
+   - Combatant cards
+
+### B) QToolTip Locations (8 files, 13 uses)
+1. **Party Builder Slots** (`party_builder_slot.py`, lines 360, 401)
+2. **Party Builder Idle Bar** (`party_builder_idle_bar.py`, lines 23, 58, 64)
+   - Tooltip text: "Add at least 1 OnSite character to idle."
+3. **Party Builder Fight Bar** (`party_builder_fight_bar.py`, lines 21, 55, 61)
+   - Tooltip text: "Add at least 1 OnSite character to fight."
+4. **Party Builder Bar** (`party_builder_bar.py`, line 352)
+5. **Onsite Stat Bars** (`onsite/stat_bars.py`, line 127)
+   - Dynamic tooltips on stat bars
+6. **Onsite Card Stats Button** (`onsite/card.py`, line 145)
+   - Tooltip text: "Stats"
+7. **Battle Widgets Stat Labels** (`battle/widgets.py`, line 258)
+   - Dynamic stat tooltips
+8. **Battle Screen Status** (`battle/screen.py`, line 721)
+   - Status message tooltips
 
 ## Estimated Effort
 

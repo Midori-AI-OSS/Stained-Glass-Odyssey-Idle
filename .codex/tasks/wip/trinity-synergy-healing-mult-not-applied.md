@@ -38,6 +38,14 @@ Lady Light has two sources of healing that should be affected:
 
 The combat system does not check `context.extra` from turn start passives when calculating healing. The `resolve_light_heal()` function has no access to the context data.
 
+**Trinity Synergy passive** (`endless_idler/passives/implementations/trinity_synergy.py`):
+- **Line 173**: Stores healing multiplier in `context.extra["lady_light_healing_mult"] = 4.0`
+- **Line 76**: Multiplier defined as `self.lady_light_healing_mult = 4.0`
+
+**But this value is never read by:**
+1. `lady_light_radiant_aegis.py` `execute()` method (lines 51-93)
+2. `ui/battle/mechanics.py` `resolve_light_heal()` function (lines 104-132)
+
 **Task cea883a7-trinity-synergy-passive** (line 535) notes:
 ```
 Check `context.extra["lady_light_healing_mult"]` when Lady Light heals
@@ -57,25 +65,38 @@ But this integration was never implemented.
 
 Modify Trinity Synergy to store the healing multiplier directly on Lady Light's Stats object:
 
+**File: `endless_idler/passives/implementations/trinity_synergy.py`**
+- Modify `_apply_turn_start_effects()` method (lines 138-187)
+- Around line 173 (after storing in context.extra), add:
 ```python
-# In trinity_synergy.py execute() method
+# In trinity_synergy.py execute() method (around line 173)
 if lady_light and owner_id == LADY_LIGHT_ID:
     # Store on stats for healing functions to access
     lady_light._trinity_healing_mult = self.lady_light_healing_mult
+    context.extra["lady_light_healing_mult"] = self.lady_light_healing_mult
 ```
 
 Then update healing functions:
 
+**File: `endless_idler/passives/implementations/lady_light_radiant_aegis.py`**
+- Modify `execute()` method (lines 51-93)
+- After line 65 (base heal calculation), add:
 ```python
-# In lady_light_radiant_aegis.py execute()
-base_heal = int(context.owner_stats.regain * self.heal_multiplier)
+# In lady_light_radiant_aegis.py execute() (after line 65)
+base_heal = int(effective_regain * self.heal_multiplier)
 # Apply trinity multiplier if present
 trinity_mult = getattr(context.owner_stats, '_trinity_healing_mult', 1.0)
 base_heal = int(base_heal * trinity_mult)
+```
 
-# In resolve_light_heal()
+**File: `endless_idler/ui/battle/mechanics.py`**
+- Modify `resolve_light_heal()` function (lines 104-132)
+- After line 112 (base_power calculation), add:
+```python
+# In resolve_light_heal() (after line 112)
 def resolve_light_heal(*, attacker: Combatant, ...):
-    base_power = max(1, int(round(float(attacker.stats.atk) * 0.05)))
+    effective_atk = int(attacker.stats.atk * attacker.stats.passive_modifier)
+    base_power = max(1, int(round(float(effective_atk) * 0.05)))
     # Apply trinity multiplier if present
     trinity_mult = getattr(attacker.stats, '_trinity_healing_mult', 1.0)
     base_power = int(base_power * trinity_mult)
@@ -110,15 +131,27 @@ If the 15x regain boost is deemed sufficient and the additional 4x multiplier is
 
 If Option A is chosen:
 
-1. `endless_idler/passives/implementations/trinity_synergy.py`
-   - Store `_trinity_healing_mult` on Lady Light's Stats
-   - Clear on trinity deactivation or combat end
+### 1. `endless_idler/passives/implementations/trinity_synergy.py`
+   - **Method**: `_apply_turn_start_effects()` (lines 138-187)
+   - **Location**: Around line 173 (after existing context.extra assignment)
+   - **Action**: Store `_trinity_healing_mult` on Lady Light's Stats object
+   - **Action**: Clear on trinity deactivation or combat end (may need new logic)
 
-2. `endless_idler/passives/implementations/lady_light_radiant_aegis.py`
-   - Check for `_trinity_healing_mult` and apply it
+### 2. `endless_idler/passives/implementations/lady_light_radiant_aegis.py`
+   - **Method**: `execute()` (lines 51-93)
+   - **Location**: After line 65 (base_heal calculation)
+   - **Action**: Check for `_trinity_healing_mult` attribute and apply it to base_heal
 
-3. `endless_idler/ui/battle/mechanics.py`
-   - Update `resolve_light_heal()` to check for multiplier
+### 3. `endless_idler/ui/battle/mechanics.py`
+   - **Function**: `resolve_light_heal()` (lines 104-132)
+   - **Location**: After line 112 (base_power calculation)
+   - **Action**: Check for `_trinity_healing_mult` on attacker.stats and apply to base_power
+
+### Additional Considerations
+- May need to add cleanup logic to clear `_trinity_healing_mult` when:
+  - Trinity breaks (member removed from party)
+  - Combat ends
+  - Turn ends (depending on design)
 
 ## Related Issues
 

@@ -119,9 +119,10 @@ This task covers fixes for:
 
 ## Related Files
 
-- `endless_idler/ui/tooltip.py` - StainedGlassTooltip implementation
-- `endless_idler/ui/theme.py` - QToolTip stylesheet
-- `.codex/tasks/wip/10422986-tooltip-qa-findings.md` - QA results
+- `endless_idler/ui/tooltip.py` - StainedGlassTooltip implementation (class at lines 44-192)
+  - Key methods: `_apply_element_tint()` (lines 168-191), `_refresh_background()` (lines 123-136)
+- `endless_idler/ui/theme.py` - QToolTip stylesheet (lines 383-389)
+- `.codex/tasks/wip/10422986-tooltip-qa-findings.md` - QA results (to be created by QA task)
 
 ## Estimated Effort
 

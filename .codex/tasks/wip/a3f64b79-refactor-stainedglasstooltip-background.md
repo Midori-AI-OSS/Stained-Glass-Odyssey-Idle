@@ -20,13 +20,21 @@ While this creates a textured look, it still appears as an opaque panel similar 
 
 ## Current Implementation Analysis
 
-From `endless_idler/ui/tooltip.py`:
-- Lines 52-65: Background layer with pixmap and blur
-- Lines 67-74: Panel layer with drop shadow
-- Lines 123-136: `_refresh_background()` scales the cityscape pixmap
-- Lines 137-140: `_load_background()` loads cityscape image
-- Lines 142-166: `_apply_stained_glass_overlay()` adds colored grid pattern
-- Lines 168-191: `_apply_element_tint()` applies element-based color tint to panel
+From `endless_idler/ui/tooltip.py` (class `StainedGlassTooltip` at lines 44-192):
+- **Lines 52-53**: `self._base_pixmap = self._load_background()` - Loads cityscape image
+- **Lines 59-65**: Background layer (`self._bg`) with QLabel, blur effect (radius 14)
+- **Lines 67-74**: Panel layer (`self._panel`) with QFrame, drop shadow (radius 26, offset 0,8)
+- **Lines 123-136**: `_refresh_background()` scales the cityscape pixmap to tooltip size
+- **Lines 137-140**: `_load_background()` loads `backgrounds/main_menu_cityscape.png` via `asset_path()`
+- **Lines 142-166**: `_apply_stained_glass_overlay()` adds colored grid pattern (32px cells, alpha 38)
+- **Lines 168-191**: `_apply_element_tint()` applies element-based color tint to panel (alpha 35 for element, 30 for default)
+
+### Current Color Values:
+- Element tint alpha: 35 (line 185)
+- Default tint: `rgba(100, 120, 150, 30)` (line 171)
+- Border: `1px solid rgba(255, 255, 255, 60)` (lines 175, 189)
+- Grid cell alpha: 38 (line 157)
+- Drop shadow: `rgba(0, 0, 0, 180)` (line 72)
 
 ## Requirements
 
@@ -121,10 +129,26 @@ From `endless_idler/ui/tooltip.py`:
 
 ## Related Files
 
-- `endless_idler/ui/tooltip.py` - StainedGlassTooltip implementation
+- `endless_idler/ui/tooltip.py` - Custom StainedGlassTooltip implementation (class at lines 44-192)
+  - `_load_background()` - Line 137 (loads cityscape image)
+  - `_refresh_background()` - Line 123 (scales and applies overlay)
+  - `_apply_element_tint()` - Line 168 (applies color tint to panel)
 - `endless_idler/ui/theme.py` - Tooltip panel stylesheet (lines 373-381)
-- `endless_idler/ui/assets.py` - Asset path helper
-- `endless_idler/ui/battle/colors.py` - Element color mapping
+  - Note: Lines 383-389 contain QToolTip stylesheet (different from StainedGlassTooltip panel)
+- `endless_idler/ui/assets.py` - Asset path helper function
+- `endless_idler/ui/battle/colors.py` - Element color mapping (`color_for_damage_type_id()` function)
+
+## Key Objects to Modify
+
+In `StainedGlassTooltip` class:
+1. `self._base_pixmap` (line 52) - Currently stores cityscape image
+2. `self._bg` (lines 59-65) - Background QLabel with blur effect
+3. `self._panel` (lines 67-74) - Panel QFrame with drop shadow
+4. Methods to refactor:
+   - `_load_background()` (lines 137-140)
+   - `_refresh_background()` (lines 123-136)
+   - `_apply_stained_glass_overlay()` (lines 142-166) - May need removal/refactor
+   - `_apply_element_tint()` (lines 168-191) - Keep but adjust alpha values
 
 ## Estimated Effort
 
