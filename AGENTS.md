@@ -9,8 +9,6 @@ This document summarizes common development practices for the Stained Glass Odys
 
 - **`.feedback/`**: Task lists and priorities. *Read only*—never edit directly unless you are the Task Master.
 - **`.codex/`**:
-  - `instructions/`: Contributor mode docs, process notes, and service-specific instructions. Place all new and updated process documentation here, following the structure and naming conventions. See examples in this folder.
-  - `implementation/`: Technical implementation notes and documentation. Keep these in sync with code changes.
   - `modes/`: Contributor mode documentation defining roles and responsibilities.
   - `tasks/`: Organized task folders (wip, review, taskmaster) for work items.
   - Other subfolders: For planning, notes, and prototyping.
@@ -31,7 +29,7 @@ This document summarizes common development practices for the Stained Glass Odys
 - No backward compatibility shims by default: do not preserve old code paths “just in case”; only add compatibility layers when the task explicitly requires it.
 - Minimal documentation, minimal logging: prefer reading code and docstrings; do not add docs/logs unless required to diagnose a specific issue or prevent a crash.
 - Do not update `README.md`.
-- Split large modules into smaller ones when practical and keep documentation in `.codex/implementation/` in sync with code.
+- Split large modules into smaller ones when practical.
 - Ensure code is asynchronous-friendly: avoid blocking the event loop, use async/await for I/O and long-running tasks, and keep work off the main loop.
 - Any test running longer than 15 seconds is automatically aborted in local development. GitHub Actions CI has no timeout limits.
 - For Python style:
@@ -119,6 +117,6 @@ Stained Glass Odyssey Idle is an idle/incremental game featuring characters from
 
 - Maintain the idle game mechanics and incremental progression systems
 - Keep the visual style consistent with the stained glass aesthetic
-- Documentation: prefer code and docstrings; only update `.codex/implementation/` when a change would otherwise be misleading.
+- Documentation: prefer code and docstrings; keep notes minimal and task-scoped.
 - Test game balance and progression carefully
 - Ensure all character artwork and assets follow the project's art guidelines
