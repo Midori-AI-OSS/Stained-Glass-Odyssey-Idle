@@ -129,6 +129,11 @@ class BattleScreenWidget(QWidget):
         self._stalemate_last_check_time: float = time.time()
         self._stalemate_stacks: int = 0
         self._stalemate_tick_counter: int = 0
+        
+        # Wave spawning system
+        self._wave_number: int = 1
+        self._last_wave_spawn_time: float = time.time()
+        self._wave_spawn_interval: float = 30.0  # 30 seconds between waves
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 16, 16, 16)
@@ -354,6 +359,69 @@ class BattleScreenWidget(QWidget):
                 if hasattr(card, 'refresh'):
                     card.refresh()
 
+    def _check_wave_spawn(self) -> None:
+        """Check if a new wave should spawn based on timer or zero foes"""
+        current_time = time.time()
+        time_since_last_wave = current_time - self._last_wave_spawn_time
+        
+        # Count alive foes
+        foes_alive_count = sum(1 for foe in self._foes if foe.stats.hp > 0)
+        
+        # Check spawn conditions: 30 second timer OR zero foes alive
+        should_spawn = (time_since_last_wave >= self._wave_spawn_interval) or (foes_alive_count == 0)
+        
+        if should_spawn:
+            self._spawn_new_wave()
+            self._last_wave_spawn_time = current_time
+    
+    def _spawn_new_wave(self) -> None:
+        """Spawn a new wave of foes"""
+        self._wave_number += 1
+        
+        # Use existing foe level calculation
+        foe_level = max(1, int(self._party_level * float(self._fight_number) * 1.3))
+        
+        # Build new foes using baseline spawn count (5)
+        new_foes = build_foes(
+            exclude_ids=set(self._onsite_ids + self._offsite_ids),
+            party_level=foe_level,
+            foe_count=5,
+            plugins=self._plugins,
+            rng=self._rng,
+        )
+        
+        # Replace old foes with new wave
+        self._foes = new_foes
+        
+        # Update foe cards in the UI
+        # Remove old foe cards from layout
+        right_layout = self._arena.layout().itemAtPosition(0, 2).widget().layout()
+        
+        # Clear old cards
+        for card in self._foe_cards:
+            right_layout.removeWidget(card)
+            card.deleteLater()
+        
+        self._foe_cards.clear()
+        
+        # Add new foe cards
+        for combatant in self._foes:
+            card = CombatantCard(
+                combatant=combatant,
+                plugin=self._plugin_by_id.get(combatant.char_id),
+                rng=self._rng,
+                compact=True,
+                team_side="right",
+                stack_count=1,
+                variant="foe",
+            )
+            self._foe_cards.append(card)
+            right_layout.insertWidget(right_layout.count() - 1, card)  # Insert before stretch
+        
+        # Log wave spawn for debugging
+        print(f"[Wave System] Wave {self._wave_number} spawned with {len(new_foes)} foes")
+        self._set_status(f"Wave {self._wave_number}!")
+
     def _step_battle(self) -> None:
         if self._battle_over:
             return
@@ -364,6 +432,9 @@ class BattleScreenWidget(QWidget):
         # Check for stalemate and apply bleed
         self._check_stalemate()
         self._apply_stalemate_bleed()
+        
+        # Check wave spawn conditions
+        self._check_wave_spawn()
 
         party_alive = [
             (c, w)
