@@ -17,7 +17,7 @@ Characters in the Shop and Party Management screens always show as level 1, rega
 3. Use the same source of truth for character data across all modes
 4. Do not display placeholder values like always showing level 1
 
-## Auditor's Investigation Results (Pre-Implementation)
+## ⚠️ AUDITOR BLOCK: Investigation Required Before Implementation
 
 **Finding:** The code ALREADY loads character progression correctly!
 
@@ -35,11 +35,25 @@ Characters in the Shop and Party Management screens always show as level 1, rega
 3. The problem might only occur in specific scenarios (new game, after certain actions)
 4. The tooltip might be caching old data and not refreshing
 
-**Recommended Investigation Steps:**
-1. Add debug logging to `_tooltip_stats_for_character` to verify what level is actually being loaded
-2. Check if `self._save.character_progress` contains the expected data
-3. Verify the tooltip is being refreshed after characters level up
-4. Test in both shop and party management screens separately
+**⚠️ MANDATORY Investigation Steps - DO THESE FIRST:**
+1. **Run the game** and manually verify the issue still exists:
+   - Level up a character in combat/idle
+   - Go to Shop screen → hover over character → check level shown
+   - Go to Party Management → hover over character → check level shown
+   - **If levels show correctly, CLOSE THIS TASK - it's already fixed**
+   
+2. **If issue confirmed**, add debug logging:
+   ```python
+   # In party_builder.py, _tooltip_stats_for_character method
+   print(f"DEBUG: Loading stats for {char_id}")
+   print(f"  Progress: {self._save.character_progress.get(char_id)}")
+   print(f"  Stats: {self._save.character_stats.get(char_id)}")
+   print(f"  Built level: {final_stats.level}")
+   ```
+
+3. Test in both shop and party management screens separately
+
+4. Check if tooltip is cached and not refreshing on stat changes
 
 ### Implementation Phase
 1. In `endless_idler/ui/party_builder.py` and related files:

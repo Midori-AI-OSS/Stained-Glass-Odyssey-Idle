@@ -6,8 +6,12 @@ Part of: Fix tooltip styling, correct character stats display outside combat, an
 ## Problem
 After fixing the tooltip styling (square corners and blur), we must verify that the changes apply everywhere tooltips appear in the application. The requirement states "Apply the same tooltip style everywhere tooltips exist in the application: Do not fix only one screen."
 
-## Dependencies
-This task depends on task `87abfe35-fix-tooltip-styling-square-corners-and-blur.md` being completed first.
+## ⚠️ BLOCKED - Dependencies Must Complete First
+
+**This task is BLOCKED until:**
+- Task `87abfe35-fix-tooltip-styling-square-corners-and-blur.md` is completed
+- **Check `.codex/tasks/wip/` and `.codex/tasks/review/` for the dependent task**
+- **DO NOT START** this verification task until the base styling is implemented
 
 ## Current State
 All tooltips use the centralized `StainedGlassTooltip` class from `endless_idler/ui/tooltip.py`, so changes should automatically propagate everywhere. However, we need to verify this is actually the case.
@@ -126,7 +130,9 @@ uv run python -m endless_idler
 
 ## Notes
 - This is part A requirement #4 from the main issue
-- This is a verification task, not an implementation task
+- **This is a VERIFICATION/QA task, not an implementation task**
+- **Task type: Manual Testing** - requires running the application
 - If custom tooltips are found, they should be migrated to use `StainedGlassTooltip`
 - Document any legitimate reasons why a screen might need custom tooltips
-- Block this task from completion until dependent tasks are done
+- **BLOCKED** - cannot complete until dependent task 87abfe35 is done
+- **Estimated time**: 30-60 minutes of manual testing across all screens
