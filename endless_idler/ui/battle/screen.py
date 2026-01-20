@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time
 import random
 
@@ -415,9 +416,16 @@ class BattleScreenWidget(QWidget):
         current_foe_count = sum(1 for foe in self._foes if foe.stats.hp > 0)
         available_slots = MAX_FOES - current_foe_count
         
-        # Baseline spawn count
+        # TIME-BASED SPAWN COUNT SCALING
+        # Calculate survival time since battle start
+        survival_time = max(0.0, time.time() - self._save.battle_start_time)
+        
+        # Calculate time multiplier: time_mult = 1 + 0.15 * floor(t / 25) + 0.05 * floor(t / 30)
+        time_mult = 1.0 + 0.15 * int(survival_time / 25) + 0.05 * int(survival_time / 30)
+        
+        # Baseline spawn count and apply time multiplier with ceiling
         base_spawn_count = 5
-        requested_spawn_count = base_spawn_count
+        requested_spawn_count = math.ceil(base_spawn_count * time_mult)
         
         # Calculate actual spawn count and blocked spawns
         actual_spawn_count = min(requested_spawn_count, max(0, available_slots))
@@ -470,9 +478,9 @@ class BattleScreenWidget(QWidget):
         
         # Log wave spawn for debugging with cap info
         if blocked_spawns > 0:
-            print(f"[Wave System] Wave {self._wave_number} spawned with {actual_spawn_count}/{requested_spawn_count} foes (CAPPED: {blocked_spawns} blocked, wave_only_mult={wave_only_mult:.4f}, wave_index={self._wave_index - 1}, total_mult={combined_mult:.4f})")
+            print(f"[Wave System] Wave {self._wave_number} spawned with {actual_spawn_count}/{requested_spawn_count} foes (CAPPED: {blocked_spawns} blocked, wave_only_mult={wave_only_mult:.4f}, wave_index={self._wave_index - 1}, total_mult={combined_mult:.4f}, time={survival_time:.1f}s, time_mult={time_mult:.2f})")
         else:
-            print(f"[Wave System] Wave {self._wave_number} spawned with {actual_spawn_count} foes (wave_index={self._wave_index - 1}, mult={combined_mult:.4f})")
+            print(f"[Wave System] Wave {self._wave_number} spawned with {actual_spawn_count} foes (wave_index={self._wave_index - 1}, mult={combined_mult:.4f}, time={survival_time:.1f}s, time_mult={time_mult:.2f})")
         
         status_msg = f"Wave {self._wave_number}!"
         if blocked_spawns > 0:
