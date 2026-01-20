@@ -42,7 +42,7 @@ class Stats:
     _base_dodge_odds: float = field(default=0.05, init=False)
     _base_effect_resistance: float = field(default=0.05, init=False)
     _base_vitality: float = field(default=1.0, init=False)
-    _base_spd: int = field(default=2, init=False)
+    _base_atk_speed: int = field(default=2, init=False)
     damage_reduction_passes: int = 1
 
     damage_type: DamageTypeBase = field(default_factory=Generic)
@@ -194,12 +194,12 @@ class Stats:
         self._base_vitality = float(value)
 
     @property
-    def spd(self) -> int:
-        return int(max(1, self._base_spd + self._calculate_stat_modifier("spd")))
+    def atk_speed(self) -> int:
+        return int(max(1, self._base_atk_speed + self._calculate_stat_modifier("atk_speed")))
 
-    @spd.setter
-    def spd(self, value: int) -> None:
-        self._base_spd = int(value)
+    @atk_speed.setter
+    def atk_speed(self, value: int) -> None:
+        self._base_atk_speed = int(value)
 
     @property
     def aggro(self) -> float:

@@ -528,7 +528,7 @@ QProgressBar#onsiteStatBar[statKey="defense"]::chunk {
     background-color: rgba(52, 152, 219, 175);
 }
 
-QProgressBar#onsiteStatBar[statKey="spd"]::chunk {
+QProgressBar#onsiteStatBar[statKey="atk_speed"]::chunk {
     background-color: rgba(46, 204, 113, 175);
 }
 
@@ -664,7 +664,7 @@ QProgressBar#battleStatBar[statKey="defense"]::chunk {
     background-color: rgba(52, 152, 219, 175);
 }
 
-QProgressBar#battleStatBar[statKey="spd"]::chunk {
+QProgressBar#battleStatBar[statKey="atk_speed"]::chunk {
     background-color: rgba(46, 204, 113, 175);
 }
 
