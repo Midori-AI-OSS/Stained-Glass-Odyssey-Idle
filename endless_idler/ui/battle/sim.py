@@ -245,7 +245,7 @@ def choose_weighted_attacker(
     alive: list[tuple[Combatant, object]],
     rng: random.Random,
 ) -> tuple[Combatant, object]:
-    weights = [max(1.0, float(item[0].stats.spd)) for item in alive]
+    weights = [max(1.0, float(item[0].stats.atk_speed)) for item in alive]
     total = sum(weights)
     roll = rng.random() * total
     running = 0.0
