@@ -157,7 +157,7 @@ def build_foes(
             stats,
             base_stats=getattr(plugin, "base_stats", None),
             scale=scale,
-            spd=2 + max(0, stars - 1),
+            atk_speed=2,
         )
         stats.damage_type = load_damage_type(resolve_damage_type_id(plugin, rng))
         apply_plugin_overrides(stats, plugin=plugin)

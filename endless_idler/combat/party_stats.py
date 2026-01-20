@@ -14,7 +14,7 @@ STAT_SHARE_KEYS: tuple[str, ...] = (
     "dodge_odds",
     "effect_resistance",
     "vitality",
-    "spd",
+    "atk_speed",
 )
 
 
@@ -34,7 +34,7 @@ def apply_scaled_bases(
     *,
     base_stats: dict[str, float] | None,
     scale: float,
-    spd: int,
+    atk_speed: int,
 ) -> None:
     template = base_stats if isinstance(base_stats, dict) else {}
 
@@ -58,7 +58,7 @@ def apply_scaled_bases(
     ):
         if key in template:
             stats.set_base_stat(key, float(template[key]))
-    stats.set_base_stat("spd", int(max(1, spd)))
+    stats.set_base_stat("atk_speed", int(max(1, atk_speed)))
 
 
 def merged_base_stats(
@@ -127,11 +127,11 @@ def build_scaled_character_stats(
     stacks: int,
     progress: dict[str, float | int] | None,
     saved_base_stats: dict[str, float] | None,
-    spd: int | None = None,
+    atk_speed: int | None = None,
 ) -> Stats:
     stacks = max(1, int(stacks))
     stars = max(1, min(7, int(stars)))
-    spd_value = int(spd if spd is not None else (2 + stars))
+    atk_speed_value = int(atk_speed if atk_speed is not None else 1)
 
     stats = Stats()
     # Passive modifier formula: (stacks * 0.05) + 1
@@ -158,7 +158,7 @@ def build_scaled_character_stats(
         stats,
         base_stats=merged,
         scale=scale,
-        spd=spd_value,
+        atk_speed=atk_speed_value,
     )
     apply_plugin_overrides(stats, plugin=plugin)
     apply_progress_meta(stats, progress=progress)
@@ -188,7 +188,7 @@ def apply_offsite_stat_share(
     if not totals:
         return
 
-    int_stats = {"max_hp", "atk", "defense", "regain", "spd"}
+    int_stats = {"max_hp", "atk", "defense", "regain", "atk_speed"}
     for stats in party:
         for stat_name, amount in totals.items():
             if stat_name in int_stats:
