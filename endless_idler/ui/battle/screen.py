@@ -383,7 +383,24 @@ class BattleScreenWidget(QWidget):
             self._last_wave_spawn_time = current_time
     
     def _spawn_new_wave(self) -> None:
-        """Spawn a new wave of foes with 100 foe cap and overflow scaling"""
+        """Spawn a new wave of foes with 100 foe cap and overflow scaling.
+        
+        Implements a 100 foe cap by:
+        1. Counting currently alive foes (hp > 0)
+        2. Calculating available slots (100 - alive count)
+        3. Spawning only what fits in available slots
+        4. Applying wave-only multiplier (1.01^blocked_spawns) to compensate
+        
+        The wave-only multiplier is:
+        - Applied only to foes spawned in the current wave
+        - Reset for the next wave (doesn't carry over)
+        - Calculated as: pow(1.01, blocked_spawns)
+        
+        Example: If 95 foes alive and wave requests 10:
+        - Only 5 spawn (to hit cap of 100)
+        - 5 blocked spawns
+        - Wave-only mult = 1.01^5 ≈ 1.051 (5.1% stronger)
+        """
         self._wave_number += 1
         
         # Calculate spawn wave multiplier based on wave index
