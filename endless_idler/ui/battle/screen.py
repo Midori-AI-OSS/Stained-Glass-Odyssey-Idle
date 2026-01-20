@@ -86,6 +86,11 @@ class BattleScreenWidget(QWidget):
         self._save_manager = SaveManager()
         self._save = self._save_manager.load() or RunSave()
         self._fight_number = max(1, int(getattr(self._save, "fight_number", 1)))
+        
+        # Reset idle exp multiplier and set battle start time for new battle
+        self._save.idle_exp_mult = 1.0
+        self._save.battle_start_time = time.time()
+        self._save_manager.save(self._save)
 
         self._party: list[Combatant] = build_party(
             onsite=onsite,
