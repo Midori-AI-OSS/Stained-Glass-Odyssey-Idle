@@ -40,13 +40,13 @@ Apply a per-wave difficulty multiplier based on wave index. Later waves spawn st
    - wave_index = 1000: spawn_wave_mult ≈ 1.6487
 
 ## Acceptance Criteria
-- [ ] wave_index tracked per battle
-- [ ] wave_index increments on each wave spawn
-- [ ] spawn_wave_mult formula is correct
-- [ ] Multiplier applies to newly spawned foes
-- [ ] Earlier wave foes are not affected
-- [ ] wave_index resets on new battle
-- [ ] Multiplier persists and grows within same battle
+- [x] wave_index tracked per battle
+- [x] wave_index increments on each wave spawn
+- [x] spawn_wave_mult formula is correct
+- [x] Multiplier applies to newly spawned foes
+- [x] Earlier wave foes are not affected
+- [x] wave_index resets on new battle
+- [x] Multiplier persists and grows within same battle
 
 ## Dependencies
 - Requires: 44ea3aa4-implement-foe-cap-and-wave-overflow-scaling.md
@@ -61,3 +61,59 @@ Apply a per-wave difficulty multiplier based on wave index. Later waves spawn st
 - This creates long-term difficulty growth
 - Multiplier is small per wave but compounds over time
 - Combine with wave-only overflow mult for total spawn mult
+
+---
+
+## Audit Results (Auditor Mode)
+
+**Status: APPROVED ✓**
+
+**Audited by:** Auditor Mode  
+**Date:** 2025-01-20
+
+### Implementation Review
+
+1. **wave_index Tracking** ✓
+   - Implemented in `endless_idler/ui/battle/screen.py:136`
+   - Initialized to 0 in `__init__`
+   - Correctly resets on new battle (BattleScreenWidget instantiation)
+
+2. **wave_index Increment** ✓
+   - Increments after each wave spawn at line 401
+   - Properly incremented after applying multiplier to current wave
+
+3. **spawn_wave_mult Formula** ✓
+   - Correctly implemented at line 385: `pow(1.0005, self._wave_index)`
+   - Formula verified with test cases:
+     - wave_index=0: 1.0000 (expected 1.0)
+     - wave_index=100: 1.0513 (expected ≈1.0512)
+     - wave_index=500: 1.2839 (expected ≈1.2840)
+     - wave_index=1000: 1.6485 (expected ≈1.6487)
+
+4. **Multiplier Application** ✓
+   - Applied in `build_foes()` function (`endless_idler/ui/battle/sim.py:169-172`)
+   - Multiplies max_hp, atk, and defense at spawn time
+   - Only affects newly spawned foes, not existing ones
+
+5. **Battle Reset** ✓
+   - wave_index initialized to 0 in BattleScreenWidget.__init__
+   - Each new battle creates a new BattleScreenWidget instance
+   - Verified reset behavior through code inspection
+
+6. **Persistence Within Battle** ✓
+   - wave_index persists as instance variable
+   - Grows incrementally with each wave spawn
+   - Maintained throughout battle lifetime
+
+### Code Quality
+- Clean implementation with clear comments
+- Proper integration with existing wave spawning system
+- No code smells or anti-patterns detected
+- Formula documented inline at line 384
+
+### Testing
+- Game launches successfully (verified with timeout test)
+- No remaining issues or edge cases identified
+- All acceptance criteria met
+
+**Recommendation:** Move to `.codex/tasks/taskmaster/` for final Task Master approval.
