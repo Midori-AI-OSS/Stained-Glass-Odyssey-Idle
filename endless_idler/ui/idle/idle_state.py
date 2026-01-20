@@ -64,6 +64,7 @@ class IdleGameState(QObject):
         advance_run_buffs: bool = True,
         shared_exp_percentage: int = 1,
         risk_reward_level: int = 0,
+        battle_start_time: float = 0.0,
     ) -> None:
         super().__init__()
         self._char_ids = char_ids
@@ -81,6 +82,7 @@ class IdleGameState(QObject):
         self._advance_run_buffs = bool(advance_run_buffs)
         self._time = time.time
         self._offsite_exp_share = OFFSITE_EXP_SHARE_PER_CHAR
+        self._battle_start_time = float(max(0.0, battle_start_time))
 
         self._tick_count = 0
         self._shared_exp_percentage = max(1, min(95, int(shared_exp_percentage)))
@@ -445,6 +447,7 @@ class IdleGameState(QObject):
         onsite_mult = 1.0 - onsite_reduction
 
         exp_multiplier = self._current_exp_multiplier()
+        idle_exp_mult = self._calculate_idle_exp_mult()
         total_onsite_base_gain = 0.0
         total_onsite_shared_gain = 0.0
         
@@ -464,6 +467,8 @@ class IdleGameState(QObject):
             base_gain *= self._exp_gain_scale
             # Apply passive modifier from character stacks
             base_gain *= data.get("passive_modifier", 1.0)
+            # Apply idle survival multiplier
+            base_gain *= idle_exp_mult
             
             total_onsite_base_gain += base_gain
             onsite_gain = base_gain * onsite_mult
@@ -530,6 +535,7 @@ class IdleGameState(QObject):
         onsite_mult = 1.0 - onsite_reduction
         
         exp_multiplier = self._current_exp_multiplier()
+        idle_exp_mult = self._calculate_idle_exp_mult()
 
         if char_id in self._char_ids:
             exp_mult = float(data.get("exp_multiplier", 1.0))
@@ -541,6 +547,8 @@ class IdleGameState(QObject):
             gain *= self._exp_gain_scale
             # Apply passive modifier for display consistency
             gain *= data.get("passive_modifier", 1.0)
+            # Apply idle survival multiplier
+            gain *= idle_exp_mult
             return gain * onsite_mult
 
         if char_id in self._offsite_ids:
@@ -560,6 +568,8 @@ class IdleGameState(QObject):
                 onsite_gain *= self._exp_gain_scale
                 # Apply passive modifier from onsite character
                 onsite_gain *= onsite_data.get("passive_modifier", 1.0)
+                # Apply idle survival multiplier
+                onsite_gain *= idle_exp_mult
                 total_onsite_base_gain += onsite_gain
                 shared_reduction = onsite_gain * onsite_reduction
                 total_onsite_shared_gain += shared_reduction
@@ -605,6 +615,24 @@ class IdleGameState(QObject):
         if self._exp_penalty_seconds > 0.0:
             multiplier *= LOSS_EXP_MULTIPLIER
         return multiplier
+    
+    def _calculate_idle_exp_mult(self) -> float:
+        """
+        Calculate idle exp multiplier based on survival time.
+        Every 1 second the party is alive: idle_exp_mult *= 1.00001
+        
+        Returns:
+            Current idle exp multiplier based on time survived
+        """
+        if self._battle_start_time <= 0.0:
+            return 1.0
+        
+        current_time = float(self._time())
+        seconds_survived = max(0.0, current_time - self._battle_start_time)
+        
+        # idle_exp_mult = 1.0 * (1.00001 ^ seconds_survived)
+        # Using exponentiation for compounding effect
+        return 1.00001 ** seconds_survived
 
     def export_run_buff_seconds(self) -> tuple[float, float]:
         return (float(max(0.0, self._exp_bonus_seconds)), float(max(0.0, self._exp_penalty_seconds)))
