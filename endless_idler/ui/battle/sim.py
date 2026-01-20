@@ -130,6 +130,7 @@ def build_foes(
     foe_count: int,
     plugins: list[CharacterPlugin],
     rng: random.Random,
+    spawn_wave_mult: float = 1.0,
 ) -> list[Combatant]:
     plugins_by_id = {plugin.char_id: plugin for plugin in plugins}
     pool = [plugin.char_id for plugin in plugins if plugin.char_id not in exclude_ids]
@@ -163,6 +164,13 @@ def build_foes(
         if stats.element_id == "ice" and (plugin is None or plugin.damage_reduction_passes is None):
             stats.damage_reduction_passes = max(2, int(stats.damage_reduction_passes))
         stats.level = party_level
+        
+        # Apply spawn wave multiplier to combat stats
+        if spawn_wave_mult != 1.0:
+            stats.max_hp = int(stats.max_hp * spawn_wave_mult)
+            stats.atk = int(stats.atk * spawn_wave_mult)
+            stats.defense = int(stats.defense * spawn_wave_mult)
+        
         stats.hp = stats.max_hp
         load_passives_for_character(stats, plugin, char_id)
         foes.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))

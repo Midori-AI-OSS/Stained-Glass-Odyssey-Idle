@@ -115,6 +115,7 @@ class BattleScreenWidget(QWidget):
             foe_count=5,
             plugins=self._plugins,
             rng=self._rng,
+            spawn_wave_mult=1.0,  # Initial wave uses base multiplier (wave_index=0)
         )
 
         self._party_cards: list[QWidget] = []
@@ -132,6 +133,7 @@ class BattleScreenWidget(QWidget):
         
         # Wave spawning system
         self._wave_number: int = 1
+        self._wave_index: int = 0  # Wave index for difficulty scaling (starts at 0)
         self._last_wave_spawn_time: float = time.time()
         self._wave_spawn_interval: float = 30.0  # 30 seconds between waves
 
@@ -378,6 +380,10 @@ class BattleScreenWidget(QWidget):
         """Spawn a new wave of foes"""
         self._wave_number += 1
         
+        # Calculate spawn wave multiplier based on wave index
+        # spawn_wave_mult = 1.0005 ^ wave_index
+        spawn_wave_mult = pow(1.0005, self._wave_index)
+        
         # Use existing foe level calculation
         foe_level = max(1, int(self._party_level * float(self._fight_number) * 1.3))
         
@@ -388,7 +394,11 @@ class BattleScreenWidget(QWidget):
             foe_count=5,
             plugins=self._plugins,
             rng=self._rng,
+            spawn_wave_mult=spawn_wave_mult,
         )
+        
+        # Increment wave index for next wave
+        self._wave_index += 1
         
         # Replace old foes with new wave
         self._foes = new_foes
@@ -419,7 +429,7 @@ class BattleScreenWidget(QWidget):
             right_layout.insertWidget(right_layout.count() - 1, card)  # Insert before stretch
         
         # Log wave spawn for debugging
-        print(f"[Wave System] Wave {self._wave_number} spawned with {len(new_foes)} foes")
+        print(f"[Wave System] Wave {self._wave_number} spawned with {len(new_foes)} foes (wave_index={self._wave_index - 1}, mult={spawn_wave_mult:.4f})")
         self._set_status(f"Wave {self._wave_number}!")
 
     def _step_battle(self) -> None:
