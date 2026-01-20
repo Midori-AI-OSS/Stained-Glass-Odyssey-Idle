@@ -847,10 +847,16 @@ class BattleScreenWidget(QWidget):
         try:
             save = self._save_manager.load() or self._save or RunSave()
             should_reset = False
+            
+            # Calculate survival time for defeat health loss calculation
+            survival_seconds = 0.0
+            if defeat and save.battle_start_time > 0.0:
+                survival_seconds = max(0.0, time.time() - save.battle_start_time)
+            
             if victory:
                 should_reset = apply_battle_result(save, victory=True)
             elif defeat:
-                should_reset = apply_battle_result(save, victory=False)
+                should_reset = apply_battle_result(save, victory=False, survival_seconds=survival_seconds)
             if should_reset:
                 for char_id in sorted(set(self._onsite_ids + self._offsite_ids)):
                     plugin = self._plugin_by_id.get(char_id)
@@ -990,7 +996,13 @@ class BattleScreenWidget(QWidget):
         
         try:
             save = self._save_manager.load() or self._save or RunSave()
-            should_reset = apply_battle_result(save, victory=False)
+            
+            # Calculate survival time for retreat health loss calculation
+            survival_seconds = 0.0
+            if save.battle_start_time > 0.0:
+                survival_seconds = max(0.0, time.time() - save.battle_start_time)
+            
+            should_reset = apply_battle_result(save, victory=False, survival_seconds=survival_seconds)
             
             if should_reset:
                 for char_id in sorted(set(self._onsite_ids + self._offsite_ids)):
