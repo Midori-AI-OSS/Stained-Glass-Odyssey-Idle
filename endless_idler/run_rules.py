@@ -58,7 +58,7 @@ def apply_battle_result(save: RunSave, *, victory: bool, survival_seconds: float
     if save.party_hp_current <= 0:
         return True
 
-    save.party_hp_current = min(save.party_hp_max, save.party_hp_current + PARTY_HP_LOSS_HEAL)
+    # No heal on defeat - the loss formula should be the final word on defeat penalty
     return False
 
 
