@@ -86,6 +86,11 @@ class BattleScreenWidget(QWidget):
         self._save_manager = SaveManager()
         self._save = self._save_manager.load() or RunSave()
         self._fight_number = max(1, int(getattr(self._save, "fight_number", 1)))
+        
+        # Reset idle exp multiplier and set battle start time for new battle
+        self._save.idle_exp_mult = 1.0
+        self._save.battle_start_time = time.time()
+        self._save_manager.save(self._save)
 
         self._party: list[Combatant] = build_party(
             onsite=onsite,
@@ -124,6 +129,7 @@ class BattleScreenWidget(QWidget):
         self._turn_side = "party"
         self._battle_over = False
         self._foe_kills = 0
+        self._coins_earned = 0  # Track coins earned from foe kills
         
         # Stalemate detection
         self._stalemate_hp_ratio: float | None = None
@@ -796,6 +802,10 @@ class BattleScreenWidget(QWidget):
             self._apply_death_exp_debuff(target.char_id)
         elif target in self._foes:
             self._foe_kills += 1
+            # Award coins based on foe level: coins_gained = 1 * foe_level
+            foe_level = max(1, int(getattr(target.stats, "level", 1)))
+            coins = 1 * foe_level
+            self._coins_earned += coins
 
     def _set_status(self, message: str) -> None:
         message = str(message or "").replace("\n", " ").strip()
@@ -822,11 +832,11 @@ class BattleScreenWidget(QWidget):
         victory = bool(party_alive and not foes_alive)
         defeat = bool(foes_alive and not party_alive)
         if party_alive and not foes_alive:
-            self._award_gold(self._foe_kills, victory=True)
+            self._award_gold(self._coins_earned, victory=True)
             self._set_status("Victory")
             self._apply_idle_exp_bonus()
         elif foes_alive and not party_alive:
-            self._award_gold(self._foe_kills, victory=False)
+            self._award_gold(self._coins_earned, victory=False)
             self._set_status("Defeat")
             self._apply_idle_exp_penalty()
             # Show defeat popup and schedule auto-return to main menu
@@ -837,10 +847,16 @@ class BattleScreenWidget(QWidget):
         try:
             save = self._save_manager.load() or self._save or RunSave()
             should_reset = False
+            
+            # Calculate survival time for defeat health loss calculation
+            survival_seconds = 0.0
+            if defeat and save.battle_start_time > 0.0:
+                survival_seconds = max(0.0, time.time() - save.battle_start_time)
+            
             if victory:
                 should_reset = apply_battle_result(save, victory=True)
             elif defeat:
-                should_reset = apply_battle_result(save, victory=False)
+                should_reset = apply_battle_result(save, victory=False, survival_seconds=survival_seconds)
             if should_reset:
                 for char_id in sorted(set(self._onsite_ids + self._offsite_ids)):
                     plugin = self._plugin_by_id.get(char_id)
@@ -885,14 +901,14 @@ class BattleScreenWidget(QWidget):
     def _apply_idle_exp_penalty(self) -> None:
         self._extend_idle_exp_timer(key="idle_exp_penalty_seconds", seconds=15 * 60)
 
-    def _award_gold(self, kills: int, victory: bool = True) -> None:
-        """Award gold based on foe kills.
+    def _award_gold(self, coins: int, victory: bool = True) -> None:
+        """Award gold based on coins earned from foe defeats.
         
         Args:
-            kills: Number of foes defeated
-            victory: If True, award full gold. If False, award 50% of base kills only.
+            coins: Base coins earned from defeating foes (level-based)
+            victory: If True, award full gold. If False, award 50% of base coins only.
         """
-        gold = max(0, int(kills))
+        gold = max(0, int(coins))
         if gold <= 0:
             return
 
@@ -905,10 +921,10 @@ class BattleScreenWidget(QWidget):
             bonus = calculate_gold_bonus(tokens, winstreak)
             
             if victory:
-                # Full rewards on victory: base kills + bonus
+                # Full rewards on victory: base coins + bonus
                 total_gold = gold + bonus
             else:
-                # Partial rewards on loss: 50% of base kills + full bonus
+                # Partial rewards on loss: 50% of base coins + full bonus
                 # Bonus helps struggling players, reduced base maintains win incentive
                 loss_gold = max(1, gold // 2)  # Minimum 1 gold for killing any foes
                 total_gold = loss_gold + bonus
@@ -980,7 +996,13 @@ class BattleScreenWidget(QWidget):
         
         try:
             save = self._save_manager.load() or self._save or RunSave()
-            should_reset = apply_battle_result(save, victory=False)
+            
+            # Calculate survival time for retreat health loss calculation
+            survival_seconds = 0.0
+            if save.battle_start_time > 0.0:
+                survival_seconds = max(0.0, time.time() - save.battle_start_time)
+            
+            should_reset = apply_battle_result(save, victory=False, survival_seconds=survival_seconds)
             
             if should_reset:
                 for char_id in sorted(set(self._onsite_ids + self._offsite_ids)):

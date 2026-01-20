@@ -5,7 +5,11 @@ import time
 from endless_idler.save import RunSave
 
 
-PARTY_HP_LOSS_DAMAGE_PER_FIGHT = 15
+# DEPRECATED: PARTY_HP_LOSS_DAMAGE_PER_FIGHT is no longer used.
+# Health loss on defeat is now calculated based on survival time.
+# See apply_battle_result() for the new formula.
+# PARTY_HP_LOSS_DAMAGE_PER_FIGHT = 15
+
 PARTY_HP_LOSS_HEAL = 2
 PARTY_HP_WIN_HEAL = 4
 
@@ -19,8 +23,14 @@ def clamp_party_hp(save: RunSave) -> None:
     save.party_hp_current = min(save.party_hp_current, save.party_hp_max)
 
 
-def apply_battle_result(save: RunSave, *, victory: bool) -> bool:
-    """Returns True if the run should be force-reset."""
+def apply_battle_result(save: RunSave, *, victory: bool, survival_seconds: float = 0.0) -> bool:
+    """Returns True if the run should be force-reset.
+    
+    Args:
+        save: The run save data
+        victory: Whether the battle was won
+        survival_seconds: Time survived in battle (seconds) - used for defeat health loss calculation
+    """
     clamp_party_hp(save)
     fight_number = max(1, int(save.fight_number))
 
@@ -31,12 +41,24 @@ def apply_battle_result(save: RunSave, *, victory: bool) -> bool:
         return False
 
     save.winstreak = 0
-    damage = PARTY_HP_LOSS_DAMAGE_PER_FIGHT * fight_number
-    save.party_hp_current = max(0, save.party_hp_current - damage)
+    
+    # Calculate health loss based on survival time
+    # Formula: loss_percent = max(5, min(95, 100 - (survival_seconds * 0.3)))
+    # At 10s: ~97% loss (high penalty for quick defeat)
+    # At 100s: ~70% loss
+    # At 300s: ~10% loss
+    # At 317s+: 5% loss (minimum)
+    survival_seconds = max(0.0, float(survival_seconds))
+    loss_percent = max(5.0, min(95.0, 100.0 - (survival_seconds * 0.3)))
+    
+    # Apply percentage loss to current health
+    health_lost = int(save.party_hp_current * (loss_percent / 100.0))
+    save.party_hp_current = max(0, save.party_hp_current - health_lost)
+    
     if save.party_hp_current <= 0:
         return True
 
-    save.party_hp_current = min(save.party_hp_max, save.party_hp_current + PARTY_HP_LOSS_HEAL)
+    # No heal on defeat - the loss formula should be the final word on defeat penalty
     return False
 
 
