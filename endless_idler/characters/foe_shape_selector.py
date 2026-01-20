@@ -66,11 +66,12 @@ def select_shape_for_foe(stats: Stats) -> str:
     
     # Create fingerprint using weighted sum
     # Weights chosen to create good distribution across shape space
+    # Using prime-like numbers to avoid common factors
     fingerprint = int(
         hp_ratio * 1000 +
-        atk_ratio * 500 +
-        def_ratio * 250 +
-        spd_ratio * 125
+        atk_ratio * 733 +
+        def_ratio * 419 +
+        spd_ratio * 211
     )
     
     # Import here to avoid circular dependencies
@@ -132,9 +133,9 @@ def get_shape_selection_info(stats: Stats) -> dict[str, any]:
     
     fingerprint = int(
         hp_ratio * 1000 +
-        atk_ratio * 500 +
-        def_ratio * 250 +
-        spd_ratio * 125
+        atk_ratio * 733 +
+        def_ratio * 419 +
+        spd_ratio * 211
     )
     
     shape_count = get_shape_count()
