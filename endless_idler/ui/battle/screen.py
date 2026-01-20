@@ -383,7 +383,7 @@ class BattleScreenWidget(QWidget):
             self._last_wave_spawn_time = current_time
     
     def _spawn_new_wave(self) -> None:
-        """Spawn a new wave of foes"""
+        """Spawn a new wave of foes with 100 foe cap and overflow scaling"""
         self._wave_number += 1
         
         # Calculate spawn wave multiplier based on wave index
@@ -393,35 +393,52 @@ class BattleScreenWidget(QWidget):
         # Use existing foe level calculation
         foe_level = max(1, int(self._party_level * float(self._fight_number) * 1.3))
         
-        # Build new foes using baseline spawn count (5)
-        new_foes = build_foes(
-            exclude_ids=set(self._onsite_ids + self._offsite_ids),
-            party_level=foe_level,
-            foe_count=5,
-            plugins=self._plugins,
-            rng=self._rng,
-            spawn_wave_mult=spawn_wave_mult,
-        )
+        # FOE CAP LOGIC: Cap total foes at 100
+        MAX_FOES = 100
+        current_foe_count = sum(1 for foe in self._foes if foe.stats.hp > 0)
+        available_slots = MAX_FOES - current_foe_count
+        
+        # Baseline spawn count
+        base_spawn_count = 5
+        requested_spawn_count = base_spawn_count
+        
+        # Calculate actual spawn count and blocked spawns
+        actual_spawn_count = min(requested_spawn_count, max(0, available_slots))
+        blocked_spawns = max(0, requested_spawn_count - actual_spawn_count)
+        
+        # Calculate wave-only multiplier for overflow compensation
+        # Each blocked spawn increases multiplier by 1.01
+        wave_only_mult = pow(1.01, blocked_spawns)
+        
+        # Combine base spawn wave multiplier with wave-only overflow multiplier
+        combined_mult = spawn_wave_mult * wave_only_mult
+        
+        # Only spawn if we have available slots
+        if actual_spawn_count > 0:
+            # Build new foes with combined multiplier
+            new_foes = build_foes(
+                exclude_ids=set(self._onsite_ids + self._offsite_ids),
+                party_level=foe_level,
+                foe_count=actual_spawn_count,
+                plugins=self._plugins,
+                rng=self._rng,
+                spawn_wave_mult=combined_mult,
+            )
+            
+            # Add new foes to existing foes (don't replace)
+            self._foes.extend(new_foes)
+        else:
+            new_foes = []
         
         # Increment wave index for next wave
         self._wave_index += 1
         
-        # Replace old foes with new wave
-        self._foes = new_foes
-        
         # Update foe cards in the UI
-        # Remove old foe cards from layout
+        # Get layout for foe cards
         right_layout = self._arena.layout().itemAtPosition(0, 2).widget().layout()
         
-        # Clear old cards
-        for card in self._foe_cards:
-            right_layout.removeWidget(card)
-            card.deleteLater()
-        
-        self._foe_cards.clear()
-        
-        # Add new foe cards
-        for combatant in self._foes:
+        # Add new foe cards (only for newly spawned foes)
+        for combatant in new_foes:
             card = CombatantCard(
                 combatant=combatant,
                 plugin=self._plugin_by_id.get(combatant.char_id),
@@ -434,9 +451,16 @@ class BattleScreenWidget(QWidget):
             self._foe_cards.append(card)
             right_layout.insertWidget(right_layout.count() - 1, card)  # Insert before stretch
         
-        # Log wave spawn for debugging
-        print(f"[Wave System] Wave {self._wave_number} spawned with {len(new_foes)} foes (wave_index={self._wave_index - 1}, mult={spawn_wave_mult:.4f})")
-        self._set_status(f"Wave {self._wave_number}!")
+        # Log wave spawn for debugging with cap info
+        if blocked_spawns > 0:
+            print(f"[Wave System] Wave {self._wave_number} spawned with {actual_spawn_count}/{requested_spawn_count} foes (CAPPED: {blocked_spawns} blocked, wave_only_mult={wave_only_mult:.4f}, wave_index={self._wave_index - 1}, total_mult={combined_mult:.4f})")
+        else:
+            print(f"[Wave System] Wave {self._wave_number} spawned with {actual_spawn_count} foes (wave_index={self._wave_index - 1}, mult={combined_mult:.4f})")
+        
+        status_msg = f"Wave {self._wave_number}!"
+        if blocked_spawns > 0:
+            status_msg += f" (Capped! +{blocked_spawns*1:.0f}% wave strength)"
+        self._set_status(status_msg)
 
     def _step_battle(self) -> None:
         if self._battle_over:
