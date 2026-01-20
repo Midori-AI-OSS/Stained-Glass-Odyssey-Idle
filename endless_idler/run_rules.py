@@ -5,7 +5,11 @@ import time
 from endless_idler.save import RunSave
 
 
-PARTY_HP_LOSS_DAMAGE_PER_FIGHT = 15
+# DEPRECATED: PARTY_HP_LOSS_DAMAGE_PER_FIGHT is no longer used.
+# Health loss on defeat is now calculated based on survival time.
+# See apply_battle_result() for the new formula.
+# PARTY_HP_LOSS_DAMAGE_PER_FIGHT = 15
+
 PARTY_HP_LOSS_HEAL = 2
 PARTY_HP_WIN_HEAL = 4
 
