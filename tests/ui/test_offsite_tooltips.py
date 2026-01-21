@@ -13,7 +13,7 @@ from endless_idler.ui.battle.widgets import CombatantCard
 
 def test_offsite_card_generates_tooltip():
     """Verify that offsite character cards have tooltips."""
-    app = QApplication.instance() or QApplication([])
+    _ = QApplication.instance() or QApplication([])
     
     # Create a simple combatant with default stats
     stats = Stats()
@@ -39,7 +39,7 @@ def test_offsite_card_generates_tooltip():
 
 def test_offsite_card_tooltip_vs_compact():
     """Verify that offsite cards have tooltips but compact cards don't."""
-    app = QApplication.instance() or QApplication([])
+    _ = QApplication.instance() or QApplication([])
     
     # Create a simple combatant with default stats
     stats = Stats()
@@ -75,7 +75,7 @@ def test_offsite_card_tooltip_vs_compact():
 
 def test_onsite_card_generates_tooltip():
     """Verify that onsite character cards have tooltips too (baseline check)."""
-    app = QApplication.instance() or QApplication([])
+    _ = QApplication.instance() or QApplication([])
     
     # Create a simple combatant with default stats
     stats = Stats()
