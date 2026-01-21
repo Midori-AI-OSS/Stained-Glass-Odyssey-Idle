@@ -856,14 +856,23 @@ class PartyBuilderWidget(QWidget):
         stacks = max(1, int(self._save.stacks.get(char_id, 1)))
         stars = max(1, int(getattr(plugin, "stars", 1) or 1))
 
+        # DEBUG: Log what we're loading for investigation
+        progress = self._save.character_progress.get(char_id)
+        saved_stats = self._save.character_stats.get(char_id)
+        print(f"DEBUG: Loading stats for {char_id}")
+        print(f"  Progress: {progress}")
+        print(f"  Saved Stats: {saved_stats}")
+
         stats = build_scaled_character_stats(
             plugin=plugin,
             party_level=party_level,
             stars=stars,
             stacks=stacks,
-            progress=self._save.character_progress.get(char_id),
-            saved_base_stats=self._save.character_stats.get(char_id),
+            progress=progress,
+            saved_base_stats=saved_stats,
         )
+        
+        print(f"  Built level: {stats.level}, exp: {stats.exp}, exp_mult: {stats.exp_multiplier}")
 
         if (context or "").strip().lower() != "onsite":
             return stats
