@@ -24,11 +24,11 @@ Add small, controlled buffs to `atk_speed` from rebirth progression and other st
 5. Ensure stat displays reflect the modified atk_speed value
 
 ## Acceptance Criteria
-- [ ] atk_speed receives small buffs from rebirth progression
-- [ ] Maximum atk_speed increase from progression is capped/controlled
-- [ ] Stat display shows modified atk_speed value
-- [ ] Action timing correctly uses modified atk_speed
-- [ ] No runaway exponential growth in action rate
+- [x] atk_speed receives small buffs from rebirth progression
+- [x] Maximum atk_speed increase from progression is capped/controlled
+- [x] Stat display shows modified atk_speed value
+- [x] Action timing correctly uses modified atk_speed
+- [x] No runaway exponential growth in action rate
 
 ## Dependencies
 - Requires: d210c1ad-implement-tick-based-action-timing.md
@@ -41,3 +41,12 @@ Add small, controlled buffs to `atk_speed` from rebirth progression and other st
 ## Notes
 - Keep influence small and linear/sublinear
 - This is a tuning task; values may need adjustment
+
+## Implementation Notes
+- Added `calculate_atk_speed_bonus()` function in `party_stats.py` to compute level and rebirth bonuses
+- Modified `apply_progress_meta()` to apply bonuses via StatEffect system
+- Updated `atk_speed` property in `Stats` class to apply hard cap of 5.0
+- Modified `idle_state.py` to pass rebirth count in progress dict
+- Created comprehensive test suite in `tests/test_atk_speed_scaling.py`
+- All tests pass, integration verified
+- Stat displays and battle timing automatically use modified atk_speed values
