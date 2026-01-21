@@ -28,11 +28,11 @@ Replace the current action timing system with a tick-based system where actions 
    - Do NOT change damage/heal formulas, only timing
 
 ## Acceptance Criteria
-- [ ] Tick counter increments in battle loop
-- [ ] Characters with atk_speed=1 act once per 500 ticks
-- [ ] Characters with atk_speed=2 act once per 250 ticks
-- [ ] Offsite characters act 10x slower (interval × 10)
-- [ ] Combat math (damage, healing, etc.) remains unchanged
+- [x] Tick counter increments in battle loop
+- [x] Characters with atk_speed=1 act once per 500 ticks
+- [x] Characters with atk_speed=2 act once per 250 ticks
+- [x] Offsite characters act 10x slower (interval × 10)
+- [x] Combat math (damage, healing, etc.) remains unchanged
 
 ## Dependencies
 - Requires: 3b475c11-rename-speed-stat-to-atk_speed.md
@@ -45,3 +45,18 @@ Replace the current action timing system with a tick-based system where actions 
 ## Notes
 - Keep existing combat calculation math intact
 - Only change when actions occur, not what they do
+
+## Implementation Summary
+- Added `_battle_tick` counter to BattleScreenWidget
+- Added `next_action_tick` and `is_offsite` fields to Combatant
+- Created `_calculate_action_interval()` helper method implementing 500/atk_speed formula
+- Refactored `_step_battle()` to use tick-based timing instead of alternating turns
+- Characters act when `next_action_tick <= current_tick`
+- Offsite characters have 10x multiplier applied to action intervals
+- Comprehensive test suite added in `tests/test_tick_based_timing.py`
+- All tests passing
+
+## Commits
+- b456498: Add tick-based action timing system - Part 1
+- 8c62bd6: Complete tick-based action timing implementation
+
