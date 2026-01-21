@@ -72,26 +72,34 @@ def test_atk_speed_with_progression():
     assert stats.atk_speed == 2
 
 
-def test_atk_speed_hard_cap():
-    """Test that atk_speed is capped at 5.0."""
+def test_atk_speed_soft_cap():
+    """Test that atk_speed has a soft cap (not a hard cap)."""
     stats = Stats()
-    stats.set_base_stat("atk_speed", 10)  # Set very high base
+    stats.set_base_stat("atk_speed", 10)  # Set high base
     
-    # Should be capped at 5
-    assert stats.atk_speed == 5
+    # Should not be capped at 5, but should be reduced by soft cap
+    # Raw 10: excess = 5, soft_excess ≈ 1.17, soft_capped ≈ 6.17
+    # int(6.17) = 6
+    result = stats.atk_speed
+    assert result > 5, f"Expected value > 5 due to soft cap, got {result}"
+    assert result < 10, f"Expected value < 10 due to soft cap, got {result}"
     
-    # Test with effects
+    # Test with effects to push even higher (need a very large bonus to see int-level change)
     from endless_idler.combat.stat_effect import StatEffect
     effect = StatEffect(
         name="test_large_bonus",
-        stat_modifiers={"atk_speed": 100},
+        stat_modifiers={"atk_speed": 100},  # Need very large bonus due to diminishing returns
         duration=-1,
         source="test"
     )
     stats.add_effect(effect)
     
-    # Should still be capped at 5
-    assert stats.atk_speed == 5
+    # Should continue growing (not hard capped)
+    # Raw 110 should give us int(7)
+    result_with_effect = stats.atk_speed
+    assert result_with_effect >= result, f"Expected continued growth with effect, got {result_with_effect} vs {result}"
+    # Just verify it's not hitting a hard wall like old implementation
+    assert result_with_effect <= 10, f"Expected soft cap to slow growth, got {result_with_effect}"
 
 
 def test_atk_speed_minimum():

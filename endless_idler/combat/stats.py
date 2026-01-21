@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from typing import Any
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -195,10 +197,31 @@ class Stats:
 
     @property
     def atk_speed(self) -> int:
-        # Apply progression bonuses and cap at 5.0 before converting to int
-        base_plus_modifiers = self._base_atk_speed + self._calculate_stat_modifier("atk_speed")
-        capped_value = min(5.0, base_plus_modifiers)
-        return int(max(1, capped_value))
+        """
+        Get atk_speed with soft cap applied.
+        
+        Linear up to 5.0, then logarithmic diminishing returns.
+        Rate slows by 2x for each 5% gain past threshold.
+        """
+        THRESHOLD = 5.0
+        STEP_SIZE = 0.25  # 5% of threshold
+        
+        # Calculate raw value from base + modifiers
+        raw_value = self._base_atk_speed + self._calculate_stat_modifier("atk_speed")
+        
+        # If below threshold, no soft cap needed
+        if raw_value <= THRESHOLD:
+            return int(max(1, raw_value))
+        
+        # Calculate excess over threshold
+        excess = raw_value - THRESHOLD
+        
+        # Apply logarithmic diminishing returns
+        soft_excess = STEP_SIZE * math.log2(1 + (excess / STEP_SIZE))
+        soft_capped = THRESHOLD + soft_excess
+        
+        # Convert to int and enforce minimum
+        return int(max(1, soft_capped))
 
     @atk_speed.setter
     def atk_speed(self, value: int) -> None:
