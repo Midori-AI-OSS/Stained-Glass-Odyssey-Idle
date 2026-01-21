@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from endless_idler.combat.stats import Stats
 
 
@@ -99,13 +101,46 @@ def apply_plugin_overrides(stats: Stats, *, plugin: object | None) -> None:
         stats.damage_reduction_passes = int(passes)
 
 
+def apply_soft_cap_to_rebirth_bonus(rebirths: int) -> float:
+    """
+    Apply soft cap to rebirth bonus calculation.
+    
+    Linear up to 0.2 (rebirth 100), then logarithmic diminishing returns.
+    Rate slows by 2x for each 5% gain past threshold.
+    
+    Args:
+        rebirths: Number of rebirths
+        
+    Returns:
+        Rebirth bonus as a float with soft cap applied
+    """
+    THRESHOLD = 0.2
+    STEP_SIZE = 0.02  # Adjusted for better scaling
+    
+    # Calculate raw linear value
+    raw_value = rebirths * 0.002
+    
+    # If below threshold, no soft cap needed
+    if raw_value <= THRESHOLD:
+        return raw_value
+    
+    # Calculate excess over threshold
+    excess = raw_value - THRESHOLD
+    
+    # Apply logarithmic diminishing returns with adjusted scaling
+    soft_excess = STEP_SIZE * math.log2(1 + (excess / STEP_SIZE))
+    
+    return THRESHOLD + soft_excess
+
+
 def calculate_atk_speed_bonus(level: int, rebirths: int) -> float:
     """
     Calculate atk_speed bonus from level and rebirth progression.
     
-    Formula: bonus = min(0.1, level * 0.001) + min(0.2, rebirths * 0.002)
+    Formula: bonus = min(0.1, level * 0.001) + apply_soft_cap_to_rebirth_bonus(rebirths)
     - Level bonus: +0.001 per level, capped at +0.1 (at level 100)
-    - Rebirth bonus: +0.002 per rebirth, capped at +0.2 (at rebirth 100)
+    - Rebirth bonus: +0.002 per rebirth up to 0.2 (rebirth 100), then soft cap with
+      logarithmic diminishing returns (rate slows by 2x per 5% gain past 0.2)
     
     Args:
         level: Character level
@@ -118,7 +153,7 @@ def calculate_atk_speed_bonus(level: int, rebirths: int) -> float:
     rebirths = max(0, int(rebirths))
     
     level_bonus = min(0.1, level * 0.001)
-    rebirth_bonus = min(0.2, rebirths * 0.002)
+    rebirth_bonus = apply_soft_cap_to_rebirth_bonus(rebirths)
     
     return level_bonus + rebirth_bonus
 

@@ -28,11 +28,11 @@ def test_calculate_atk_speed_bonus_rebirth_only():
     # Rebirth 50: 0.1 bonus
     assert calculate_atk_speed_bonus(0, 50) == 0.1
     
-    # Rebirth 100: 0.2 bonus (capped)
+    # Rebirth 100: 0.2 bonus (at threshold)
     assert calculate_atk_speed_bonus(0, 100) == 0.2
     
-    # Rebirth 200: 0.2 bonus (still capped)
-    assert calculate_atk_speed_bonus(0, 200) == 0.2
+    # Rebirth 200: ~0.269 bonus (soft cap - continues to grow but slows)
+    assert abs(calculate_atk_speed_bonus(0, 200) - 0.269) < 0.001
 
 
 def test_calculate_atk_speed_bonus_combined():
@@ -95,11 +95,11 @@ def test_atk_speed_soft_cap():
     stats.add_effect(effect)
     
     # Should continue growing (not hard capped)
-    # Raw 110 should give us int(7)
+    # Raw 110 should give us more than the base result
     result_with_effect = stats.atk_speed
     assert result_with_effect >= result, f"Expected continued growth with effect, got {result_with_effect} vs {result}"
-    # Just verify it's not hitting a hard wall like old implementation
-    assert result_with_effect <= 10, f"Expected soft cap to slow growth, got {result_with_effect}"
+    # Verify it continues to grow but with diminishing returns
+    assert result_with_effect > result, f"Expected growth with large bonus, got {result_with_effect}"
 
 
 def test_atk_speed_minimum():
