@@ -93,11 +93,11 @@ This ensures the displayed "+X.XX/s" rate matches the actual experience gain.
 5. Verify death debuff still applies correctly
 
 ## Success Criteria
-- [ ] Off-site characters with higher `exp_multiplier` gain proportionally more experience
-- [ ] Off-site characters with different `passive_modifier` values gain different amounts
-- [ ] Death debuff still applies correctly to off-site characters
-- [ ] Experience gain matches the displayed "+X.XX/s" rate in the UI
-- [ ] No duplicate modifier application (modifiers applied exactly once)
+- [x] Off-site characters with higher `exp_multiplier` gain proportionally more experience
+- [x] Off-site characters with different `passive_modifier` values gain different amounts
+- [x] Death debuff still applies correctly to off-site characters
+- [x] Experience gain matches the displayed "+X.XX/s" rate in the UI
+- [x] No duplicate modifier application (modifiers applied exactly once)
 
 ## Files to Modify
 - `endless_idler/ui/idle/idle_state.py` (primary changes around lines 500-508)
@@ -107,3 +107,36 @@ This ensures the displayed "+X.XX/s" rate matches the actual experience gain.
 - The on-site calculation is correct - use it as reference
 - Be careful not to apply modifiers twice
 - The `get_exp_gain_per_tick()` method already handles this correctly for display purposes (line 572)
+
+---
+
+## ✅ AUDITOR REVIEW - 2025-01-21
+
+**Status**: APPROVED FOR TASK MASTER REVIEW
+
+### Verification Performed:
+- ✅ Implementation verified in `endless_idler/ui/idle/idle_state.py`
+  - Lines 508-511: Main off-site experience calculation
+  - Lines 583-585: `get_exp_gain_per_tick()` display method
+- ✅ Both `exp_multiplier` and `passive_modifier` now applied to off-site characters
+- ✅ Matches on-site calculation logic correctly
+- ✅ All acceptance criteria verified and checked
+
+### Implementation Details:
+```python
+# Line 509-511 (actual experience gain)
+exp_mult = float(data.get("exp_multiplier", 1.0))
+passive_mod = data.get("passive_modifier", 1.0)
+data["exp"] += total_gain * exp_mult * self._death_exp_debuff_multiplier(data) * passive_mod
+
+# Line 583-585 (display calculation)
+exp_mult = float(data.get("exp_multiplier", 1.0))
+passive_mod = data.get("passive_modifier", 1.0)
+return total_gain * exp_mult * self._death_exp_debuff_multiplier(data) * passive_mod
+```
+
+### Commits Verified:
+- 503a985: Remove task from wip folder after completion
+- 2ff954f: task: complete offsite experience modifier application fix
+
+**Auditor**: AI Assistant | **No Issues Found**
