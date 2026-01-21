@@ -33,7 +33,6 @@ from endless_idler.ui.battle.sim import build_reserves
 from endless_idler.ui.battle.sim import build_foes
 from endless_idler.ui.battle.sim import build_party
 from endless_idler.ui.battle.sim import calculate_damage
-from endless_idler.ui.battle.sim import choose_weighted_attacker
 from endless_idler.ui.battle.sim import choose_weighted_target_by_aggro
 from endless_idler.ui.battle.widgets import Arena
 from endless_idler.ui.battle.widgets import CombatantCard
@@ -629,19 +628,27 @@ class BattleScreenWidget(QWidget):
         color = color_for_damage_type_id(element_id)
 
         party_onsite = [c for c, _ in party_alive]
+        reserves_onsite = [c for c, _ in reserves_alive]
         foes_onsite = [c for c, _ in foes_alive]
         party_widgets = {c: w for c, w in party_alive}
         foe_widgets = {c: w for c, w in foes_alive}
-        reserve_widgets = {c: w for c, w in zip(self._reserves, self._reserve_cards, strict=False)}
+        reserve_widgets = {c: w for c, w in reserves_alive}
 
         if attacker_side == "party":
-            allies_onsite = party_onsite
-            allies_offsite = [c for c in self._reserves if c.stats.hp > 0]
+            # Party or reserves attacking foes
+            if attacker in party_onsite:
+                allies_onsite = party_onsite
+            else:
+                # Attacker is from reserves
+                allies_onsite = party_onsite  # Onsite allies are still the party
+            allies_offsite = reserves_onsite
             enemies = foes_alive
         else:
+            # Foes attacking party
             allies_onsite = foes_onsite
             allies_offsite = []
-            enemies = party_alive
+            # Foes can attack both party and reserves
+            enemies = party_alive + reserves_alive
 
         if element_id == "ice":
             if not attacker.ice_charge_ready:
