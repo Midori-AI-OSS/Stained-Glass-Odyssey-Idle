@@ -34,6 +34,7 @@ from endless_idler.ui.battle.sim import build_foes
 from endless_idler.ui.battle.sim import build_party
 from endless_idler.ui.battle.sim import calculate_damage
 from endless_idler.ui.battle.sim import choose_weighted_target_by_aggro
+from endless_idler.ui.battle.shape_foe_widget import ShapeFoeWidget
 from endless_idler.ui.battle.widgets import Arena
 from endless_idler.ui.battle.widgets import CombatantCard
 from endless_idler.ui.onsite import BattleOnsiteCharacterCard
@@ -125,7 +126,7 @@ class BattleScreenWidget(QWidget):
 
         self._party_cards: list[QWidget] = []
         self._reserve_cards: list[CombatantCard] = []
-        self._foe_cards: list[CombatantCard] = []
+        self._foe_cards: list[QWidget] = []
         self._turn_side = "party"
         self._battle_over = False
         self._foe_kills = 0
@@ -274,14 +275,10 @@ class BattleScreenWidget(QWidget):
         right_layout.addStretch(1)
 
         for combatant in self._foes:
-            card = CombatantCard(
+            card = ShapeFoeWidget(
                 combatant=combatant,
-                plugin=self._plugin_by_id.get(combatant.char_id),
-                rng=self._rng,
-                compact=True,
                 team_side="right",
-                stack_count=1,
-                variant="foe",
+                size=60,
             )
             self._foe_cards.append(card)
             right_layout.addWidget(card)
@@ -471,14 +468,10 @@ class BattleScreenWidget(QWidget):
         
         # Add new foe cards (only for newly spawned foes)
         for combatant in new_foes:
-            card = CombatantCard(
+            card = ShapeFoeWidget(
                 combatant=combatant,
-                plugin=self._plugin_by_id.get(combatant.char_id),
-                rng=self._rng,
-                compact=True,
                 team_side="right",
-                stack_count=1,
-                variant="foe",
+                size=60,
             )
             self._foe_cards.append(card)
             right_layout.insertWidget(right_layout.count() - 1, card)  # Insert before stretch
