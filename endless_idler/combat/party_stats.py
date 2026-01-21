@@ -115,7 +115,7 @@ def apply_soft_cap_to_rebirth_bonus(rebirths: int) -> float:
         Rebirth bonus as a float with soft cap applied
     """
     THRESHOLD = 0.2
-    STEP_SIZE = 0.02  # Adjusted for better scaling
+    STEP_SIZE = 0.01  # 5% of threshold
     
     # Calculate raw linear value
     raw_value = rebirths * 0.002
@@ -127,7 +127,7 @@ def apply_soft_cap_to_rebirth_bonus(rebirths: int) -> float:
     # Calculate excess over threshold
     excess = raw_value - THRESHOLD
     
-    # Apply logarithmic diminishing returns with adjusted scaling
+    # Apply logarithmic diminishing returns
     soft_excess = STEP_SIZE * math.log2(1 + (excess / STEP_SIZE))
     
     return THRESHOLD + soft_excess

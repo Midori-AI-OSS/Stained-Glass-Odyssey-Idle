@@ -34,8 +34,8 @@ class TestApplySoftCapToRebirthBonus:
         # Raw linear would be 0.3, but soft cap should reduce it
         assert result > 0.2  # More than threshold
         assert result < 0.3  # Less than raw linear
-        # Actual value with soft cap formula
-        assert abs(result - 0.2517) < 0.001
+        # Actual value with soft cap formula (STEP_SIZE = 0.01)
+        assert abs(result - 0.2346) < 0.001
     
     def test_rebirth_200_continued_diminishing(self):
         """Test that rebirth 200 shows continued diminishing returns."""
@@ -43,8 +43,8 @@ class TestApplySoftCapToRebirthBonus:
         # Raw linear would be 0.4, but soft cap should reduce it significantly
         assert result > 0.2  # More than threshold
         assert result < 0.4  # Less than raw linear
-        # Actual value with soft cap formula
-        assert abs(result - 0.2692) < 0.001
+        # Actual value with soft cap formula (STEP_SIZE = 0.01)
+        assert abs(result - 0.2439) < 0.001
     
     def test_rebirth_300_extreme_diminishing(self):
         """Test that rebirth 300 shows extreme diminishing returns."""
@@ -52,8 +52,8 @@ class TestApplySoftCapToRebirthBonus:
         # Raw linear would be 0.6, but soft cap should reduce it significantly
         assert result > 0.2  # More than threshold
         assert result < 0.6  # Much less than raw linear
-        # Actual value with soft cap formula
-        assert abs(result - 0.2878) < 0.001
+        # Actual value with soft cap formula (STEP_SIZE = 0.01)
+        assert abs(result - 0.2536) < 0.001
     
     def test_rebirth_500_very_high_diminishing(self):
         """Test that rebirth 500 shows very high diminishing returns."""
@@ -61,8 +61,8 @@ class TestApplySoftCapToRebirthBonus:
         # Raw linear would be 1.0, but soft cap should reduce it significantly
         assert result > 0.2  # More than threshold
         assert result < 1.0  # Much less than raw linear
-        # Actual value with soft cap formula
-        assert abs(result - 0.3072) < 0.001
+        # Actual value with soft cap formula (STEP_SIZE = 0.01)
+        assert abs(result - 0.2634) < 0.001
     
     def test_continuous_growth_no_plateau(self):
         """Test that bonuses continuously increase (no plateau)."""
@@ -78,7 +78,7 @@ class TestApplySoftCapToRebirthBonus:
         rebirths = 250
         raw_value = rebirths * 0.002  # 0.5
         threshold = 0.2
-        step_size = 0.02  # Adjusted step size
+        step_size = 0.01  # 5% of threshold as per task spec
         excess = raw_value - threshold  # 0.3
         
         expected = threshold + step_size * math.log2(1 + (excess / step_size))
@@ -132,9 +132,9 @@ class TestCalculateAtkSpeedBonus:
     def test_combined_with_soft_cap(self):
         """Test combined bonuses with soft cap active."""
         result = calculate_atk_speed_bonus(100, 150)
-        # Level gives 0.1, rebirth ~0.2517
+        # Level gives 0.1, rebirth ~0.2346
         assert result > 0.3  # More than threshold (0.1 + 0.2)
-        assert abs(result - 0.3517) < 0.001  # ~0.1 + 0.2517
+        assert abs(result - 0.3346) < 0.001  # ~0.1 + 0.2346
     
     def test_negative_inputs_clamped(self):
         """Test that negative inputs are clamped to 0."""
