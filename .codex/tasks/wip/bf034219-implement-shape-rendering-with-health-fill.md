@@ -47,8 +47,8 @@ Implement rendering of foe shapes with color (damage type) and health-based fill
 - [x] Foe stats generation (build_foes) remains unchanged
 
 ## Dependencies
-- Requires: ea22d177-create-shape-palette-system.md ✅
-- Requires: 3d3ed165-implement-foe-shape-selection-logic.md ✅
+- Requires: ea22d177-create-shape-palette-system.md
+- Requires: 3d3ed165-implement-foe-shape-selection-logic.md
 
 ## Testing
 - Spawn foe at full health, verify full fill
@@ -64,62 +64,54 @@ Implement rendering of foe shapes with color (damage type) and health-based fill
 
 ---
 
-## 🔴 AUDIT FEEDBACK - MUST ADDRESS BEFORE RE-SUBMISSION
+## AUDITOR FEEDBACK - RETURNED FOR WORKFLOW COMPLIANCE
 
-**Status:** RETURNED TO WIP  
-**Auditor:** Auditor Mode  
 **Date:** 2024-01-21
+**Auditor:** Auditor Mode
 
-### Implementation Quality: ✅ EXCELLENT
-The code is **production-ready** - clean, well-tested, follows all coding standards. All acceptance criteria met. Great work!
+### Code Quality: ✅ EXCELLENT
+The implementation is technically perfect:
+- Clean code following all repository standards
+- All tests passing (23 shape-related tests)
+- Proper abstractions and type hints
+- File size under 300 lines
+- Linting passed
 
-### Process Issues: ❌ WORKFLOW VIOLATIONS
-The following process violations must be corrected:
+### Issues to Fix Before Re-submission:
 
-#### 1. ❌ COMMIT CHANGES FIRST
-**Problem:** Uncommitted changes detected in git status
-- New file: `endless_idler/ui/battle/shape_foe_widget.py`
-- Modified: `endless_idler/ui/battle/screen.py`
-- Task file moved but not committed
+1. **WORKFLOW VIOLATION** ❌
+   - Task was in `.codex/tasks/done/` folder
+   - Per AGENTS.md, correct workflow is: `wip/` → `review/` → `taskmaster/` → closed
+   - The `done/` folder is NOT part of the documented workflow
+   - **Action:** Task returned to `wip/` - move to `review/` when ready
 
-**Required Action:**
-```bash
-git add endless_idler/ui/battle/shape_foe_widget.py
-git add endless_idler/ui/battle/screen.py
-git commit -m "[FEAT] Implement shape-based foe rendering with health fill"
-git status  # Must show "nothing to commit, working tree clean"
-```
+2. **UNCOMMITTED CHANGES** ❌
+   - Implementation files not committed
+   - Per AGENTS.md: Must commit ALL changes BEFORE moving to next stage
+   - **Action Required:** 
+     ```bash
+     git add endless_idler/ui/battle/shape_foe_widget.py
+     git add endless_idler/ui/battle/screen.py
+     git commit -m "[FEAT] Implement shape-based foe rendering with health fill"
+     git status  # Verify clean
+     ```
 
-#### 2. ❌ MANUAL GUI VERIFICATION REQUIRED
-**Problem:** No evidence of visual testing. This is a **visual feature** that must be manually verified.
+3. **MISSING MANUAL VERIFICATION** ❌
+   - This is a VISUAL feature - requires manual testing
+   - Completion notes mention "GUI tests removed" but no manual test evidence
+   - **Action Required:** Manually verify and document:
+     - Shapes render correctly in battle screen
+     - Health fill works at 100%, 50%, 10% health
+     - Colors match different damage types
+     - Foe names display properly
+     - All three fill directions work (bottom_up, left_right, center_out)
+     - Add verification notes to completion document or task file
 
-**Required Action:** Launch the application and verify:
-- [ ] Shapes render correctly (not broken/invisible)
-- [ ] Health fill works (test at 100%, 50%, 10% health)
-- [ ] Different damage types show different colors
-- [ ] Names display under shapes
-- [ ] Shapes update smoothly when health changes
-- [ ] All three fill directions work (bottom_up, left_right, center_out)
+### Next Steps:
+1. Commit all implementation files with `[FEAT]` prefix
+2. Verify `git status` is clean
+3. Manually test GUI functionality
+4. Document manual test results
+5. Move task from `wip/` to `review/` (not `done/`)
 
-Document verification in completion notes with specific observations.
-
-#### 3. ℹ️ WORKFLOW CLARIFICATION
-**Note:** Tasks should move: `wip/` → `review/` → `taskmaster/` (not to `done/`)
-- After fixing above issues, move to `review/` folder
-- Auditor will then review and move to `taskmaster/` if approved
-
----
-
-### What to Do Next
-
-1. ✅ **Commit your changes** (see command above)
-2. ✅ **Run manual GUI test** (launch app, verify rendering)
-3. ✅ **Document verification** in COMPLETION_NOTES
-4. ✅ **Move task to `.codex/tasks/review/`** (not done/)
-5. ✅ **Commit the task move** with `[DOCS]` prefix
-
-Once completed, the auditor will review and approve for taskmaster.
-
----
-
-**Full audit report available at:** `.codex/tasks/done/AUDIT_REPORT_bf034219.md`
+The code is production-ready - just need proper workflow compliance! 🎉
