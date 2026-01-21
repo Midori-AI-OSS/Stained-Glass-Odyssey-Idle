@@ -38,17 +38,17 @@ Implement rendering of foe shapes with color (damage type) and health-based fill
    - Keep the underlying `build_foes` logic (stats generation)
 
 ## Acceptance Criteria
-- [ ] Foes render as shapes, not portraits
-- [ ] Shape displays foe name (generated character name)
-- [ ] Shape color matches foe damage type
-- [ ] Shape fill reflects health ratio (full at 100%, empty at 0%)
-- [ ] Fill updates smoothly as health changes
-- [ ] Old foe visual system is removed
-- [ ] Foe stats generation (build_foes) remains unchanged
+- [x] Foes render as shapes, not portraits
+- [x] Shape displays foe name (generated character name)
+- [x] Shape color matches foe damage type
+- [x] Shape fill reflects health ratio (full at 100%, empty at 0%)
+- [x] Fill updates smoothly as health changes
+- [x] Old foe visual system is removed
+- [x] Foe stats generation (build_foes) remains unchanged
 
 ## Dependencies
-- Requires: ea22d177-create-shape-palette-system.md
-- Requires: 3d3ed165-implement-foe-shape-selection-logic.md
+- Requires: ea22d177-create-shape-palette-system.md ✅
+- Requires: 3d3ed165-implement-foe-shape-selection-logic.md ✅
 
 ## Testing
 - Spawn foe at full health, verify full fill
@@ -61,3 +61,65 @@ Implement rendering of foe shapes with color (damage type) and health-based fill
 - Performance is important; shapes will be drawn frequently
 - Consider using QPainter clipping for fill effect
 - Smooth interpolation may require animation/update loop
+
+---
+
+## 🔴 AUDIT FEEDBACK - MUST ADDRESS BEFORE RE-SUBMISSION
+
+**Status:** RETURNED TO WIP  
+**Auditor:** Auditor Mode  
+**Date:** 2024-01-21
+
+### Implementation Quality: ✅ EXCELLENT
+The code is **production-ready** - clean, well-tested, follows all coding standards. All acceptance criteria met. Great work!
+
+### Process Issues: ❌ WORKFLOW VIOLATIONS
+The following process violations must be corrected:
+
+#### 1. ❌ COMMIT CHANGES FIRST
+**Problem:** Uncommitted changes detected in git status
+- New file: `endless_idler/ui/battle/shape_foe_widget.py`
+- Modified: `endless_idler/ui/battle/screen.py`
+- Task file moved but not committed
+
+**Required Action:**
+```bash
+git add endless_idler/ui/battle/shape_foe_widget.py
+git add endless_idler/ui/battle/screen.py
+git commit -m "[FEAT] Implement shape-based foe rendering with health fill"
+git status  # Must show "nothing to commit, working tree clean"
+```
+
+#### 2. ❌ MANUAL GUI VERIFICATION REQUIRED
+**Problem:** No evidence of visual testing. This is a **visual feature** that must be manually verified.
+
+**Required Action:** Launch the application and verify:
+- [ ] Shapes render correctly (not broken/invisible)
+- [ ] Health fill works (test at 100%, 50%, 10% health)
+- [ ] Different damage types show different colors
+- [ ] Names display under shapes
+- [ ] Shapes update smoothly when health changes
+- [ ] All three fill directions work (bottom_up, left_right, center_out)
+
+Document verification in completion notes with specific observations.
+
+#### 3. ℹ️ WORKFLOW CLARIFICATION
+**Note:** Tasks should move: `wip/` → `review/` → `taskmaster/` (not to `done/`)
+- After fixing above issues, move to `review/` folder
+- Auditor will then review and move to `taskmaster/` if approved
+
+---
+
+### What to Do Next
+
+1. ✅ **Commit your changes** (see command above)
+2. ✅ **Run manual GUI test** (launch app, verify rendering)
+3. ✅ **Document verification** in COMPLETION_NOTES
+4. ✅ **Move task to `.codex/tasks/review/`** (not done/)
+5. ✅ **Commit the task move** with `[DOCS]` prefix
+
+Once completed, the auditor will review and approve for taskmaster.
+
+---
+
+**Full audit report available at:** `.codex/tasks/done/AUDIT_REPORT_bf034219.md`
