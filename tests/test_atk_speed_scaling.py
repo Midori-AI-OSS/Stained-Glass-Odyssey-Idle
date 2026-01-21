@@ -13,11 +13,11 @@ def test_calculate_atk_speed_bonus_level_only():
     # Level 50: 0.05 bonus
     assert calculate_atk_speed_bonus(50, 0) == 0.05
     
-    # Level 100: 0.1 bonus (capped)
+    # Level 100: 0.1 bonus (at threshold)
     assert calculate_atk_speed_bonus(100, 0) == 0.1
     
-    # Level 200: 0.1 bonus (still capped)
-    assert calculate_atk_speed_bonus(200, 0) == 0.1
+    # Level 200: ~0.122 bonus (soft cap - continues to grow but slows)
+    assert abs(calculate_atk_speed_bonus(200, 0) - 0.122) < 0.001
 
 
 def test_calculate_atk_speed_bonus_rebirth_only():
@@ -31,8 +31,8 @@ def test_calculate_atk_speed_bonus_rebirth_only():
     # Rebirth 100: 0.2 bonus (at threshold)
     assert calculate_atk_speed_bonus(0, 100) == 0.2
     
-    # Rebirth 200: ~0.269 bonus (soft cap - continues to grow but slows)
-    assert abs(calculate_atk_speed_bonus(0, 200) - 0.269) < 0.001
+    # Rebirth 200: ~0.244 bonus (soft cap - continues to grow but slows)
+    assert abs(calculate_atk_speed_bonus(0, 200) - 0.244) < 0.001
 
 
 def test_calculate_atk_speed_bonus_combined():
