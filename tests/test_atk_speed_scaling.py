@@ -37,14 +37,14 @@ def test_calculate_atk_speed_bonus_rebirth_only():
 
 def test_calculate_atk_speed_bonus_combined():
     """Test atk_speed bonus from both level and rebirth."""
-    # Level 50 + Rebirth 50: 0.05 + 0.1 = 0.15
-    assert calculate_atk_speed_bonus(50, 50) == 0.15
+    # Level 50 + Rebirth 50: 0.05 + 0.1 = 0.15 (with floating point tolerance)
+    assert abs(calculate_atk_speed_bonus(50, 50) - 0.15) < 1e-10
     
     # Level 100 + Rebirth 100: 0.1 + 0.2 = 0.3 (both maxed)
-    assert calculate_atk_speed_bonus(100, 100) == 0.3
+    assert abs(calculate_atk_speed_bonus(100, 100) - 0.3) < 1e-10
     
     # Level 1 + Rebirth 1: 0.001 + 0.002 = 0.003
-    assert calculate_atk_speed_bonus(1, 1) == 0.003
+    assert abs(calculate_atk_speed_bonus(1, 1) - 0.003) < 1e-10
 
 
 def test_atk_speed_with_progression():
