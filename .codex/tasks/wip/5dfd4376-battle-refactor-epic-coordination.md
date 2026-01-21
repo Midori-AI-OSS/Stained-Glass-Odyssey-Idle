@@ -163,5 +163,39 @@ Rewards Chain:
 
 ---
 
+## Audit Notes (2026-01-21)
+
+**Status**: Returned to WIP - Epic coordination incomplete
+
+**Completion Summary**: 11/14 verifiable tasks complete (79%)
+
+### Completed Tasks (11):
+- ✅ 3b475c11 - Rename speed stat to atk_speed
+- ✅ d210c1ad - Implement tick-based action timing
+- ✅ e4c0bb06 - Refactor battle layout to horizontal rows
+- ✅ ea22d177 - Create shape palette system
+- ✅ 3d3ed165 - Implement foe shape selection logic
+- ✅ 0dcdf834 - Implement wave spawning system
+- ✅ 70c89728 - Implement wave spawn count time scaling
+- ✅ 44ea3aa4 - Implement foe cap and wave overflow scaling
+- ✅ 3aa5ebc3 - Implement wave index difficulty ramp
+- ✅ 3b475c12 - Implement coin rewards per foe kill
+- ✅ 3b475c13 - Implement survival idle exp multiplier
+
+### Remaining Tasks (2):
+- ⏳ bf034219 - Implement shape rendering with health fill (in WIP, acceptance criteria checked but needs verification)
+- ⏳ 8fd957a1 - Implement foe spawning and movement (in WIP, blocked by bf034219)
+
+### Removed Tasks (1):
+- ❌ a7dfe25e - Add atk_speed rebirth scaling (deleted due to design issues in commit c1f2da0)
+
+**Action Required**:
+1. Update this document to reflect actual completion status
+2. Complete remaining 2 tasks
+3. Verify bf034219 implementation meets all requirements
+4. Move back to done/ when all sub-tasks are verified complete
+
+---
+
 **Created:** 2025-01-19 (Task Master)
-**Last Updated:** 2025-01-19
+**Last Updated:** 2026-01-21 (Auditor)
