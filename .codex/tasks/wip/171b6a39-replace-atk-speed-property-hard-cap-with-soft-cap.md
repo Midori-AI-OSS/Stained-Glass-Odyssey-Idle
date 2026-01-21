@@ -111,3 +111,93 @@ def atk_speed(self) -> int:
 - The int conversion at the end means players will see discrete integer values
 - However, the soft cap should apply to the float value before conversion
 - This allows fine-grained control while maintaining compatibility
+
+---
+
+## 🔴 AUDITOR REVIEW (2026-01-21) - BLOCKED
+
+### Status: **RETURNED TO WIP**
+
+### Critical Issue: Task Specification Inconsistency
+
+The task specification contains **contradictory information** - the provided formula does NOT produce the example values:
+
+| Raw Value | Formula Result | Spec Example | Match? |
+|-----------|---------------|--------------|---------|
+| 5.0 | 5.00 | 5.00 | ✓ |
+| 6.0 | 5.58 | 5.49 | ✗ |
+| 7.0 | 5.79 | 5.83 | ✗ |
+| 9.0 | 6.02 | 6.36 | ✗ |
+| 15.0 | 6.34 | **7.66** | ✗ MAJOR |
+| 25.0 | 6.58 | **9.16** | ✗ MAJOR |
+
+### Implementation Review
+
+✅ **What was done correctly:**
+- Formula implemented exactly as specified: `STEP_SIZE * math.log2(1 + (excess / STEP_SIZE))`
+- Math module imported correctly
+- All 13 tests created and passing
+- Soft cap removes hard limit (continuous growth verified)
+- Minimum value of 1 enforced
+- Int conversion preserved
+- Code is clean and well-documented
+
+❌ **Critical Problems:**
+
+1. **Formula produces overly aggressive diminishing returns:**
+   - At raw 25.0, effective value is only 6.58 (spec says should be 9.16)
+   - At raw 100.0, effective value would be only ~7.0
+   - This is barely better than a hard cap at 6-7!
+
+2. **Defeats the purpose of soft cap:**
+   - Original hard cap was at 5.0
+   - With current formula, practical cap is around 6.5-7.0
+   - Players will hit effective ceiling very quickly
+   - Doesn't allow meaningful continued growth
+
+3. **Quantization compounds the problem:**
+   - Due to int conversion, players see: int(6.58) = 6
+   - Even at raw 25+, display shows only 6
+   - Combined with known quantization issues from previous audit (c89442d)
+
+### What Needs to be Fixed
+
+**MUST decide which is correct:**
+
+**Option A**: Formula is correct, update example values
+- Update task spec examples to match log2 formula
+- Acknowledge this creates very aggressive soft cap
+- May need to revisit if cap is too restrictive
+
+**Option B**: Examples are correct, fix formula (RECOMMENDED)
+- Reverse-engineer formula that produces example values
+- Appears to need gentler diminishing returns
+- Consider: `soft_excess = excess * (THRESHOLD / (THRESHOLD + (excess / STEP_SIZE)))`
+- Or other formula that allows more growth
+
+**Option C**: Compromise formula
+- Create formula with moderate diminishing returns
+- Set new realistic example values
+- Ensure meaningful growth is possible beyond raw 10+
+
+### Recommendation
+
+**BLOCK and return to WIP**: Task spec must be clarified before implementation can be accepted. The coder did their job correctly by implementing the spec, but the spec itself is flawed.
+
+**Suggested next steps:**
+1. Consult with task author or designer about intended behavior
+2. Choose which is authoritative: formula or example values
+3. Update task spec to be internally consistent
+4. Re-implement with corrected formula if needed
+5. Update tests to verify correct behavior
+
+### Test Status
+- ✅ All 13 tests pass
+- ✅ No regressions in combat tests
+- ⚠️  Tests verify formula, but formula may be wrong
+- ⚠️  Pre-existing test failure in `test_lady_light_radiant_aegis.py` (unrelated)
+
+### Files Modified
+- `endless_idler/combat/stats.py` - atk_speed property updated
+- `tests/combat/test_stats.py` - 13 comprehensive tests added
+- All changes are clean and revertible
