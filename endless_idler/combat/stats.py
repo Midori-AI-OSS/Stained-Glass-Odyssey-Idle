@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 from typing import Any
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -195,7 +196,36 @@ class Stats:
 
     @property
     def atk_speed(self) -> int:
-        return int(max(1, self._base_atk_speed + self._calculate_stat_modifier("atk_speed")))
+        """
+        Get atk_speed with soft cap applied.
+        
+        Linear up to 5.0, then power-based diminishing returns.
+        Rate slows by 2x for each 5% gain past threshold.
+        
+        Uses formula: soft_excess = STEP_SIZE * ((1 + (excess / STEP_SIZE))^0.66 - 1)
+        """
+        THRESHOLD = 5.0
+        STEP_SIZE = 0.25  # 5% of threshold
+        EXPONENT = 0.66  # Calibrated to match desired diminishing returns curve
+        
+        # Calculate raw value from base + modifiers
+        raw_value = self._base_atk_speed + self._calculate_stat_modifier("atk_speed")
+        
+        # If below threshold, no soft cap needed
+        if raw_value <= THRESHOLD:
+            return int(max(1, raw_value))
+        
+        # Calculate excess over threshold
+        excess = raw_value - THRESHOLD
+        
+        # Apply power-based diminishing returns
+        # This produces gentler diminishing returns than log2, allowing meaningful
+        # continued growth beyond the threshold while still reducing effectiveness
+        soft_excess = STEP_SIZE * ((1 + (excess / STEP_SIZE)) ** EXPONENT - 1)
+        soft_capped = THRESHOLD + soft_excess
+        
+        # Convert to int and enforce minimum
+        return int(max(1, soft_capped))
 
     @atk_speed.setter
     def atk_speed(self, value: int) -> None:

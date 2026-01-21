@@ -33,7 +33,6 @@ from endless_idler.ui.battle.sim import build_reserves
 from endless_idler.ui.battle.sim import build_foes
 from endless_idler.ui.battle.sim import build_party
 from endless_idler.ui.battle.sim import calculate_damage
-from endless_idler.ui.battle.sim import choose_weighted_attacker
 from endless_idler.ui.battle.sim import choose_weighted_target_by_aggro
 from endless_idler.ui.battle.widgets import Arena
 from endless_idler.ui.battle.widgets import CombatantCard
@@ -132,6 +131,13 @@ class BattleScreenWidget(QWidget):
         self._foe_kills = 0
         self._coins_earned = 0  # Track coins earned from foe kills
         
+        # Tick-based action timing
+        self._battle_tick: int = 0
+        
+        # Mark offsite combatants
+        for reserve in self._reserves:
+            reserve.is_offsite = True
+        
         # Stalemate detection
         self._stalemate_hp_ratio: float | None = None
         self._stalemate_last_check_time: float = time.time()
@@ -192,7 +198,7 @@ class BattleScreenWidget(QWidget):
         root.addWidget(arena, 1)
 
         left = QWidget()
-        left_layout = QVBoxLayout()
+        left_layout = QHBoxLayout()  # Changed from VBoxLayout to HBoxLayout for horizontal row
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(10)
         left.setLayout(left_layout)
@@ -229,7 +235,7 @@ class BattleScreenWidget(QWidget):
 
         left_layout.addStretch(1)
         reserves_panel = QWidget()
-        reserves_layout = QVBoxLayout()
+        reserves_layout = QHBoxLayout()  # Changed from VBoxLayout to HBoxLayout for horizontal row
         reserves_layout.setContentsMargins(0, 0, 0, 0)
         reserves_layout.setSpacing(10)
         reserves_panel.setLayout(reserves_layout)
@@ -251,13 +257,15 @@ class BattleScreenWidget(QWidget):
         reserves_layout.addStretch(1)
 
         left_side = QWidget()
-        left_side_layout = QHBoxLayout()
+        left_side_layout = QVBoxLayout()  # Changed from HBoxLayout to VBoxLayout to stack rows vertically
         left_side_layout.setContentsMargins(0, 0, 0, 0)
         left_side_layout.setSpacing(12)
         left_side.setLayout(left_side_layout)
+        left_side_layout.addStretch(1)  # Push content to center vertically
+        left_side_layout.addWidget(left, 0, Qt.AlignmentFlag.AlignHCenter)  # Onsite row (at bottom)
         if self._reserves:
-            left_side_layout.addWidget(reserves_panel, 0, Qt.AlignmentFlag.AlignVCenter)
-        left_side_layout.addWidget(left, 0, Qt.AlignmentFlag.AlignVCenter)
+            left_side_layout.addWidget(reserves_panel, 0, Qt.AlignmentFlag.AlignHCenter)  # Offsite row (below onsite)
+        left_side_layout.addStretch(1)  # Push content to center vertically
 
         right = QWidget()
         right_layout = QVBoxLayout()
@@ -487,12 +495,35 @@ class BattleScreenWidget(QWidget):
             status_msg += f" (Capped! +{blocked_spawns*1:.0f}% wave strength)"
         self._set_status(status_msg)
 
+    def _calculate_action_interval(self, combatant: Combatant) -> int:
+        """Calculate action interval in ticks based on atk_speed.
+        
+        Formula: action_interval_ticks = 500 / atk_speed
+        Offsite characters act 10x slower (interval × 10)
+        
+        Args:
+            combatant: The combatant to calculate interval for
+            
+        Returns:
+            Number of ticks between actions
+        """
+        base_interval = 500.0 / max(1, combatant.stats.atk_speed)
+        
+        # Apply offsite multiplier
+        if combatant.is_offsite:
+            base_interval *= 10.0
+        
+        return int(base_interval)
+
     def _step_battle(self) -> None:
         if self._battle_over:
             return
         if self._is_over():
             self._on_battle_over()
             return
+        
+        # Increment tick counter
+        self._battle_tick += 1
         
         # Check for stalemate and apply bleed
         self._check_stalemate()
@@ -506,6 +537,11 @@ class BattleScreenWidget(QWidget):
             for c, w in zip(self._party, self._party_cards, strict=False)
             if c.stats.hp > 0
         ]
+        reserves_alive = [
+            (c, w)
+            for c, w in zip(self._reserves, self._reserve_cards, strict=False)
+            if c.stats.hp > 0
+        ]
         foes_alive = [
             (c, w)
             for c, w in zip(self._foes, self._foe_cards, strict=False)
@@ -515,7 +551,7 @@ class BattleScreenWidget(QWidget):
             self._on_battle_over()
             return
 
-        # Trigger TURN_START passives for party
+        # Trigger TURN_START passives for party (keep this per tick for now)
         party_stats = [c.stats for c in self._party if c.stats.hp > 0]
         reserve_stats = [c.stats for c in self._reserves if c.stats.hp > 0]
         all_party_stats = party_stats + reserve_stats
@@ -546,13 +582,47 @@ class BattleScreenWidget(QWidget):
             self._on_battle_over()
             return
 
-        if self._turn_side == "party":
-            attacker, attacker_widget = choose_weighted_attacker(party_alive, self._rng)
-            self._turn_side = "foes"
+        # Determine which combatants should act this tick (tick-based timing)
+        # Collect all alive combatants from all teams
+        all_combatants_alive = party_alive + reserves_alive + foes_alive
+        
+        # Find combatants ready to act (next_action_tick <= current_tick)
+        ready_to_act = [
+            (c, w) for c, w in all_combatants_alive 
+            if c.next_action_tick <= self._battle_tick
+        ]
+        
+        # If no one is ready, continue to next tick
+        if not ready_to_act:
+            return
+        
+        # Pick one combatant to act this tick (weighted by atk_speed for fairness)
+        # Higher atk_speed = more likely to be selected when multiple are ready
+        weights = [c.stats.atk_speed for c, _ in ready_to_act]
+        total_weight = sum(weights)
+        if total_weight <= 0:
+            return
+        
+        # Weighted random selection
+        r = self._rng.random() * total_weight
+        cumulative = 0.0
+        attacker, attacker_widget = ready_to_act[0]
+        for (c, w), weight in zip(ready_to_act, weights, strict=False):
+            cumulative += weight
+            if r <= cumulative:
+                attacker, attacker_widget = c, w
+                break
+        
+        # Schedule next action for this combatant
+        action_interval = self._calculate_action_interval(attacker)
+        attacker.next_action_tick = self._battle_tick + action_interval
+        
+        # Determine attacker side (party vs foes)
+        if attacker in [c for c, _ in party_alive]:
             attacker_side = "party"
+        elif attacker in [c for c, _ in reserves_alive]:
+            attacker_side = "party"  # Reserves are on party side
         else:
-            attacker, attacker_widget = choose_weighted_attacker(foes_alive, self._rng)
-            self._turn_side = "party"
             attacker_side = "foes"
 
         attacker.turns_taken += 1
@@ -560,19 +630,27 @@ class BattleScreenWidget(QWidget):
         color = color_for_damage_type_id(element_id)
 
         party_onsite = [c for c, _ in party_alive]
+        reserves_onsite = [c for c, _ in reserves_alive]
         foes_onsite = [c for c, _ in foes_alive]
         party_widgets = {c: w for c, w in party_alive}
         foe_widgets = {c: w for c, w in foes_alive}
-        reserve_widgets = {c: w for c, w in zip(self._reserves, self._reserve_cards, strict=False)}
+        reserve_widgets = {c: w for c, w in reserves_alive}
 
         if attacker_side == "party":
-            allies_onsite = party_onsite
-            allies_offsite = [c for c in self._reserves if c.stats.hp > 0]
+            # Party or reserves attacking foes
+            if attacker in party_onsite:
+                allies_onsite = party_onsite
+            else:
+                # Attacker is from reserves
+                allies_onsite = party_onsite  # Onsite allies are still the party
+            allies_offsite = reserves_onsite
             enemies = foes_alive
         else:
+            # Foes attacking party
             allies_onsite = foes_onsite
             allies_offsite = []
-            enemies = party_alive
+            # Foes can attack both party and reserves
+            enemies = party_alive + reserves_alive
 
         if element_id == "ice":
             if not attacker.ice_charge_ready:

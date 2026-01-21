@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from endless_idler.characters.foe_shape_selector import get_shape_selection_info
 from endless_idler.characters.foe_shape_selector import select_shape_for_foe
