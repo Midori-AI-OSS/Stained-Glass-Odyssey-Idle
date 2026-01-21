@@ -258,6 +258,7 @@ class IdleGameState(QObject):
                 "exp": float(max(0.0, float(data.get("exp", 0.0)))),
                 "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
                 "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
+                "rebirths": max(0, int(data.get("rebirths", 0))),
             }
             reserves.append(
                 build_scaled_character_stats(
@@ -294,6 +295,7 @@ class IdleGameState(QObject):
                 "exp": float(max(0.0, float(data.get("exp", 0.0)))),
                 "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
                 "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
+                "rebirths": max(0, int(data.get("rebirths", 0))),
             }
             party_stats.append(
                 build_scaled_character_stats(

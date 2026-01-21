@@ -99,6 +99,30 @@ def apply_plugin_overrides(stats: Stats, *, plugin: object | None) -> None:
         stats.damage_reduction_passes = int(passes)
 
 
+def calculate_atk_speed_bonus(level: int, rebirths: int) -> float:
+    """
+    Calculate atk_speed bonus from level and rebirth progression.
+    
+    Formula: bonus = min(0.1, level * 0.001) + min(0.2, rebirths * 0.002)
+    - Level bonus: +0.001 per level, capped at +0.1 (at level 100)
+    - Rebirth bonus: +0.002 per rebirth, capped at +0.2 (at rebirth 100)
+    
+    Args:
+        level: Character level
+        rebirths: Number of rebirths
+        
+    Returns:
+        Total atk_speed bonus as a float
+    """
+    level = max(0, int(level))
+    rebirths = max(0, int(rebirths))
+    
+    level_bonus = min(0.1, level * 0.001)
+    rebirth_bonus = min(0.2, rebirths * 0.002)
+    
+    return level_bonus + rebirth_bonus
+
+
 def apply_progress_meta(stats: Stats, *, progress: dict[str, float | int] | None) -> None:
     if not isinstance(progress, dict):
         return
@@ -117,6 +141,23 @@ def apply_progress_meta(stats: Stats, *, progress: dict[str, float | int] | None
         stats.exp_multiplier = max(0.0, float(progress.get("exp_multiplier", 1.0)))
     except (TypeError, ValueError):
         stats.exp_multiplier = 1.0
+    
+    # Apply atk_speed bonuses from level and rebirth progression
+    try:
+        rebirths = max(0, int(progress.get("rebirths", 0)))
+    except (TypeError, ValueError):
+        rebirths = 0
+    
+    atk_speed_bonus = calculate_atk_speed_bonus(stats.level, rebirths)
+    if atk_speed_bonus > 0:
+        from endless_idler.combat.stat_effect import StatEffect
+        effect = StatEffect(
+            name="progression_atk_speed",
+            stat_modifiers={"atk_speed": atk_speed_bonus},
+            duration=-1,  # Permanent effect
+            source="progression"
+        )
+        stats.add_effect(effect)
 
 
 def build_scaled_character_stats(

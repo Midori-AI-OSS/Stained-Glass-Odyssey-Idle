@@ -195,7 +195,10 @@ class Stats:
 
     @property
     def atk_speed(self) -> int:
-        return int(max(1, self._base_atk_speed + self._calculate_stat_modifier("atk_speed")))
+        # Apply progression bonuses and cap at 5.0 before converting to int
+        base_plus_modifiers = self._base_atk_speed + self._calculate_stat_modifier("atk_speed")
+        capped_value = min(5.0, base_plus_modifiers)
+        return int(max(1, capped_value))
 
     @atk_speed.setter
     def atk_speed(self, value: int) -> None:
