@@ -19,12 +19,6 @@ These tasks establish the new tick-based timing system.
    - Status: Blocked by #1
    - Dependencies: 3b475c11
 
-3. **a7dfe25e-add-atk_speed-rebirth-scaling.md**
-   - Add small atk_speed buffs from rebirth progression
-   - Controlled scaling to prevent runaway rates
-   - Status: Blocked by #2
-   - Dependencies: d210c1ad
-
 ### Phase 2: Visual Foundation - Layout (Priority: High)
 These tasks change the battle layout and establish shape rendering.
 
