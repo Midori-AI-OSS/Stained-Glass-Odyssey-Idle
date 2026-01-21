@@ -466,6 +466,10 @@ class BattleScreenWidget(QWidget):
         # Get layout for foe cards
         right_layout = self._arena.layout().itemAtPosition(0, 2).widget().layout()
         
+        # Calculate engagement line position (80% down the battle area)
+        battle_height = self._arena.height()
+        engagement_y = int(battle_height * 0.8)
+        
         # Add new foe cards (only for newly spawned foes)
         for combatant in new_foes:
             card = ShapeFoeWidget(
@@ -475,6 +479,31 @@ class BattleScreenWidget(QWidget):
             )
             self._foe_cards.append(card)
             right_layout.insertWidget(right_layout.count() - 1, card)  # Insert before stretch
+            
+            # Start animation from top to engagement line
+            # Position at top (y=0) and animate down to engagement line
+            def make_engage_callback(c: Combatant) -> object:
+                """Create callback to mark combatant as engaged."""
+                def on_finished() -> None:
+                    c.engaged = True
+                return on_finished
+            
+            # Schedule animation after widget is shown
+            # Use QTimer.singleShot to ensure widget geometry is set
+            from PySide6.QtCore import QTimer
+            def start_animation() -> None:
+                # Calculate start position (top of parent widget area)
+                parent_widget = card.parent()
+                if parent_widget:
+                    # Start at top of the parent's geometry
+                    start_y = 0
+                    # Calculate end position relative to engagement line
+                    # The engagement line is 80% down the arena, but we need to
+                    # position relative to the right layout's coordinate space
+                    end_y = engagement_y - parent_widget.geometry().top()
+                    card.animate_entry(start_y, end_y, make_engage_callback(combatant))
+            
+            QTimer.singleShot(100, start_animation)  # Small delay to ensure layout is ready
         
         # Log wave spawn for debugging with cap info
         if blocked_spawns > 0:
@@ -579,9 +608,10 @@ class BattleScreenWidget(QWidget):
         all_combatants_alive = party_alive + reserves_alive + foes_alive
         
         # Find combatants ready to act (next_action_tick <= current_tick)
+        # Only engaged combatants can attack (players are always engaged, foes must reach engagement line)
         ready_to_act = [
             (c, w) for c, w in all_combatants_alive 
-            if c.next_action_tick <= self._battle_tick
+            if c.next_action_tick <= self._battle_tick and c.engaged
         ]
         
         # If no one is ready, continue to next tick

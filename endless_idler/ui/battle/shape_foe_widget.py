@@ -6,8 +6,10 @@ shapes with color-coded damage types and health-based fill animations.
 
 from __future__ import annotations
 
+from PySide6.QtCore import QEasingCurve
 from PySide6.QtCore import QEvent
 from PySide6.QtCore import QPointF
+from PySide6.QtCore import QPropertyAnimation
 from PySide6.QtCore import QRectF
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QBrush
@@ -169,6 +171,7 @@ class ShapeFoeWidget(QFrame):
         self._combatant = combatant
         self._team_side = (team_side or "right").strip().lower()
         self._size = size
+        self._animation: QPropertyAnimation | None = None
 
         self.setObjectName("shapeFoeWidget")
         self.setFrameShape(QFrame.Shape.NoFrame)
@@ -245,3 +248,41 @@ class ShapeFoeWidget(QFrame):
             tooltip += f"Type: {element_id.capitalize()}"
             self.setToolTip(tooltip)
         return super().eventFilter(watched, event)  # type: ignore[misc]
+
+    def animate_entry(self, start_y: int, end_y: int, on_finished: object = None) -> None:
+        """Animate foe moving from spawn position to engagement line.
+        
+        Args:
+            start_y: Starting Y position (top of battle area)
+            end_y: Ending Y position (engagement line)
+            on_finished: Optional callback when animation completes
+        """
+        # Set initial position
+        current_geo = self.geometry()
+        self.setGeometry(current_geo.x(), start_y, current_geo.width(), current_geo.height())
+        
+        # Create animation
+        self._animation = QPropertyAnimation(self, b"geometry")
+        self._animation.setDuration(2000)  # 2.0 seconds as specified
+        self._animation.setEasingCurve(QEasingCurve.Type.Linear)  # Linear easing as specified
+        
+        # Set start and end values
+        start_rect = self.geometry()
+        end_rect = self.geometry()
+        end_rect.moveTop(end_y)
+        
+        self._animation.setStartValue(start_rect)
+        self._animation.setEndValue(end_rect)
+        
+        # Connect finished signal to mark engagement
+        if on_finished:
+            self._animation.finished.connect(on_finished)
+        
+        # Start animation
+        self._animation.start()
+    
+    def stop_animation(self) -> None:
+        """Stop any ongoing animation."""
+        if self._animation and self._animation.state() == QPropertyAnimation.State.Running:
+            self._animation.stop()
+            self._animation = None
