@@ -25,14 +25,14 @@ def demo_basic_selection():
     shape_id = select_shape_for_foe(foe)
     info = get_shape_selection_info(foe)
     
-    print(f"\nFoe Stats:")
+    print("\nFoe Stats:")
     print(f"  Level: {foe.level}")
     print(f"  HP: {foe.max_hp}")
     print(f"  ATK: {foe.atk}")
     print(f"  DEF: {foe.defense}")
     print(f"  SPD: {foe.atk_speed}")
     
-    print(f"\nSelection Process:")
+    print("\nSelection Process:")
     print(f"  HP Ratio: {info['stat_ratios']['hp_ratio']:.2f}")
     print(f"  ATK Ratio: {info['stat_ratios']['atk_ratio']:.2f}")
     print(f"  DEF Ratio: {info['stat_ratios']['def_ratio']:.2f}")
@@ -167,9 +167,9 @@ def demo_variety():
         shape = select_shape_for_foe(foe)
         shapes_count[shape] = shapes_count.get(shape, 0) + 1
     
-    print(f"\nGenerated 100 random foes:")
+    print("\nGenerated 100 random foes:")
     print(f"Unique shapes seen: {len(shapes_count)}/25")
-    print(f"\nShape distribution:")
+    print("\nShape distribution:")
     for shape, count in sorted(shapes_count.items(), key=lambda x: -x[1])[:10]:
         print(f"  {shape:15}: {count:2} {'█' * count}")
 

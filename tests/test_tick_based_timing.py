@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import random
 
 from endless_idler.combat.stats import Stats
 from endless_idler.ui.battle.sim import Combatant
