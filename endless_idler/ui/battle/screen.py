@@ -132,6 +132,13 @@ class BattleScreenWidget(QWidget):
         self._foe_kills = 0
         self._coins_earned = 0  # Track coins earned from foe kills
         
+        # Tick-based action timing
+        self._battle_tick: int = 0
+        
+        # Mark offsite combatants
+        for reserve in self._reserves:
+            reserve.is_offsite = True
+        
         # Stalemate detection
         self._stalemate_hp_ratio: float | None = None
         self._stalemate_last_check_time: float = time.time()
@@ -487,12 +494,35 @@ class BattleScreenWidget(QWidget):
             status_msg += f" (Capped! +{blocked_spawns*1:.0f}% wave strength)"
         self._set_status(status_msg)
 
+    def _calculate_action_interval(self, combatant: Combatant) -> int:
+        """Calculate action interval in ticks based on atk_speed.
+        
+        Formula: action_interval_ticks = 500 / atk_speed
+        Offsite characters act 10x slower (interval × 10)
+        
+        Args:
+            combatant: The combatant to calculate interval for
+            
+        Returns:
+            Number of ticks between actions
+        """
+        base_interval = 500.0 / max(1, combatant.stats.atk_speed)
+        
+        # Apply offsite multiplier
+        if combatant.is_offsite:
+            base_interval *= 10.0
+        
+        return int(base_interval)
+
     def _step_battle(self) -> None:
         if self._battle_over:
             return
         if self._is_over():
             self._on_battle_over()
             return
+        
+        # Increment tick counter
+        self._battle_tick += 1
         
         # Check for stalemate and apply bleed
         self._check_stalemate()
@@ -506,6 +536,11 @@ class BattleScreenWidget(QWidget):
             for c, w in zip(self._party, self._party_cards, strict=False)
             if c.stats.hp > 0
         ]
+        reserves_alive = [
+            (c, w)
+            for c, w in zip(self._reserves, self._reserve_cards, strict=False)
+            if c.stats.hp > 0
+        ]
         foes_alive = [
             (c, w)
             for c, w in zip(self._foes, self._foe_cards, strict=False)
@@ -515,7 +550,7 @@ class BattleScreenWidget(QWidget):
             self._on_battle_over()
             return
 
-        # Trigger TURN_START passives for party
+        # Trigger TURN_START passives for party (keep this per tick for now)
         party_stats = [c.stats for c in self._party if c.stats.hp > 0]
         reserve_stats = [c.stats for c in self._reserves if c.stats.hp > 0]
         all_party_stats = party_stats + reserve_stats
@@ -546,13 +581,47 @@ class BattleScreenWidget(QWidget):
             self._on_battle_over()
             return
 
-        if self._turn_side == "party":
-            attacker, attacker_widget = choose_weighted_attacker(party_alive, self._rng)
-            self._turn_side = "foes"
+        # Determine which combatants should act this tick (tick-based timing)
+        # Collect all alive combatants from all teams
+        all_combatants_alive = party_alive + reserves_alive + foes_alive
+        
+        # Find combatants ready to act (next_action_tick <= current_tick)
+        ready_to_act = [
+            (c, w) for c, w in all_combatants_alive 
+            if c.next_action_tick <= self._battle_tick
+        ]
+        
+        # If no one is ready, continue to next tick
+        if not ready_to_act:
+            return
+        
+        # Pick one combatant to act this tick (weighted by atk_speed for fairness)
+        # Higher atk_speed = more likely to be selected when multiple are ready
+        weights = [c.stats.atk_speed for c, _ in ready_to_act]
+        total_weight = sum(weights)
+        if total_weight <= 0:
+            return
+        
+        # Weighted random selection
+        r = self._rng.random() * total_weight
+        cumulative = 0.0
+        attacker, attacker_widget = ready_to_act[0]
+        for (c, w), weight in zip(ready_to_act, weights, strict=False):
+            cumulative += weight
+            if r <= cumulative:
+                attacker, attacker_widget = c, w
+                break
+        
+        # Schedule next action for this combatant
+        action_interval = self._calculate_action_interval(attacker)
+        attacker.next_action_tick = self._battle_tick + action_interval
+        
+        # Determine attacker side (party vs foes)
+        if attacker in [c for c, _ in party_alive]:
             attacker_side = "party"
+        elif attacker in [c for c, _ in reserves_alive]:
+            attacker_side = "party"  # Reserves are on party side
         else:
-            attacker, attacker_widget = choose_weighted_attacker(foes_alive, self._rng)
-            self._turn_side = "party"
             attacker_side = "foes"
 
         attacker.turns_taken += 1

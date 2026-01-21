@@ -62,6 +62,8 @@ class Combatant:
     turns_taken: int = 0
     pending_damage_multiplier: float = 1.0
     ice_charge_ready: bool = False
+    next_action_tick: int = 0
+    is_offsite: bool = False
 
     def __hash__(self) -> int:
         return hash(self.char_id)
