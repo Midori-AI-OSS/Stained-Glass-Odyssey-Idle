@@ -101,6 +101,39 @@ def apply_plugin_overrides(stats: Stats, *, plugin: object | None) -> None:
         stats.damage_reduction_passes = int(passes)
 
 
+def apply_soft_cap_to_level_bonus(level: int) -> float:
+    """
+    Apply soft cap to level bonus calculation.
+    
+    Linear up to 0.1 (level 100), then logarithmic diminishing returns.
+    Rate slows by 2x for each 5% gain past threshold.
+    
+    Args:
+        level: Character level
+        
+    Returns:
+        Level bonus as a float with soft cap applied
+    """
+    THRESHOLD = 0.1
+    STEP_SIZE = 0.005  # 5% of threshold
+    
+    # Calculate raw linear value
+    raw_value = level * 0.001
+    
+    # If below threshold, no soft cap needed
+    if raw_value <= THRESHOLD:
+        return raw_value
+    
+    # Calculate excess over threshold
+    excess = raw_value - THRESHOLD
+    
+    # Apply logarithmic diminishing returns
+    # log2(1 + x) gives us the "doubling steps"
+    soft_excess = STEP_SIZE * math.log2(1 + (excess / STEP_SIZE))
+    
+    return THRESHOLD + soft_excess
+
+
 def apply_soft_cap_to_rebirth_bonus(rebirths: int) -> float:
     """
     Apply soft cap to rebirth bonus calculation.
@@ -137,8 +170,9 @@ def calculate_atk_speed_bonus(level: int, rebirths: int) -> float:
     """
     Calculate atk_speed bonus from level and rebirth progression.
     
-    Formula: bonus = min(0.1, level * 0.001) + apply_soft_cap_to_rebirth_bonus(rebirths)
-    - Level bonus: +0.001 per level, capped at +0.1 (at level 100)
+    Formula: bonus = apply_soft_cap_to_level_bonus(level) + apply_soft_cap_to_rebirth_bonus(rebirths)
+    - Level bonus: +0.001 per level up to 0.1 (level 100), then soft cap with
+      logarithmic diminishing returns (rate slows by 2x per 5% gain past 0.1)
     - Rebirth bonus: +0.002 per rebirth up to 0.2 (rebirth 100), then soft cap with
       logarithmic diminishing returns (rate slows by 2x per 5% gain past 0.2)
     
@@ -152,7 +186,7 @@ def calculate_atk_speed_bonus(level: int, rebirths: int) -> float:
     level = max(0, int(level))
     rebirths = max(0, int(rebirths))
     
-    level_bonus = min(0.1, level * 0.001)
+    level_bonus = apply_soft_cap_to_level_bonus(level)
     rebirth_bonus = apply_soft_cap_to_rebirth_bonus(rebirths)
     
     return level_bonus + rebirth_bonus
