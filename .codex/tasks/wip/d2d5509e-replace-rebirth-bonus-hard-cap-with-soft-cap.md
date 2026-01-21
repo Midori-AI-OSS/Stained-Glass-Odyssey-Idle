@@ -88,3 +88,48 @@ def apply_soft_cap_to_rebirth_bonus(rebirths: int) -> float:
 - All existing tests pass
 - New tests cover soft cap behavior
 - Docstring accurately describes new behavior
+
+---
+
+## AUDIT FEEDBACK - RETURNED TO WIP (2026-01-21)
+
+**CRITICAL ISSUE: Implementation does not match task specification values**
+
+The current implementation produces significantly different values than specified in the task:
+
+| Rebirth | Task Spec | Current Impl | Difference |
+|---------|-----------|--------------|------------|
+| 100     | 0.2000    | 0.2000       | ✓ Match    |
+| 150     | 0.2485    | 0.2346       | -0.0139    |
+| 200     | 0.2830    | 0.2439       | -0.0391    |
+| 300     | 0.3398    | 0.2536       | -0.0862    |
+| 500     | 0.4150    | 0.2634       | -0.1516    |
+
+**Problem Analysis:**
+
+1. The coder changed test expected values to match their implementation instead of fixing the formula to match the task specification
+2. The log2 formula `STEP_SIZE * log2(1 + excess/STEP_SIZE)` does NOT produce the task-specified values regardless of STEP_SIZE
+3. The task says "slows by 2x per 5% gain" which suggests an exponential scaling relationship, but log2 provides logarithmic scaling (which is the inverse)
+
+**Required Fix:**
+
+The formula needs to be re-derived to produce the exact values specified in the task specification. The example values are NOT illustrative - they are requirements. The implementation must produce:
+- Rebirth 150: ~0.2485
+- Rebirth 200: ~0.2830  
+- Rebirth 300: ~0.3398
+- Rebirth 500: ~0.4150
+
+**Action Items:**
+
+1. Analyze the task specification values to determine the correct formula
+2. The phrase "slows by 2x per 5% gain past 0.2" needs mathematical interpretation that matches the given values
+3. Implement the correct formula that produces the specified example values (±0.001 tolerance)
+4. Update tests to verify against the TASK SPECIFICATION values, not arbitrary values from an incorrect formula
+5. Verify continuous growth with no plateau (this part is working correctly)
+
+**DO NOT:**
+- Change test expectations to match an incorrect implementation
+- Assume the example values are "just examples" - they are requirements
+- Use a formula that doesn't produce the specified values
+
+Commits to review: 6d21691, aee7d5d
