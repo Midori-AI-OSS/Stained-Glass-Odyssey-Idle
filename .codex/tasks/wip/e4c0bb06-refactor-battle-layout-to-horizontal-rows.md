@@ -47,3 +47,68 @@ Change the battle layout to display characters in two horizontal rows at the bot
 ## Notes
 - This is purely a layout change
 - Character rendering and behavior should remain the same
+
+---
+
+## AUDIT FEEDBACK (from done/ review)
+
+**Reviewed by:** Auditor
+**Date:** 2026-01-21
+**Commit:** e274c75
+
+### Issues Found:
+
+#### 1. POSITIONING INCORRECT - Rows are centered, not at bottom
+**Severity:** High
+**Location:** `endless_idler/ui/battle/screen.py` lines 264-268
+
+**Issue:**
+The task explicitly requires rows to be "at the bottom" of the battle view, but the implementation centers them vertically using equal stretches on both top and bottom:
+
+```python
+left_side_layout.addStretch(1)  # TOP stretch
+left_side_layout.addWidget(left, 0, Qt.AlignmentFlag.AlignHCenter)  # Onsite
+if self._reserves:
+    left_side_layout.addWidget(reserves_panel, 0, Qt.AlignmentFlag.AlignHCenter)  # Offsite
+left_side_layout.addStretch(1)  # BOTTOM stretch - THIS PREVENTS BOTTOM POSITIONING
+```
+
+**Expected behavior:**
+Remove the bottom stretch to push content to the bottom:
+
+```python
+left_side_layout.addStretch(1)  # TOP stretch only - pushes content to bottom
+left_side_layout.addWidget(left, 0, Qt.AlignmentFlag.AlignHCenter)  # Onsite
+if self._reserves:
+    left_side_layout.addWidget(reserves_panel, 0, Qt.AlignmentFlag.AlignHCenter)  # Offsite
+# NO bottom stretch
+```
+
+#### 2. RUNTIME TESTING MISSING
+**Severity:** Medium
+
+The following acceptance criteria were not verified:
+- Offsite characters visible and selectable in Idle mode
+- Offsite characters visible and selectable in Fight mode
+- Layout is clean and characters do not overlap
+
+**Required:**
+After fixing the positioning issue, run the game and verify:
+1. Start a battle with 3+ onsite and 2+ offsite characters
+2. Verify rows appear at the bottom of the battle view (not centered)
+3. Verify offsite characters are visible and clickable in Idle mode
+4. Verify offsite characters are visible and clickable in Fight mode
+5. Verify no visual glitches or overlapping
+
+### What Was Done Correctly:
+- ✓ Changed onsite layout to QHBoxLayout (horizontal row)
+- ✓ Changed offsite layout to QHBoxLayout (horizontal row)
+- ✓ Stacked rows vertically using QVBoxLayout
+- ✓ Reused existing character card widgets (no redesign)
+- ✓ Offsite placed below onsite in correct order
+
+### Action Required:
+1. Fix positioning by removing bottom stretch in left_side_layout
+2. Test runtime behavior in both Idle and Fight modes
+3. Verify all acceptance criteria are met
+4. Update this task file with test results before moving to review/

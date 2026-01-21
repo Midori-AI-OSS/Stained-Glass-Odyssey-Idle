@@ -198,7 +198,7 @@ class BattleScreenWidget(QWidget):
         root.addWidget(arena, 1)
 
         left = QWidget()
-        left_layout = QVBoxLayout()
+        left_layout = QHBoxLayout()  # Changed from VBoxLayout to HBoxLayout for horizontal row
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(10)
         left.setLayout(left_layout)
@@ -235,7 +235,7 @@ class BattleScreenWidget(QWidget):
 
         left_layout.addStretch(1)
         reserves_panel = QWidget()
-        reserves_layout = QVBoxLayout()
+        reserves_layout = QHBoxLayout()  # Changed from VBoxLayout to HBoxLayout for horizontal row
         reserves_layout.setContentsMargins(0, 0, 0, 0)
         reserves_layout.setSpacing(10)
         reserves_panel.setLayout(reserves_layout)
@@ -257,13 +257,15 @@ class BattleScreenWidget(QWidget):
         reserves_layout.addStretch(1)
 
         left_side = QWidget()
-        left_side_layout = QHBoxLayout()
+        left_side_layout = QVBoxLayout()  # Changed from HBoxLayout to VBoxLayout to stack rows vertically
         left_side_layout.setContentsMargins(0, 0, 0, 0)
         left_side_layout.setSpacing(12)
         left_side.setLayout(left_side_layout)
+        left_side_layout.addStretch(1)  # Push content to center vertically
+        left_side_layout.addWidget(left, 0, Qt.AlignmentFlag.AlignHCenter)  # Onsite row (at bottom)
         if self._reserves:
-            left_side_layout.addWidget(reserves_panel, 0, Qt.AlignmentFlag.AlignVCenter)
-        left_side_layout.addWidget(left, 0, Qt.AlignmentFlag.AlignVCenter)
+            left_side_layout.addWidget(reserves_panel, 0, Qt.AlignmentFlag.AlignHCenter)  # Offsite row (below onsite)
+        left_side_layout.addStretch(1)  # Push content to center vertically
 
         right = QWidget()
         right_layout = QVBoxLayout()

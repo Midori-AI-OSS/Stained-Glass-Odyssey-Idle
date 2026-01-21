@@ -184,6 +184,10 @@ class IdleOffsiteCard(QFrame):
         
         # Apply element tint on each update
         self._apply_element_tint(data)
+        
+        # Update tooltip if mouse is currently over the widget
+        if self.underMouse():
+            self._show_tooltip()
 
     def eventFilter(self, watched: object, event: object) -> bool:  # noqa: ANN001
         if hasattr(event, "type") and event.type() == QEvent.Type.Enter:
