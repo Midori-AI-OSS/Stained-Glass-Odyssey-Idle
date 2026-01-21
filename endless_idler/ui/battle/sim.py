@@ -64,6 +64,7 @@ class Combatant:
     ice_charge_ready: bool = False
     next_action_tick: int = 0
     is_offsite: bool = False
+    engaged: bool = True  # True for players, set to False for newly spawned foes
 
     def __hash__(self) -> int:
         return hash(self.char_id)
@@ -175,7 +176,8 @@ def build_foes(
         
         stats.hp = stats.max_hp
         load_passives_for_character(stats, plugin, char_id)
-        foes.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp))
+        # New foes start unengaged - they need to move down to engagement line first
+        foes.append(Combatant(char_id=char_id, name=name, stats=stats, max_hp=stats.max_hp, engaged=False))
     return foes
 
 

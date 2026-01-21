@@ -34,6 +34,7 @@ from endless_idler.ui.battle.sim import build_foes
 from endless_idler.ui.battle.sim import build_party
 from endless_idler.ui.battle.sim import calculate_damage
 from endless_idler.ui.battle.sim import choose_weighted_target_by_aggro
+from endless_idler.ui.battle.shape_foe_widget import ShapeFoeWidget
 from endless_idler.ui.battle.widgets import Arena
 from endless_idler.ui.battle.widgets import CombatantCard
 from endless_idler.ui.onsite import BattleOnsiteCharacterCard
@@ -125,7 +126,7 @@ class BattleScreenWidget(QWidget):
 
         self._party_cards: list[QWidget] = []
         self._reserve_cards: list[CombatantCard] = []
-        self._foe_cards: list[CombatantCard] = []
+        self._foe_cards: list[QWidget] = []
         self._turn_side = "party"
         self._battle_over = False
         self._foe_kills = 0
@@ -266,27 +267,25 @@ class BattleScreenWidget(QWidget):
         if self._reserves:
             left_side_layout.addWidget(reserves_panel, 0, Qt.AlignmentFlag.AlignHCenter)  # Offsite row (below onsite)
 
+        # Create right side container with no layout for absolute positioning of animated foes
         right = QWidget()
-        right_layout = QVBoxLayout()
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(10)
-        right.setLayout(right_layout)
-        right_layout.addStretch(1)
+        right.setMinimumWidth(200)
+        # No layout - we'll use absolute positioning for animated foes
+        
+        # Store reference to right widget for spawn positioning
+        self._foe_container = right
 
         for combatant in self._foes:
-            card = CombatantCard(
+            card = ShapeFoeWidget(
                 combatant=combatant,
-                plugin=self._plugin_by_id.get(combatant.char_id),
-                rng=self._rng,
-                compact=True,
                 team_side="right",
-                stack_count=1,
-                variant="foe",
+                size=60,
+                parent=right,
             )
             self._foe_cards.append(card)
-            right_layout.addWidget(card)
-
-        right_layout.addStretch(1)
+            # Position initially at center for non-animated initial foes
+            card.move(70, 100)
+            card.show()
 
         arena_layout.addWidget(left_side, 0, 0, 1, 1, Qt.AlignmentFlag.AlignVCenter)
         arena_layout.addWidget(QWidget(), 0, 1, 1, 1)
@@ -466,22 +465,46 @@ class BattleScreenWidget(QWidget):
         self._wave_index += 1
         
         # Update foe cards in the UI
-        # Get layout for foe cards
-        right_layout = self._arena.layout().itemAtPosition(0, 2).widget().layout()
+        # Calculate engagement line position (80% down the battle area)
+        battle_height = self._arena.height()
+        engagement_y = int(battle_height * 0.8)
         
-        # Add new foe cards (only for newly spawned foes)
-        for combatant in new_foes:
-            card = CombatantCard(
+        # Add new foe cards with animation
+        for index, combatant in enumerate(new_foes):
+            card = ShapeFoeWidget(
                 combatant=combatant,
-                plugin=self._plugin_by_id.get(combatant.char_id),
-                rng=self._rng,
-                compact=True,
                 team_side="right",
-                stack_count=1,
-                variant="foe",
+                size=60,
+                parent=self._foe_container,
             )
             self._foe_cards.append(card)
-            right_layout.insertWidget(right_layout.count() - 1, card)  # Insert before stretch
+            
+            # Calculate horizontal position (center the cards with some spacing)
+            container_width = self._foe_container.width()
+            card_width = 80  # Approximate width of card
+            x_pos = max(10, (container_width - card_width) // 2)
+            
+            # Calculate vertical positions
+            # Start at top of container
+            start_y = 10
+            # End at engagement line (80% down the arena)
+            # Need to convert arena coordinates to container coordinates
+            container_top = self._foe_container.mapFrom(self._arena, self._arena.rect().topLeft()).y()
+            end_y = engagement_y - container_top
+            
+            # Position card initially
+            card.setGeometry(x_pos, start_y, 80, 100)
+            card.show()
+            
+            # Create callback to mark combatant as engaged
+            def make_engage_callback(c: Combatant) -> object:
+                """Create callback to mark combatant as engaged."""
+                def on_finished() -> None:
+                    c.engaged = True
+                return on_finished
+            
+            # Start animation
+            card.animate_entry(start_y, end_y, make_engage_callback(combatant))
         
         # Log wave spawn for debugging with cap info
         if blocked_spawns > 0:
@@ -586,9 +609,10 @@ class BattleScreenWidget(QWidget):
         all_combatants_alive = party_alive + reserves_alive + foes_alive
         
         # Find combatants ready to act (next_action_tick <= current_tick)
+        # Only engaged combatants can attack (players are always engaged, foes must reach engagement line)
         ready_to_act = [
             (c, w) for c, w in all_combatants_alive 
-            if c.next_action_tick <= self._battle_tick
+            if c.next_action_tick <= self._battle_tick and c.engaged
         ]
         
         # If no one is ready, continue to next tick
