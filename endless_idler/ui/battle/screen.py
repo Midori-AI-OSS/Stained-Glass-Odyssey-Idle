@@ -261,11 +261,10 @@ class BattleScreenWidget(QWidget):
         left_side_layout.setContentsMargins(0, 0, 0, 0)
         left_side_layout.setSpacing(12)
         left_side.setLayout(left_side_layout)
-        left_side_layout.addStretch(1)  # Push content to center vertically
+        left_side_layout.addStretch(1)  # Push content to bottom
         left_side_layout.addWidget(left, 0, Qt.AlignmentFlag.AlignHCenter)  # Onsite row (at bottom)
         if self._reserves:
             left_side_layout.addWidget(reserves_panel, 0, Qt.AlignmentFlag.AlignHCenter)  # Offsite row (below onsite)
-        left_side_layout.addStretch(1)  # Push content to center vertically
 
         right = QWidget()
         right_layout = QVBoxLayout()
