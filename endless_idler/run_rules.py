@@ -52,7 +52,7 @@ def apply_battle_result(save: RunSave, *, victory: bool, survival_seconds: float
     loss_percent = max(5.0, min(95.0, 100.0 - (survival_seconds * 0.3)))
     
     # Apply percentage loss to current health
-    health_lost = int(save.party_hp_current * (loss_percent / 100.0))
+    health_lost = max(1, int(save.party_hp_current * (loss_percent / 100.0)))
     save.party_hp_current = max(0, save.party_hp_current - health_lost)
     
     if save.party_hp_current <= 0:
