@@ -1,12 +1,15 @@
 # WIP Tasks Audit Summary
 
-**Date**: 2024
+**Date**: 2025-01-21
 **Auditor**: AI Auditor Mode
 **Scope**: All task files in `.codex/tasks/wip/`
 
+**⚠️ NOTE**: This audit summary is OUTDATED. It references 21 tasks but only 12 currently exist in WIP.
+This document should be archived or updated to reflect current state.
+
 ---
 
-## Summary
+## Summary (OUTDATED - DO NOT USE)
 
 Audited 21 task files for actionability and scope clarity. Made in-place updates to 8 tasks requiring specification improvements.
 
