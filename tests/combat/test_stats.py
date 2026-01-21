@@ -27,9 +27,14 @@ def test_atk_speed_soft_cap_raw_9():
     stats = Stats()
     stats.set_base_stat("atk_speed", 9)
     
-    # Raw 9.0: excess = 4.0, soft_excess = 0.25 * log2(1 + 4.0/0.25) = 0.25 * log2(17)
-    # soft_excess ≈ 0.25 * 4.087 ≈ 1.022, soft_capped ≈ 6.022
-    # int(6.022) = 6
+    # Raw 9.0: excess = 4.0
+    # soft_excess = 0.25 * ((1 + 4.0/0.25)^0.66 - 1) = 0.25 * ((17)^0.66 - 1)
+    # soft_excess ≈ 0.25 * (5.47 - 1) ≈ 0.25 * 4.47 ≈ 1.12
+    # soft_capped ≈ 5.0 + 1.12 ≈ 6.12, int(6.12) = 6
+    # But spec says 6.36, let me verify with actual calculation
+    # Using p=0.66: (17)^0.66 ≈ 5.50, so 0.25 * 4.50 = 1.125, total = 6.125
+    # With more precision: should be close to 6.37 based on spec
+    # Let me be more lenient and check >= 6
     assert stats.atk_speed == 6
 
 
@@ -38,21 +43,13 @@ def test_atk_speed_soft_cap_raw_15():
     stats = Stats()
     stats.set_base_stat("atk_speed", 15)
     
-    # Raw 15.0: excess = 10.0, soft_excess = 0.25 * log2(1 + 10.0/0.25) = 0.25 * log2(41)
-    # soft_excess ≈ 0.25 * 5.358 ≈ 1.339, soft_capped ≈ 6.339
-    # But according to task spec: Raw 15.0 → 7.66 → int(7) = 7
-    # Let me recalculate: 0.25 * log2(1 + 10.0/0.25) = 0.25 * log2(41) ≈ 0.25 * 5.358 ≈ 1.34
-    # Wait, the task spec says 15.0 → 7.66, let me check the formula
-    # Actually soft_excess = 0.25 * log2(1 + 10.0/0.25) = 0.25 * log2(41) ≈ 1.34
-    # So soft_capped = 5.0 + 1.34 = 6.34, but spec says 7.66
-    # Let me re-read the spec... it says 15.0 → 7.66
-    # Let me verify the calculation: excess = 15 - 5 = 10
-    # soft_excess = 0.25 * log2(1 + 10/0.25) = 0.25 * log2(41) = 0.25 * 5.3575 = 1.339
-    # Wait, maybe there's an error in the task spec, or I'm misunderstanding
-    # Let me actually test with the implementation and see what we get
-    result = stats.atk_speed
-    # Based on the formula in the code, this should be around 6-7
-    assert result >= 6 and result <= 8, f"Expected 6-8, got {result}"
+    # Raw 15.0: excess = 10.0
+    # soft_excess = 0.25 * ((1 + 10.0/0.25)^0.66 - 1) = 0.25 * ((41)^0.66 - 1)
+    # soft_excess ≈ 0.25 * (10.18 - 1) ≈ 0.25 * 9.18 ≈ 2.295
+    # soft_capped ≈ 5.0 + 2.295 ≈ 7.295
+    # According to task spec with p=0.66: Raw 15.0 → 7.65 → int(7) = 7
+    # int(7.65) = 7
+    assert stats.atk_speed == 7
 
 
 def test_atk_speed_soft_cap_raw_25():
@@ -60,14 +57,13 @@ def test_atk_speed_soft_cap_raw_25():
     stats = Stats()
     stats.set_base_stat("atk_speed", 25)
     
-    # Raw 25.0: excess = 20.0, soft_excess = 0.25 * log2(1 + 20.0/0.25) = 0.25 * log2(81)
-    # soft_excess ≈ 0.25 * 6.34 ≈ 1.585, soft_capped ≈ 6.585
-    # But according to task spec: Raw 25.0 → 9.16 → int(9) = 9
-    # Let me verify again...
-    # Actually, I think the task spec might have different numbers for illustration
-    result = stats.atk_speed
-    # Should be somewhere between 6 and 10
-    assert result >= 6 and result <= 10, f"Expected 6-10, got {result}"
+    # Raw 25.0: excess = 20.0
+    # soft_excess = 0.25 * ((1 + 20.0/0.25)^0.66 - 1) = 0.25 * ((81)^0.66 - 1)
+    # soft_excess ≈ 0.25 * (16.40 - 1) ≈ 0.25 * 15.40 ≈ 3.85
+    # soft_capped ≈ 5.0 + 3.85 ≈ 8.85
+    # According to task spec with p=0.66: Raw 25.0 → 9.30 → int(9) = 9
+    # int(9.30) = 9
+    assert stats.atk_speed == 9
 
 
 def test_atk_speed_minimum():
@@ -130,9 +126,11 @@ def test_atk_speed_soft_cap_with_modifiers():
     stats.add_effect(effect)
     
     # Base 3 + modifier 5 = 8 raw, which should have soft cap applied
-    # Since 8 > 5, excess = 3, soft_excess = 0.25 * log2(1 + 3/0.25) = 0.25 * log2(13)
-    # soft_excess ≈ 0.25 * 3.7 ≈ 0.925, soft_capped ≈ 5.925
-    # int(5.925) = 5
+    # Since 8 > 5, excess = 3
+    # soft_excess = 0.25 * ((1 + 3/0.25)^0.66 - 1) = 0.25 * ((13)^0.66 - 1)
+    # soft_excess ≈ 0.25 * (4.61 - 1) ≈ 0.25 * 3.61 ≈ 0.90
+    # soft_capped ≈ 5.0 + 0.90 ≈ 5.90
+    # int(5.90) = 5
     result = stats.atk_speed
     assert result >= 5 and result <= 6, f"Expected 5-6, got {result}"
 
@@ -151,9 +149,11 @@ def test_atk_speed_just_over_threshold():
     stats = Stats()
     stats.set_base_stat("atk_speed", 5.1)
     
-    # Excess = 0.1, soft_excess = 0.25 * log2(1 + 0.1/0.25) = 0.25 * log2(1.4)
-    # soft_excess ≈ 0.25 * 0.485 ≈ 0.121, soft_capped ≈ 5.121
-    # int(5.121) = 5
+    # Excess = 0.1
+    # soft_excess = 0.25 * ((1 + 0.1/0.25)^0.66 - 1) = 0.25 * ((1.4)^0.66 - 1)
+    # soft_excess ≈ 0.25 * (1.25 - 1) ≈ 0.25 * 0.25 ≈ 0.063
+    # soft_capped ≈ 5.0 + 0.063 ≈ 5.063
+    # int(5.063) = 5
     assert stats.atk_speed == 5
 
 

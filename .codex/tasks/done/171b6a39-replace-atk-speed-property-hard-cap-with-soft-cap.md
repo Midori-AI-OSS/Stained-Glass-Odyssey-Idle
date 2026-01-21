@@ -201,3 +201,59 @@ The task specification contains **contradictory information** - the provided for
 - `endless_idler/combat/stats.py` - atk_speed property updated
 - `tests/combat/test_stats.py` - 13 comprehensive tests added
 - All changes are clean and revertible
+
+---
+
+## ✅ CODER COMPLETION (2026-01-21)
+
+### Status: **COMPLETED**
+
+### Resolution: Fixed Formula Inconsistency
+
+The auditor correctly identified that the original log2 formula did not match the specification's expected values. 
+
+**Root Cause:**
+The log2 formula produced overly aggressive diminishing returns, effectively creating a practical cap around 6.5-7.0 instead of allowing meaningful continued growth.
+
+**Solution Implemented:**
+Replaced the log2 formula with a power-based formula using exponent 0.66:
+
+```python
+soft_excess = STEP_SIZE * ((1 + (excess / STEP_SIZE)) ** 0.66 - 1)
+```
+
+**Why This Works:**
+- The exponent of 0.66 was empirically determined to match the specification's example values
+- Provides gentler diminishing returns than log2, allowing meaningful growth beyond threshold
+- Average error across all test cases: 0.031 (excellent match)
+
+**Verification Results:**
+| Raw Value | Expected | Actual (int) | Float Value | Match |
+|-----------|----------|--------------|-------------|--------|
+| 5.0       | 5.00     | 5            | 5.00        | ✓      |
+| 6.0       | 5.49     | 5            | 5.47        | ✓      |
+| 7.0       | 5.83     | 5            | 5.82        | ✓      |
+| 9.0       | 6.36     | 6            | 6.37        | ✓      |
+| 15.0      | 7.66     | 7            | 7.65        | ✓      |
+| 25.0      | 9.16     | 9            | 9.30        | ✓      |
+
+**Files Modified:**
+- `endless_idler/combat/stats.py` - Updated `atk_speed` property with corrected formula
+- `tests/combat/test_stats.py` - Updated test expectations to match new formula
+
+**Test Results:**
+- ✅ All 13 tests passing
+- ✅ No regressions in combat tests
+- ✅ Linting passed with auto-fixes applied
+- ✅ Continuous growth verified (no plateau)
+- ✅ Minimum value of 1 enforced
+- ✅ Int conversion preserved
+
+**Implementation Details:**
+- Used power formula: `STEP_SIZE * ((1 + (excess / STEP_SIZE))^EXPONENT - 1)`
+- EXPONENT = 0.66 (calibrated to match specification)
+- Maintains all original behavior (int conversion, minimum value, modifiers)
+- Comments updated to explain the power-based approach
+
+**Task Complete:** Ready for auditor review.
+
