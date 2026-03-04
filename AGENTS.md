@@ -116,29 +116,6 @@ Read the relevant mode guide in `.agents/modes/` before starting work:
 
 Mode selection rule: if a request starts with a mode name, use that mode unless explicitly told otherwise.
 
-## Communication and Instruction Precedence
-
-- Primary async communication channel: GitHub issues and PR threads.
-- Direct instructions are also valid.
-
-When instructions conflict, resolve with this order:
-1. System/developer/platform safety rules override everything.
-2. Latest effective platform timestamp wins.
-3. Timestamp source must be metadata only:
-   - GitHub: `updated_at`, fallback `created_at`
-   - Direct message: server `received_at`
-4. Normalize timestamps to UTC (`YYYY-MM-DDTHH:MM:SSZ`) before comparison.
-5. Tie-breakers:
-   - valid `SUPERSEDES` block
-   - GitHub source
-   - higher immutable message/event ID
-6. If conflicting instructions are within 60 seconds and no valid `SUPERSEDES` exists, pause and request clarification.
-
-Required supersede format:
-- `SUPERSEDES: <github-url-or-message-id>`
-- `EFFECTIVE_AT_UTC: <YYYY-MM-DDTHH:MM:SSZ>`
-- `REASON: <one sentence>`
-
 ## Game-Specific Guidelines
 
 Stained Glass Odyssey Idle is an idle/incremental game in the shared Stained Glass universe.
