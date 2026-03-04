@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time
 import random
 
@@ -10,6 +11,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QMessageBox
 from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
@@ -31,8 +33,8 @@ from endless_idler.ui.battle.sim import build_reserves
 from endless_idler.ui.battle.sim import build_foes
 from endless_idler.ui.battle.sim import build_party
 from endless_idler.ui.battle.sim import calculate_damage
-from endless_idler.ui.battle.sim import choose_weighted_attacker
 from endless_idler.ui.battle.sim import choose_weighted_target_by_aggro
+from endless_idler.ui.battle.shape_foe_widget import ShapeFoeWidget
 from endless_idler.ui.battle.widgets import Arena
 from endless_idler.ui.battle.widgets import CombatantCard
 from endless_idler.ui.onsite import BattleOnsiteCharacterCard
@@ -85,6 +87,11 @@ class BattleScreenWidget(QWidget):
         self._save_manager = SaveManager()
         self._save = self._save_manager.load() or RunSave()
         self._fight_number = max(1, int(getattr(self._save, "fight_number", 1)))
+        
+        # Reset idle exp multiplier and set battle start time for new battle
+        self._save.idle_exp_mult = 1.0
+        self._save.battle_start_time = time.time()
+        self._save_manager.save(self._save)
 
         self._party: list[Combatant] = build_party(
             onsite=onsite,
@@ -114,20 +121,35 @@ class BattleScreenWidget(QWidget):
             foe_count=5,
             plugins=self._plugins,
             rng=self._rng,
+            spawn_wave_mult=1.0,  # Initial wave uses base multiplier (wave_index=0)
         )
 
         self._party_cards: list[QWidget] = []
         self._reserve_cards: list[CombatantCard] = []
-        self._foe_cards: list[CombatantCard] = []
+        self._foe_cards: list[QWidget] = []
         self._turn_side = "party"
         self._battle_over = False
         self._foe_kills = 0
+        self._coins_earned = 0  # Track coins earned from foe kills
+        
+        # Tick-based action timing
+        self._battle_tick: int = 0
+        
+        # Mark offsite combatants
+        for reserve in self._reserves:
+            reserve.is_offsite = True
         
         # Stalemate detection
         self._stalemate_hp_ratio: float | None = None
         self._stalemate_last_check_time: float = time.time()
         self._stalemate_stacks: int = 0
         self._stalemate_tick_counter: int = 0
+        
+        # Wave spawning system
+        self._wave_number: int = 1
+        self._wave_index: int = 0  # Wave index for difficulty scaling (starts at 0)
+        self._last_wave_spawn_time: float = time.time()
+        self._wave_spawn_interval: float = 30.0  # 30 seconds between waves
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 16, 16, 16)
@@ -177,7 +199,7 @@ class BattleScreenWidget(QWidget):
         root.addWidget(arena, 1)
 
         left = QWidget()
-        left_layout = QVBoxLayout()
+        left_layout = QHBoxLayout()  # Changed from VBoxLayout to HBoxLayout for horizontal row
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(10)
         left.setLayout(left_layout)
@@ -214,7 +236,7 @@ class BattleScreenWidget(QWidget):
 
         left_layout.addStretch(1)
         reserves_panel = QWidget()
-        reserves_layout = QVBoxLayout()
+        reserves_layout = QHBoxLayout()  # Changed from VBoxLayout to HBoxLayout for horizontal row
         reserves_layout.setContentsMargins(0, 0, 0, 0)
         reserves_layout.setSpacing(10)
         reserves_panel.setLayout(reserves_layout)
@@ -236,35 +258,34 @@ class BattleScreenWidget(QWidget):
         reserves_layout.addStretch(1)
 
         left_side = QWidget()
-        left_side_layout = QHBoxLayout()
+        left_side_layout = QVBoxLayout()  # Changed from HBoxLayout to VBoxLayout to stack rows vertically
         left_side_layout.setContentsMargins(0, 0, 0, 0)
         left_side_layout.setSpacing(12)
         left_side.setLayout(left_side_layout)
+        left_side_layout.addStretch(1)  # Push content to bottom
+        left_side_layout.addWidget(left, 0, Qt.AlignmentFlag.AlignHCenter)  # Onsite row (at bottom)
         if self._reserves:
-            left_side_layout.addWidget(reserves_panel, 0, Qt.AlignmentFlag.AlignVCenter)
-        left_side_layout.addWidget(left, 0, Qt.AlignmentFlag.AlignVCenter)
+            left_side_layout.addWidget(reserves_panel, 0, Qt.AlignmentFlag.AlignHCenter)  # Offsite row (below onsite)
 
+        # Create right side container with no layout for absolute positioning of animated foes
         right = QWidget()
-        right_layout = QVBoxLayout()
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(10)
-        right.setLayout(right_layout)
-        right_layout.addStretch(1)
+        right.setMinimumWidth(200)
+        # No layout - we'll use absolute positioning for animated foes
+        
+        # Store reference to right widget for spawn positioning
+        self._foe_container = right
 
         for combatant in self._foes:
-            card = CombatantCard(
+            card = ShapeFoeWidget(
                 combatant=combatant,
-                plugin=self._plugin_by_id.get(combatant.char_id),
-                rng=self._rng,
-                compact=True,
                 team_side="right",
-                stack_count=1,
-                variant="foe",
+                size=60,
+                parent=right,
             )
             self._foe_cards.append(card)
-            right_layout.addWidget(card)
-
-        right_layout.addStretch(1)
+            # Position initially at center for non-animated initial foes
+            card.move(70, 100)
+            card.show()
 
         arena_layout.addWidget(left_side, 0, 0, 1, 1, Qt.AlignmentFlag.AlignVCenter)
         arena_layout.addWidget(QWidget(), 0, 1, 1, 1)
@@ -353,6 +374,169 @@ class BattleScreenWidget(QWidget):
                 if hasattr(card, 'refresh'):
                     card.refresh()
 
+    def _check_wave_spawn(self) -> None:
+        """Check if a new wave should spawn based on timer or zero foes"""
+        current_time = time.time()
+        time_since_last_wave = current_time - self._last_wave_spawn_time
+        
+        # Count alive foes
+        foes_alive_count = sum(1 for foe in self._foes if foe.stats.hp > 0)
+        
+        # Check spawn conditions: 30 second timer OR zero foes alive
+        should_spawn = (time_since_last_wave >= self._wave_spawn_interval) or (foes_alive_count == 0)
+        
+        if should_spawn:
+            self._spawn_new_wave()
+            self._last_wave_spawn_time = current_time
+    
+    def _spawn_new_wave(self) -> None:
+        """Spawn a new wave of foes with 100 foe cap and overflow scaling.
+        
+        Implements a 100 foe cap by:
+        1. Counting currently alive foes (hp > 0)
+        2. Calculating available slots (100 - alive count)
+        3. Spawning only what fits in available slots
+        4. Applying wave-only multiplier (1.01^blocked_spawns) to compensate
+        
+        The wave-only multiplier is:
+        - Applied only to foes spawned in the current wave
+        - Reset for the next wave (doesn't carry over)
+        - Calculated as: pow(1.01, blocked_spawns)
+        
+        Example: If 95 foes alive and wave requests 10:
+        - Only 5 spawn (to hit cap of 100)
+        - 5 blocked spawns
+        - Wave-only mult = 1.01^5 ≈ 1.051 (5.1% stronger)
+        """
+        self._wave_number += 1
+        
+        # Calculate spawn wave multiplier based on wave index
+        # spawn_wave_mult = 1.0005 ^ wave_index
+        spawn_wave_mult = pow(1.0005, self._wave_index)
+        
+        # Use existing foe level calculation
+        foe_level = max(1, int(self._party_level * float(self._fight_number) * 1.3))
+        
+        # FOE CAP LOGIC: Cap total foes at 100
+        MAX_FOES = 100
+        current_foe_count = sum(1 for foe in self._foes if foe.stats.hp > 0)
+        available_slots = MAX_FOES - current_foe_count
+        
+        # TIME-BASED SPAWN COUNT SCALING
+        # Calculate survival time since battle start
+        survival_time = max(0.0, time.time() - self._save.battle_start_time)
+        
+        # Calculate time multiplier: time_mult = 1 + 0.15 * floor(t / 25) + 0.05 * floor(t / 30)
+        time_mult = 1.0 + 0.15 * int(survival_time / 25) + 0.05 * int(survival_time / 30)
+        
+        # Baseline spawn count and apply time multiplier with ceiling
+        base_spawn_count = 5
+        requested_spawn_count = math.ceil(base_spawn_count * time_mult)
+        
+        # Calculate actual spawn count and blocked spawns
+        actual_spawn_count = min(requested_spawn_count, max(0, available_slots))
+        blocked_spawns = max(0, requested_spawn_count - actual_spawn_count)
+        
+        # Calculate wave-only multiplier for overflow compensation
+        # Each blocked spawn increases multiplier by 1.01
+        wave_only_mult = pow(1.01, blocked_spawns)
+        
+        # Combine base spawn wave multiplier with wave-only overflow multiplier
+        combined_mult = spawn_wave_mult * wave_only_mult
+        
+        # Only spawn if we have available slots
+        if actual_spawn_count > 0:
+            # Build new foes with combined multiplier
+            new_foes = build_foes(
+                exclude_ids=set(self._onsite_ids + self._offsite_ids),
+                party_level=foe_level,
+                foe_count=actual_spawn_count,
+                plugins=self._plugins,
+                rng=self._rng,
+                spawn_wave_mult=combined_mult,
+            )
+            
+            # Add new foes to existing foes (don't replace)
+            self._foes.extend(new_foes)
+        else:
+            new_foes = []
+        
+        # Increment wave index for next wave
+        self._wave_index += 1
+        
+        # Update foe cards in the UI
+        # Calculate engagement line position (80% down the battle area)
+        battle_height = self._arena.height()
+        engagement_y = int(battle_height * 0.8)
+        
+        # Add new foe cards with animation
+        for index, combatant in enumerate(new_foes):
+            card = ShapeFoeWidget(
+                combatant=combatant,
+                team_side="right",
+                size=60,
+                parent=self._foe_container,
+            )
+            self._foe_cards.append(card)
+            
+            # Calculate horizontal position (center the cards with some spacing)
+            container_width = self._foe_container.width()
+            card_width = 80  # Approximate width of card
+            x_pos = max(10, (container_width - card_width) // 2)
+            
+            # Calculate vertical positions
+            # Start at top of container
+            start_y = 10
+            # End at engagement line (80% down the arena)
+            # Need to convert arena coordinates to container coordinates
+            container_top = self._foe_container.mapFrom(self._arena, self._arena.rect().topLeft()).y()
+            end_y = engagement_y - container_top
+            
+            # Position card initially
+            card.setGeometry(x_pos, start_y, 80, 100)
+            card.show()
+            
+            # Create callback to mark combatant as engaged
+            def make_engage_callback(c: Combatant) -> object:
+                """Create callback to mark combatant as engaged."""
+                def on_finished() -> None:
+                    c.engaged = True
+                return on_finished
+            
+            # Start animation
+            card.animate_entry(start_y, end_y, make_engage_callback(combatant))
+        
+        # Log wave spawn for debugging with cap info
+        if blocked_spawns > 0:
+            print(f"[Wave System] Wave {self._wave_number} spawned with {actual_spawn_count}/{requested_spawn_count} foes (CAPPED: {blocked_spawns} blocked, wave_only_mult={wave_only_mult:.4f}, wave_index={self._wave_index - 1}, total_mult={combined_mult:.4f}, time={survival_time:.1f}s, time_mult={time_mult:.2f})")
+        else:
+            print(f"[Wave System] Wave {self._wave_number} spawned with {actual_spawn_count} foes (wave_index={self._wave_index - 1}, mult={combined_mult:.4f}, time={survival_time:.1f}s, time_mult={time_mult:.2f})")
+        
+        status_msg = f"Wave {self._wave_number}!"
+        if blocked_spawns > 0:
+            status_msg += f" (Capped! +{blocked_spawns*1:.0f}% wave strength)"
+        self._set_status(status_msg)
+
+    def _calculate_action_interval(self, combatant: Combatant) -> int:
+        """Calculate action interval in ticks based on atk_speed.
+        
+        Formula: action_interval_ticks = 500 / atk_speed
+        Offsite characters act 10x slower (interval × 10)
+        
+        Args:
+            combatant: The combatant to calculate interval for
+            
+        Returns:
+            Number of ticks between actions
+        """
+        base_interval = 500.0 / max(1, combatant.stats.atk_speed)
+        
+        # Apply offsite multiplier
+        if combatant.is_offsite:
+            base_interval *= 10.0
+        
+        return int(base_interval)
+
     def _step_battle(self) -> None:
         if self._battle_over:
             return
@@ -360,13 +544,24 @@ class BattleScreenWidget(QWidget):
             self._on_battle_over()
             return
         
+        # Increment tick counter
+        self._battle_tick += 1
+        
         # Check for stalemate and apply bleed
         self._check_stalemate()
         self._apply_stalemate_bleed()
+        
+        # Check wave spawn conditions
+        self._check_wave_spawn()
 
         party_alive = [
             (c, w)
             for c, w in zip(self._party, self._party_cards, strict=False)
+            if c.stats.hp > 0
+        ]
+        reserves_alive = [
+            (c, w)
+            for c, w in zip(self._reserves, self._reserve_cards, strict=False)
             if c.stats.hp > 0
         ]
         foes_alive = [
@@ -378,7 +573,7 @@ class BattleScreenWidget(QWidget):
             self._on_battle_over()
             return
 
-        # Trigger TURN_START passives for party
+        # Trigger TURN_START passives for party (keep this per tick for now)
         party_stats = [c.stats for c in self._party if c.stats.hp > 0]
         reserve_stats = [c.stats for c in self._reserves if c.stats.hp > 0]
         all_party_stats = party_stats + reserve_stats
@@ -409,13 +604,48 @@ class BattleScreenWidget(QWidget):
             self._on_battle_over()
             return
 
-        if self._turn_side == "party":
-            attacker, attacker_widget = choose_weighted_attacker(party_alive, self._rng)
-            self._turn_side = "foes"
+        # Determine which combatants should act this tick (tick-based timing)
+        # Collect all alive combatants from all teams
+        all_combatants_alive = party_alive + reserves_alive + foes_alive
+        
+        # Find combatants ready to act (next_action_tick <= current_tick)
+        # Only engaged combatants can attack (players are always engaged, foes must reach engagement line)
+        ready_to_act = [
+            (c, w) for c, w in all_combatants_alive 
+            if c.next_action_tick <= self._battle_tick and c.engaged
+        ]
+        
+        # If no one is ready, continue to next tick
+        if not ready_to_act:
+            return
+        
+        # Pick one combatant to act this tick (weighted by atk_speed for fairness)
+        # Higher atk_speed = more likely to be selected when multiple are ready
+        weights = [c.stats.atk_speed for c, _ in ready_to_act]
+        total_weight = sum(weights)
+        if total_weight <= 0:
+            return
+        
+        # Weighted random selection
+        r = self._rng.random() * total_weight
+        cumulative = 0.0
+        attacker, attacker_widget = ready_to_act[0]
+        for (c, w), weight in zip(ready_to_act, weights, strict=False):
+            cumulative += weight
+            if r <= cumulative:
+                attacker, attacker_widget = c, w
+                break
+        
+        # Schedule next action for this combatant
+        action_interval = self._calculate_action_interval(attacker)
+        attacker.next_action_tick = self._battle_tick + action_interval
+        
+        # Determine attacker side (party vs foes)
+        if attacker in [c for c, _ in party_alive]:
             attacker_side = "party"
+        elif attacker in [c for c, _ in reserves_alive]:
+            attacker_side = "party"  # Reserves are on party side
         else:
-            attacker, attacker_widget = choose_weighted_attacker(foes_alive, self._rng)
-            self._turn_side = "party"
             attacker_side = "foes"
 
         attacker.turns_taken += 1
@@ -423,19 +653,27 @@ class BattleScreenWidget(QWidget):
         color = color_for_damage_type_id(element_id)
 
         party_onsite = [c for c, _ in party_alive]
+        reserves_onsite = [c for c, _ in reserves_alive]
         foes_onsite = [c for c, _ in foes_alive]
         party_widgets = {c: w for c, w in party_alive}
         foe_widgets = {c: w for c, w in foes_alive}
-        reserve_widgets = {c: w for c, w in zip(self._reserves, self._reserve_cards, strict=False)}
+        reserve_widgets = {c: w for c, w in reserves_alive}
 
         if attacker_side == "party":
-            allies_onsite = party_onsite
-            allies_offsite = [c for c in self._reserves if c.stats.hp > 0]
+            # Party or reserves attacking foes
+            if attacker in party_onsite:
+                allies_onsite = party_onsite
+            else:
+                # Attacker is from reserves
+                allies_onsite = party_onsite  # Onsite allies are still the party
+            allies_offsite = reserves_onsite
             enemies = foes_alive
         else:
+            # Foes attacking party
             allies_onsite = foes_onsite
             allies_offsite = []
-            enemies = party_alive
+            # Foes can attack both party and reserves
+            enemies = party_alive + reserves_alive
 
         if element_id == "ice":
             if not attacker.ice_charge_ready:
@@ -456,7 +694,32 @@ class BattleScreenWidget(QWidget):
                     widget = party_widgets.get(target) or foe_widgets.get(target) or reserve_widgets.get(target)
                     if widget is not None:
                         widget.refresh()
-                        self._arena.add_pulse(attacker_widget, widget, color, same_team=True)
+                        
+                        # Detect wrong-way healing scenario
+                        # Healing might initially target wrong side if healer is wounded (below 50% HP)
+                        wrong_widget = None
+                        if attacker.stats.hp < (attacker.max_hp * 0.5):
+                            # Healer is wounded - might misfire healing toward enemies initially
+                            if attacker_side == "party" and enemies:
+                                # Player healing allies but initially misfires toward enemy
+                                potential_wrong_targets = [c for c, w in enemies if c.stats.hp > 0]
+                                if potential_wrong_targets:
+                                    wrong_target = self._rng.choice(potential_wrong_targets)
+                                    wrong_widget = foe_widgets.get(wrong_target)
+                            elif attacker_side == "foes" and enemies:
+                                # Enemy healing allies but initially misfires toward player
+                                potential_wrong_targets = [c for c, w in enemies if c.stats.hp > 0]
+                                if potential_wrong_targets:
+                                    wrong_target = self._rng.choice(potential_wrong_targets)
+                                    wrong_widget = party_widgets.get(wrong_target)
+                        
+                        self._arena.add_pulse(
+                            attacker_widget, 
+                            widget, 
+                            color, 
+                            same_team=True,
+                            wrong_target=wrong_widget
+                        )
                 return
 
         if element_id == "dark":
@@ -689,6 +952,10 @@ class BattleScreenWidget(QWidget):
             self._apply_death_exp_debuff(target.char_id)
         elif target in self._foes:
             self._foe_kills += 1
+            # Award coins based on foe level: coins_gained = 1 * foe_level
+            foe_level = max(1, int(getattr(target.stats, "level", 1)))
+            coins = 1 * foe_level
+            self._coins_earned += coins
 
     def _set_status(self, message: str) -> None:
         message = str(message or "").replace("\n", " ").strip()
@@ -715,23 +982,31 @@ class BattleScreenWidget(QWidget):
         victory = bool(party_alive and not foes_alive)
         defeat = bool(foes_alive and not party_alive)
         if party_alive and not foes_alive:
-            self._award_gold(self._foe_kills, victory=True)
+            self._award_gold(self._coins_earned, victory=True)
             self._set_status("Victory")
             self._apply_idle_exp_bonus()
         elif foes_alive and not party_alive:
-            self._award_gold(self._foe_kills, victory=False)
+            self._award_gold(self._coins_earned, victory=False)
             self._set_status("Defeat")
             self._apply_idle_exp_penalty()
+            # Show defeat popup and schedule auto-return to main menu
+            self._show_defeat_popup()
         else:
             self._set_status("Over")
 
         try:
             save = self._save_manager.load() or self._save or RunSave()
             should_reset = False
+            
+            # Calculate survival time for defeat health loss calculation
+            survival_seconds = 0.0
+            if defeat and save.battle_start_time > 0.0:
+                survival_seconds = max(0.0, time.time() - save.battle_start_time)
+            
             if victory:
                 should_reset = apply_battle_result(save, victory=True)
             elif defeat:
-                should_reset = apply_battle_result(save, victory=False)
+                should_reset = apply_battle_result(save, victory=False, survival_seconds=survival_seconds)
             if should_reset:
                 for char_id in sorted(set(self._onsite_ids + self._offsite_ids)):
                     plugin = self._plugin_by_id.get(char_id)
@@ -776,14 +1051,14 @@ class BattleScreenWidget(QWidget):
     def _apply_idle_exp_penalty(self) -> None:
         self._extend_idle_exp_timer(key="idle_exp_penalty_seconds", seconds=15 * 60)
 
-    def _award_gold(self, kills: int, victory: bool = True) -> None:
-        """Award gold based on foe kills.
+    def _award_gold(self, coins: int, victory: bool = True) -> None:
+        """Award gold based on coins earned from foe defeats.
         
         Args:
-            kills: Number of foes defeated
-            victory: If True, award full gold. If False, award 50% of base kills only.
+            coins: Base coins earned from defeating foes (level-based)
+            victory: If True, award full gold. If False, award 50% of base coins only.
         """
-        gold = max(0, int(kills))
+        gold = max(0, int(coins))
         if gold <= 0:
             return
 
@@ -796,10 +1071,10 @@ class BattleScreenWidget(QWidget):
             bonus = calculate_gold_bonus(tokens, winstreak)
             
             if victory:
-                # Full rewards on victory: base kills + bonus
+                # Full rewards on victory: base coins + bonus
                 total_gold = gold + bonus
             else:
-                # Partial rewards on loss: 50% of base kills + full bonus
+                # Partial rewards on loss: 50% of base coins + full bonus
                 # Bonus helps struggling players, reduced base maintains win incentive
                 loss_gold = max(1, gold // 2)  # Minimum 1 gold for killing any foes
                 total_gold = loss_gold + bonus
@@ -871,7 +1146,13 @@ class BattleScreenWidget(QWidget):
         
         try:
             save = self._save_manager.load() or self._save or RunSave()
-            should_reset = apply_battle_result(save, victory=False)
+            
+            # Calculate survival time for retreat health loss calculation
+            survival_seconds = 0.0
+            if save.battle_start_time > 0.0:
+                survival_seconds = max(0.0, time.time() - save.battle_start_time)
+            
+            should_reset = apply_battle_result(save, victory=False, survival_seconds=survival_seconds)
             
             if should_reset:
                 for char_id in sorted(set(self._onsite_ids + self._offsite_ids)):
@@ -907,6 +1188,48 @@ class BattleScreenWidget(QWidget):
             pass
         
         self._finish()
+
+    def _show_defeat_popup(self) -> None:
+        """Show defeat popup with run statistics and auto-return to main menu.
+        
+        Displays:
+        - Clear indication that the run has ended
+        - Fight number reached
+        - Foes defeated in final battle
+        - Auto-returns to main menu after dismissal
+        """
+        fight_num = self._fight_number
+        foes_killed = self._foe_kills
+        
+        # Build the message with run statistics
+        message_lines = [
+            "Your party has been defeated!",
+            "",
+            f"Fight reached: {fight_num}",
+            f"Foes defeated in final battle: {foes_killed}",
+            "",
+            "The run has ended and been reset.",
+            "You will return to the main menu."
+        ]
+        message = "\n".join(message_lines)
+        
+        # Create and show the popup
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Run Lost")
+        msg_box.setText(message)
+        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        
+        # Connect to auto-return after popup is closed
+        msg_box.finished.connect(self._on_defeat_popup_closed)
+        
+        # Show the popup (non-blocking)
+        msg_box.show()
+    
+    def _on_defeat_popup_closed(self) -> None:
+        """Handle defeat popup closure by returning to main menu."""
+        # Schedule a brief delay before returning to menu for smoother transition
+        QTimer.singleShot(100, self._finish)
 
     def _finish(self) -> None:
         try:

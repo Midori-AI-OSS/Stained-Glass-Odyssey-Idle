@@ -19,15 +19,14 @@ DEFAULT_BASE_STATS: dict[str, float] = {
     "max_hp": 1000.0,
     "atk": 200.0,
     "defense": 200.0,
-    "crit_rate": 0.05,
-    "crit_damage": 2.0,
+    "crit_mod": 100.0,
     "effect_hit_rate": 1.0,
     "mitigation": 1.0,
     "regain": 100.0,
     "dodge_odds": 0.05,
     "effect_resistance": 0.05,
     "vitality": 1.0,
-    "spd": 2.0,
+    "atk_speed": 1.0,
 }
 
 _BASE_STAT_KEYS = frozenset(DEFAULT_BASE_STATS.keys())

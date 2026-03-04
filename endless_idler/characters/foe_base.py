@@ -55,8 +55,7 @@ class FoeBase(Stats):
     base_max_hp: int = 1000
     base_atk: int = 100
     base_defense: int = 50
-    base_crit_rate: float = 0.05
-    base_crit_damage: float = 2.0
+    base_crit_mod: float = 100.0
     base_effect_hit_rate: float = 0.01
     base_mitigation: float = 0.001
     base_regain: int = 1
@@ -112,8 +111,7 @@ class FoeBase(Stats):
             "max_hp": self.base_max_hp,
             "atk": self.base_atk,
             "defense": self.base_defense,
-            "crit_rate": self.base_crit_rate,
-            "crit_damage": self.base_crit_damage,
+            "crit_mod": self.base_crit_mod,
             "effect_hit_rate": self.base_effect_hit_rate,
             "mitigation": self.base_mitigation,
             "regain": self.base_regain,

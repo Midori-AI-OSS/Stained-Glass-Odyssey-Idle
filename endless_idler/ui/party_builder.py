@@ -979,6 +979,7 @@ class PartyBuilderWidget(QWidget):
                 exp_penalty_seconds=float(self._save.idle_exp_penalty_seconds),
                 exp_gain_scale=SHOP_IDLE_EXP_SCALE,
                 advance_run_buffs=False,
+                battle_start_time=float(getattr(self._save, "battle_start_time", 0.0)),
             )
             self._shop_exp_signature = signature
             self._shop_exp_ticks = 0

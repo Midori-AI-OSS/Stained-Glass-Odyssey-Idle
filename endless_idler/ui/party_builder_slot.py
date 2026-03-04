@@ -408,15 +408,32 @@ class DropSlot(QFrame):
         return self._char_id
 
     def enterEvent(self, event: object) -> None:
-        if self._tooltip_html:
-            stats: Stats | None = None
-            if self._get_tooltip_stats is not None and self._char_id:
-                try:
-                    stats = self._get_tooltip_stats(self._char_id, self._slot_kind)
-                except Exception:
-                    stats = None
+        if not self._char_id or not self._display_name:
+            try:
+                super().enterEvent(event)  # type: ignore[misc]
+            except Exception:
+                return
+            return
+
+        stats: Stats | None = None
+        if self._get_tooltip_stats is not None:
+            try:
+                stats = self._get_tooltip_stats(self._char_id, self._slot_kind)
+            except Exception:
+                stats = None
+
+        stacks = self._get_stack_count(self._char_id)
+        primary_stack = self._is_primary_stack_slot(self._slot_id, self._char_id)
+        tooltip_html = build_character_stats_tooltip(
+            name=self._display_name,
+            stars=self._stars or 1,
+            stacks=stacks if (self._show_stack_badge and primary_stack) else None,
+            stackable=stacks > 1,
+            stats=stats,
+        )
+        if tooltip_html:
             element_id = getattr(stats, "element_id", None) if stats else None
-            show_stained_tooltip(self, self._tooltip_html, element_id=element_id)
+            show_stained_tooltip(self, tooltip_html, element_id=element_id)
         try:
             super().enterEvent(event)  # type: ignore[misc]
         except Exception:

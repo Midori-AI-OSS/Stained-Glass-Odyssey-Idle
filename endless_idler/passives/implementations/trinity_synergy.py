@@ -156,11 +156,16 @@ class TrinitySynergy(Passive):
         # Lady Light: Regain and healing bonuses
         lady_light = trinity_members.get(LADY_LIGHT_ID)
         if lady_light and owner_id == LADY_LIGHT_ID:
-            # Apply regain multiplier
-            base_regain = getattr(lady_light, 'regain', 0)
-            bonus_regain = int(base_regain * (self.lady_light_regain_mult - 1.0))
-            if hasattr(lady_light, 'regain'):
-                lady_light.regain += bonus_regain
+            # Store regain multiplier in context.extra for passive system to use
+            # Only apply actual stat modification if not already applied this combat
+            if not hasattr(lady_light, '_trinity_regain_applied'):
+                # Apply regain multiplier based on base regain value
+                base_regain = getattr(lady_light, '_base_regain', 100)
+                bonus_regain = int(base_regain * (self.lady_light_regain_mult - 1.0))
+                if hasattr(lady_light, 'regain'):
+                    lady_light.regain += bonus_regain
+                    # Mark as applied to prevent stacking on subsequent turns
+                    lady_light._trinity_regain_applied = True
             effects.append(f"Lady Light regain boosted by {self.lady_light_regain_mult}x")
             
             # Store healing multiplier for use in healing calculations

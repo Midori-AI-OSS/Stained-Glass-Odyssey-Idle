@@ -371,6 +371,7 @@ QLabel#standbyShopLabel {
 }
 
 QFrame#stainedTooltipPanel {
+    background-color: rgba(80, 100, 140, 25);
     border: 1px solid rgba(255, 255, 255, 60);
 }
 
@@ -380,9 +381,10 @@ QLabel#stainedTooltipContent {
 }
 
 QToolTip {
-    background-color: rgba(10, 14, 26, 238);
-    color: rgba(255, 255, 255, 235);
-    border: 1px solid rgba(255, 255, 255, 52);
+    background-color: rgba(30, 40, 60, 230);
+    color: rgba(255, 255, 255, 245);
+    border: 1px solid rgba(255, 255, 255, 90);
+    border-radius: 0px;
     padding: 8px 10px;
     font-size: 12px;
 }
@@ -526,11 +528,11 @@ QProgressBar#onsiteStatBar[statKey="defense"]::chunk {
     background-color: rgba(52, 152, 219, 175);
 }
 
-QProgressBar#onsiteStatBar[statKey="spd"]::chunk {
+QProgressBar#onsiteStatBar[statKey="atk_speed"]::chunk {
     background-color: rgba(46, 204, 113, 175);
 }
 
-QProgressBar#onsiteStatBar[statKey="crit_rate"]::chunk {
+QProgressBar#onsiteStatBar[statKey="crit_mod"]::chunk {
     background-color: rgba(241, 196, 15, 185);
 }
 
@@ -662,11 +664,11 @@ QProgressBar#battleStatBar[statKey="defense"]::chunk {
     background-color: rgba(52, 152, 219, 175);
 }
 
-QProgressBar#battleStatBar[statKey="spd"]::chunk {
+QProgressBar#battleStatBar[statKey="atk_speed"]::chunk {
     background-color: rgba(46, 204, 113, 175);
 }
 
-QProgressBar#battleStatBar[statKey="crit_rate"]::chunk {
+QProgressBar#battleStatBar[statKey="crit_mod"]::chunk {
     background-color: rgba(241, 196, 15, 185);
 }
 

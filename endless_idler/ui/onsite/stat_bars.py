@@ -22,8 +22,8 @@ class StatBarSpec:
 STAT_BARS: tuple[StatBarSpec, ...] = (
     StatBarSpec(key="atk", label="Attack"),
     StatBarSpec(key="defense", label="Defense"),
-    StatBarSpec(key="spd", label="Speed"),
-    StatBarSpec(key="crit_rate", label="Crit Rate"),
+    StatBarSpec(key="atk_speed", label="Atk Speed"),
+    StatBarSpec(key="crit_mod", label="Crit Mod"),
     StatBarSpec(key="dodge_odds", label="Dodge"),
     StatBarSpec(key="regain", label="Regain"),
     StatBarSpec(key="mitigation", label="Mitigation"),
@@ -35,8 +35,8 @@ def compute_stat_maxima(stats_list: list[Stats]) -> dict[str, float]:
     for stats in stats_list:
         maxima["atk"] = max(maxima["atk"], float(stats.atk))
         maxima["defense"] = max(maxima["defense"], float(stats.defense))
-        maxima["spd"] = max(maxima["spd"], float(stats.spd))
-        maxima["crit_rate"] = max(maxima["crit_rate"], float(stats.crit_rate))
+        maxima["atk_speed"] = max(maxima["atk_speed"], float(stats.atk_speed))
+        maxima["crit_mod"] = max(maxima["crit_mod"], float(stats.crit_mod))
         maxima["dodge_odds"] = max(maxima["dodge_odds"], float(stats.dodge_odds))
         maxima["regain"] = max(maxima["regain"], float(stats.regain))
         maxima["mitigation"] = max(maxima["mitigation"], float(stats.mitigation))
@@ -108,8 +108,8 @@ class StatBarsPanel(QFrame):
         values: dict[str, tuple[float, str]] = {
             "atk": (float(stats.atk), f"Attack {stats.atk}"),
             "defense": (float(stats.defense), f"Defense {stats.defense}"),
-            "spd": (float(stats.spd), f"Speed {stats.spd}"),
-            "crit_rate": (float(stats.crit_rate), f"Crit Rate {stats.crit_rate * 100:.1f}%"),
+            "atk_speed": (float(stats.atk_speed), f"Atk Speed {stats.atk_speed}"),
+            "crit_mod": (float(stats.crit_mod), f"Crit Mod {stats.crit_mod:.0f}"),
             "dodge_odds": (float(stats.dodge_odds), f"Dodge {stats.dodge_odds * 100:.1f}%"),
             "regain": (float(stats.regain), f"Regain {stats.regain}"),
             "mitigation": (float(stats.mitigation), f"Mitigation {stats.mitigation:.2f}"),

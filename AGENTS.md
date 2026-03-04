@@ -9,13 +9,11 @@ This document summarizes common development practices for the Stained Glass Odys
 
 - **`.feedback/`**: Task lists and priorities. *Read only*—never edit directly unless you are the Task Master.
 - **`.codex/`**:
-  - `instructions/`: Contributor mode docs, process notes, and service-specific instructions. Place all new and updated process documentation here, following the structure and naming conventions. See examples in this folder.
-  - `implementation/`: Technical implementation notes and documentation. Keep these in sync with code changes.
   - `modes/`: Contributor mode documentation defining roles and responsibilities.
   - `tasks/`: Organized task folders (wip, review, taskmaster) for work items.
   - Other subfolders: For planning, notes, and prototyping.
 - **Never edit files in `.codex/audit/` unless you are in Auditor mode.**
-- **Docs:** Do not update the readme / Add docs unless asked to
+- **Docs:** Do not update `README.md`
 - **Test:** Do not build tests unless asked to; place tests under `tests/` (create it if missing)
 - **`.github/`**: Workflow guidelines, agent configurations, and automation scripts.
 - When entering any folder, check for a `AGENTS.md` file in that folder and read it before starting any work there.
@@ -26,7 +24,12 @@ This document summarizes common development practices for the Stained Glass Odys
 
 - Use [`uv`](https://github.com/astral-sh/uv) for Python environments and running code. Avoid `python` or `pip` directly.
 - Use [`bun`](https://bun.sh/) for Node/React tooling instead of `npm` or `yarn`.
-- Split large modules into smaller ones when practical and keep documentation in `.codex/implementation/` in sync with code.
+- Verification-first: confirm current behavior in the codebase before changing code; reproduce/confirm the issue (or missing behavior); verify the fix with clear checks.
+- No broad fallbacks: do not add “fallback behavior everywhere”; only add a narrow fallback when the task explicitly requires it, and justify it.
+- No backward compatibility shims by default: do not preserve old code paths “just in case”; only add compatibility layers when the task explicitly requires it.
+- Minimal documentation, minimal logging: prefer reading code and docstrings; do not add docs/logs unless required to diagnose a specific issue or prevent a crash.
+- Do not update `README.md`.
+- Split large modules into smaller ones when practical.
 - Ensure code is asynchronous-friendly: avoid blocking the event loop, use async/await for I/O and long-running tasks, and keep work off the main loop.
 - Any test running longer than 15 seconds is automatically aborted in local development. GitHub Actions CI has no timeout limits.
 - For Python style:
@@ -114,6 +117,6 @@ Stained Glass Odyssey Idle is an idle/incremental game featuring characters from
 
 - Maintain the idle game mechanics and incremental progression systems
 - Keep the visual style consistent with the stained glass aesthetic
-- Document all game mechanics, progression systems, and character implementations in `.codex/implementation/`
+- Documentation: prefer code and docstrings; keep notes minimal and task-scoped.
 - Test game balance and progression carefully
 - Ensure all character artwork and assets follow the project's art guidelines

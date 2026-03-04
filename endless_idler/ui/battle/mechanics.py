@@ -107,7 +107,9 @@ def resolve_light_heal(
     onsite_allies: list[Combatant],
     offsite_allies: list[Combatant],
 ) -> list[tuple[Combatant, int]]:
-    base_power = max(1, int(round(float(attacker.stats.atk) * 0.05)))
+    # Apply passive modifier to attack stat for heal power calculation
+    effective_atk = int(attacker.stats.atk * attacker.stats.passive_modifier)
+    base_power = max(1, int(round(float(effective_atk) * 0.05)))
     wounded_onsite = [ally for ally in onsite_allies if int(ally.stats.hp) < int(ally.max_hp)]
     wounded_offsite = [ally for ally in offsite_allies if int(ally.stats.hp) < int(ally.max_hp)]
     wounded = wounded_onsite + wounded_offsite

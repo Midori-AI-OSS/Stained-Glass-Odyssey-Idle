@@ -100,11 +100,13 @@ class OnsiteCharacterCardBase(QFrame):
         self._tooltip_html = ""
         self._stats_panel: StatBarsPanel | None = None
         self._stats_popup: OnsiteStatsPopup | None = None
+        self._action_button_handler: Callable[[], None] | None = None
 
         self.setObjectName("onsiteCharacterCard")
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setFixedWidth(max(220, int(card_width)))
-        self.setProperty("onsiteMode", (mode or "idle").strip().lower())
+        onsite_mode = (mode or "idle").strip().lower()
+        self.setProperty("onsiteMode", onsite_mode)
 
         root = QHBoxLayout()
         root.setContentsMargins(12, 12, 12, 12)
@@ -137,14 +139,18 @@ class OnsiteCharacterCardBase(QFrame):
 
         header.addStretch(1)
 
-        self._stats_button = QPushButton("👁")
-        self._stats_button.setObjectName("onsiteStatsButton")
-        self._stats_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._stats_button.setCheckable(True)
-        self._stats_button.setChecked(False)
-        self._stats_button.setToolTip("Stats")
-        self._stats_button.toggled.connect(self._toggle_stats_popup)
-        header.addWidget(self._stats_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        # Eye/stats popup is intentionally removed from Idle and Fight modes.
+        self._stats_button: QPushButton | None = None
+        if onsite_mode not in {"idle", "battle"}:
+            stats_button = QPushButton("👁")
+            stats_button.setObjectName("onsiteStatsButton")
+            stats_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            stats_button.setCheckable(True)
+            stats_button.setChecked(False)
+            stats_button.setToolTip("Stats")
+            stats_button.toggled.connect(self._toggle_stats_popup)
+            header.addWidget(stats_button, 0, Qt.AlignmentFlag.AlignVCenter)
+            self._stats_button = stats_button
 
         self._action_button = QPushButton("")
         self._action_button.setObjectName("onsiteActionButton")
@@ -210,12 +216,15 @@ class OnsiteCharacterCardBase(QFrame):
     ) -> None:
         self._action_button.setText(str(label))
         self._action_button.setVisible(bool(visible))
-        try:
-            self._action_button.clicked.disconnect()
-        except Exception:
-            pass
+        if self._action_button_handler is not None:
+            try:
+                self._action_button.clicked.disconnect(self._action_button_handler)
+            except (RuntimeError, TypeError):
+                pass
+            self._action_button_handler = None
         if on_click is not None:
             self._action_button.clicked.connect(on_click)
+            self._action_button_handler = on_click
 
     def set_stats(
         self,
@@ -282,6 +291,8 @@ class OnsiteCharacterCardBase(QFrame):
             return
 
     def _toggle_stats_popup(self, checked: bool) -> None:
+        if self._stats_button is None:
+            return
         if not checked:
             if self._stats_popup is not None:
                 self._stats_popup.close()
@@ -302,6 +313,8 @@ class OnsiteCharacterCardBase(QFrame):
         self._stats_popup.activateWindow()
 
     def _on_popup_closed(self) -> None:
+        if self._stats_button is None:
+            return
         if self._stats_button.isChecked():
             self._stats_button.setChecked(False)
 
@@ -374,6 +387,7 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         rng: random.Random,
         stack_count: int,
         on_rebirth: Callable[[str], None] | None = None,
+        on_prestige: Callable[[str], None] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         self._char_id = str(char_id)
@@ -381,6 +395,7 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         self._idle_state = idle_state
         self._rng = rng
         self._on_rebirth = on_rebirth
+        self._on_prestige = on_prestige
 
         portrait_path = plugin.random_image_path(rng) if plugin else None
         display_name = getattr(plugin, "display_name", char_id) if plugin else char_id
@@ -470,13 +485,35 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         self.set_hp(current=hp, max_hp=max_hp)
         self.set_exp(current=exp, max_exp=next_exp, format_text=exp_format)
 
-        show_rebirth = max(1, int(level)) >= 50
+        # Check prestige availability first (exp_multiplier >= 10)
+        exp_multiplier = float(data.get("exp_multiplier", 1.0))
+        show_prestige = exp_multiplier >= 10.0
+        
+        # Show rebirth button if level >= 50 and prestige is not available
+        show_rebirth = max(1, int(level)) >= 50 and not show_prestige
 
-        def on_click() -> None:
-            if self._on_rebirth is not None:
-                self._on_rebirth(self._char_id)
-
-        self.set_action_button(label="Rebirth", visible=show_rebirth, on_click=on_click if show_rebirth else None)
+        if show_prestige:
+            def on_prestige_click() -> None:
+                if self._on_prestige is not None:
+                    self._on_prestige(self._char_id)
+            
+            self.set_action_button(
+                label="Prestige",
+                visible=True,
+                on_click=on_prestige_click
+            )
+        elif show_rebirth:
+            def on_rebirth_click() -> None:
+                if self._on_rebirth is not None:
+                    self._on_rebirth(self._char_id)
+            
+            self.set_action_button(
+                label="Rebirth",
+                visible=True,
+                on_click=on_rebirth_click
+            )
+        else:
+            self.set_action_button(label="", visible=False, on_click=None)
 
         stars = getattr(self._plugin, "stars", None) if self._plugin else None
         display_name = getattr(self._plugin, "display_name", self._char_id) if self._plugin else self._char_id

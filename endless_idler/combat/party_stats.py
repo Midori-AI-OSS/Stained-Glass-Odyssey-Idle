@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from endless_idler.combat.stats import Stats
 
 
@@ -8,14 +10,13 @@ STAT_SHARE_KEYS: tuple[str, ...] = (
     "atk",
     "defense",
     "regain",
-    "crit_rate",
-    "crit_damage",
+    "crit_mod",
     "effect_hit_rate",
     "mitigation",
     "dodge_odds",
     "effect_resistance",
     "vitality",
-    "spd",
+    "atk_speed",
 )
 
 
@@ -35,7 +36,7 @@ def apply_scaled_bases(
     *,
     base_stats: dict[str, float] | None,
     scale: float,
-    spd: int,
+    atk_speed: int,
 ) -> None:
     template = base_stats if isinstance(base_stats, dict) else {}
 
@@ -50,8 +51,7 @@ def apply_scaled_bases(
     stats.set_base_stat("regain", int(regain * scale))
 
     for key in (
-        "crit_rate",
-        "crit_damage",
+        "crit_mod",
         "effect_hit_rate",
         "mitigation",
         "dodge_odds",
@@ -60,7 +60,7 @@ def apply_scaled_bases(
     ):
         if key in template:
             stats.set_base_stat(key, float(template[key]))
-    stats.set_base_stat("spd", int(max(1, spd)))
+    stats.set_base_stat("atk_speed", int(max(1, atk_speed)))
 
 
 def merged_base_stats(
@@ -101,6 +101,97 @@ def apply_plugin_overrides(stats: Stats, *, plugin: object | None) -> None:
         stats.damage_reduction_passes = int(passes)
 
 
+def apply_soft_cap_to_level_bonus(level: int) -> float:
+    """
+    Apply soft cap to level bonus calculation.
+    
+    Linear up to 0.1 (level 100), then logarithmic diminishing returns.
+    Rate slows by 2x for each 5% gain past threshold.
+    
+    Args:
+        level: Character level
+        
+    Returns:
+        Level bonus as a float with soft cap applied
+    """
+    THRESHOLD = 0.1
+    STEP_SIZE = 0.005  # 5% of threshold
+    
+    # Calculate raw linear value
+    raw_value = level * 0.001
+    
+    # If below threshold, no soft cap needed
+    if raw_value <= THRESHOLD:
+        return raw_value
+    
+    # Calculate excess over threshold
+    excess = raw_value - THRESHOLD
+    
+    # Apply logarithmic diminishing returns
+    # log2(1 + x) gives us the "doubling steps"
+    soft_excess = STEP_SIZE * math.log2(1 + (excess / STEP_SIZE))
+    
+    return THRESHOLD + soft_excess
+
+
+def apply_soft_cap_to_rebirth_bonus(rebirths: int) -> float:
+    """
+    Apply soft cap to rebirth bonus calculation.
+    
+    Linear up to 0.2 (rebirth 100), then logarithmic diminishing returns.
+    Rate slows by 2x for each 5% gain past threshold.
+    
+    Args:
+        rebirths: Number of rebirths
+        
+    Returns:
+        Rebirth bonus as a float with soft cap applied
+    """
+    THRESHOLD = 0.2
+    STEP_SIZE = 0.01  # 5% of threshold
+    
+    # Calculate raw linear value
+    raw_value = rebirths * 0.002
+    
+    # If below threshold, no soft cap needed
+    if raw_value <= THRESHOLD:
+        return raw_value
+    
+    # Calculate excess over threshold
+    excess = raw_value - THRESHOLD
+    
+    # Apply logarithmic diminishing returns
+    soft_excess = STEP_SIZE * math.log2(1 + (excess / STEP_SIZE))
+    
+    return THRESHOLD + soft_excess
+
+
+def calculate_atk_speed_bonus(level: int, rebirths: int) -> float:
+    """
+    Calculate atk_speed bonus from level and rebirth progression.
+    
+    Formula: bonus = apply_soft_cap_to_level_bonus(level) + apply_soft_cap_to_rebirth_bonus(rebirths)
+    - Level bonus: +0.001 per level up to 0.1 (level 100), then soft cap with
+      logarithmic diminishing returns (rate slows by 2x per 5% gain past 0.1)
+    - Rebirth bonus: +0.002 per rebirth up to 0.2 (rebirth 100), then soft cap with
+      logarithmic diminishing returns (rate slows by 2x per 5% gain past 0.2)
+    
+    Args:
+        level: Character level
+        rebirths: Number of rebirths
+        
+    Returns:
+        Total atk_speed bonus as a float
+    """
+    level = max(0, int(level))
+    rebirths = max(0, int(rebirths))
+    
+    level_bonus = apply_soft_cap_to_level_bonus(level)
+    rebirth_bonus = apply_soft_cap_to_rebirth_bonus(rebirths)
+    
+    return level_bonus + rebirth_bonus
+
+
 def apply_progress_meta(stats: Stats, *, progress: dict[str, float | int] | None) -> None:
     if not isinstance(progress, dict):
         return
@@ -119,6 +210,23 @@ def apply_progress_meta(stats: Stats, *, progress: dict[str, float | int] | None
         stats.exp_multiplier = max(0.0, float(progress.get("exp_multiplier", 1.0)))
     except (TypeError, ValueError):
         stats.exp_multiplier = 1.0
+    
+    # Apply atk_speed bonuses from level and rebirth progression
+    try:
+        rebirths = max(0, int(progress.get("rebirths", 0)))
+    except (TypeError, ValueError):
+        rebirths = 0
+    
+    atk_speed_bonus = calculate_atk_speed_bonus(stats.level, rebirths)
+    if atk_speed_bonus > 0:
+        from endless_idler.combat.stat_effect import StatEffect
+        effect = StatEffect(
+            name="progression_atk_speed",
+            stat_modifiers={"atk_speed": atk_speed_bonus},
+            duration=-1,  # Permanent effect
+            source="progression"
+        )
+        stats.add_effect(effect)
 
 
 def build_scaled_character_stats(
@@ -129,14 +237,16 @@ def build_scaled_character_stats(
     stacks: int,
     progress: dict[str, float | int] | None,
     saved_base_stats: dict[str, float] | None,
-    spd: int | None = None,
+    atk_speed: int | None = None,
 ) -> Stats:
     stacks = max(1, int(stacks))
     stars = max(1, min(7, int(stars)))
-    spd_value = int(spd if spd is not None else (2 + stars))
+    atk_speed_value = int(atk_speed if atk_speed is not None else 1)
 
     stats = Stats()
-    stats.passive_modifier = 1.5 ** max(0, stacks - 1)
+    # Passive modifier formula: (stacks * 0.05) + 1
+    # Provides 5% bonus per stack, starting at 1.0 (neutral) with 0 stacks
+    stats.passive_modifier = (stacks * 0.05) + 1.0
 
     merged = merged_base_stats(
         plugin_base_stats=getattr(plugin, "base_stats", None) if plugin else None,
@@ -158,7 +268,7 @@ def build_scaled_character_stats(
         stats,
         base_stats=merged,
         scale=scale,
-        spd=spd_value,
+        atk_speed=atk_speed_value,
     )
     apply_plugin_overrides(stats, plugin=plugin)
     apply_progress_meta(stats, progress=progress)
@@ -188,7 +298,7 @@ def apply_offsite_stat_share(
     if not totals:
         return
 
-    int_stats = {"max_hp", "atk", "defense", "regain", "spd"}
+    int_stats = {"max_hp", "atk", "defense", "regain", "atk_speed"}
     for stats in party:
         for stat_name, amount in totals.items():
             if stat_name in int_stats:
