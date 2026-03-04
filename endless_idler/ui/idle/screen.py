@@ -8,6 +8,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QMessageBox
 from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QSlider
 from PySide6.QtWidgets import QVBoxLayout
@@ -20,10 +21,8 @@ from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.combat.stats import Stats
 from endless_idler.run_rules import apply_idle_party_heal
 from endless_idler.run_rules import start_idle_heal_timer
-from endless_idler.save import OFFSITE_SLOTS
-from endless_idler.save import ONSITE_SLOTS
-from endless_idler.save import RunSave
 from endless_idler.save import SaveManager
+from endless_idler.save import new_run_save
 from endless_idler.ui.idle.widgets import IdleArena
 from endless_idler.ui.idle.widgets import IdleOffsiteCard
 from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
@@ -41,42 +40,47 @@ class IdleScreenWidget(QWidget):
         self.setObjectName("idleScreen")
 
         data = payload if isinstance(payload, dict) else {}
-        party_level = int(data.get("party_level", 1) or 1)
-        onsite_raw = data.get("onsite", [])
-        offsite_raw = data.get("offsite", [])
-        stacks_raw = data.get("stacks", {})
-
-        onsite = [str(item) for item in onsite_raw if item]
-        offsite = [str(item) for item in offsite_raw if item]
-        stacks: dict[str, int] = {}
-        if isinstance(stacks_raw, dict):
-            for key, value in stacks_raw.items():
-                if not isinstance(key, str):
-                    continue
-                try:
-                    stacks[key] = max(1, int(value))
-                except (TypeError, ValueError):
-                    continue
+        onsite_raw = data.get("onsite")
+        offsite_raw = data.get("offsite")
+        stacks_raw = data.get("stacks")
+        payload_party_level = int(data.get("party_level", 0) or 0)
 
         self._rng = random.Random()
-        self._party_level = max(1, party_level)
-        self._stacks = stacks
-        self._onsite_ids = list(onsite)
-        self._offsite_ids = list(offsite)
         self._save_manager = SaveManager()
         self._save = self._save_manager.load()
         if self._save is None:
-            self._save = RunSave(
-                party_level=self._party_level,
-                onsite=[str(item) if item else None for item in list(onsite_raw)[:ONSITE_SLOTS]],
-                offsite=[str(item) if item else None for item in list(offsite_raw)[:OFFSITE_SLOTS]],
-                stacks=dict(self._stacks),
-            )
+            self._save = new_run_save()
             start_idle_heal_timer(self._save)
             self._save_manager.save(self._save)
         else:
             start_idle_heal_timer(self._save)
             self._save_manager.save(self._save)
+
+        payload_onsite = [str(item) for item in onsite_raw if item] if isinstance(onsite_raw, list) else []
+        payload_offsite = [str(item) for item in offsite_raw if item] if isinstance(offsite_raw, list) else []
+
+        payload_stacks: dict[str, int] = {}
+        if isinstance(stacks_raw, dict):
+            for key, value in stacks_raw.items():
+                if not isinstance(key, str):
+                    continue
+                try:
+                    payload_stacks[key] = max(1, int(value))
+                except (TypeError, ValueError):
+                    continue
+
+        save_onsite = [str(item) for item in self._save.onsite if item]
+        save_offsite = [str(item) for item in self._save.offsite if item]
+
+        onsite = payload_onsite if payload_onsite else save_onsite
+        offsite = payload_offsite if payload_offsite else save_offsite
+        stacks = payload_stacks if payload_stacks else dict(self._save.stacks)
+        party_level = payload_party_level if payload_party_level > 0 else int(self._save.party_level)
+
+        self._party_level = max(1, party_level)
+        self._stacks = stacks
+        self._onsite_ids = list(onsite)
+        self._offsite_ids = list(offsite)
 
         self._plugins = discover_character_plugins()
         self._plugin_by_id = {plugin.char_id: plugin for plugin in self._plugins}
@@ -112,14 +116,14 @@ class IdleScreenWidget(QWidget):
         root.addLayout(header)
 
         back = QPushButton("Back")
-        back.setObjectName("battleBackButton")
+        back.setObjectName("idleBackButton")
         back.setCursor(Qt.CursorShape.PointingHandCursor)
         back.clicked.connect(self._finish)
         header.addWidget(back, 0, Qt.AlignmentFlag.AlignLeft)
 
         header.addStretch(1)
         title = QLabel("Idle Mode")
-        title.setObjectName("battleTitle")
+        title.setObjectName("idleTitle")
         header.addWidget(title, 0, Qt.AlignmentFlag.AlignCenter)
         header.addStretch(1)
 
@@ -441,8 +445,6 @@ class IdleScreenWidget(QWidget):
         new_stat_mult = 2.0 ** new_prestige_count
         
         # Show confirmation dialog
-        from PySide6.QtWidgets import QMessageBox
-        
         plugin = self._plugin_by_id.get(char_id)
         display_name = getattr(plugin, "display_name", char_id) if plugin else char_id
         

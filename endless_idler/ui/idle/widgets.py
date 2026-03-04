@@ -40,6 +40,7 @@ class IdleOffsiteCard(QFrame):
     ) -> None:
         super().__init__()
         self.setObjectName("idleOffsiteCard")
+        self.setProperty("elementId", "generic")
         self._char_id = char_id
         self._plugin = plugin
         self._idle_state = idle_state
@@ -303,12 +304,16 @@ class IdleOffsiteCard(QFrame):
             saved_base_stats=saved_base_stats,
         )
         
-        from endless_idler.ui.battle.colors import color_for_damage_type_id
-        element_id = getattr(stats, "element_id", "generic")
-        color = color_for_damage_type_id(element_id)
-        
-        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 60)"
-        self.setStyleSheet(f"QFrame#idleOffsiteCard {{ background-color: {tint_color} !important; }}")
+        element_id = str(getattr(stats, "element_id", "generic") or "generic")
+        element_id = element_id.strip().lower().replace(" ", "_").replace("-", "_")
+        if self.property("elementId") == element_id:
+            return
+        self.setProperty("elementId", element_id)
+        style = self.style()
+        if style is not None:
+            style.unpolish(self)
+            style.polish(self)
+        self.update()
 
     def _request_rebirth(self) -> None:
         if self._on_rebirth is None:

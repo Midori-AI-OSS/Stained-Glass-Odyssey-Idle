@@ -21,7 +21,7 @@ from endless_idler.save_codec import normalized_character_progress
 from endless_idler.save_codec import normalized_character_stats
 
 
-SAVE_VERSION = 8
+SAVE_VERSION = 9
 DEFAULT_RUN_TOKENS = 20
 DEFAULT_CHARACTER_COST = 1
 DEFAULT_SHOP_REROLL_COST = 2
@@ -108,13 +108,13 @@ class SaveManager:
 
         save = RunSave(
             version=as_int(data.get("version", SAVE_VERSION), default=SAVE_VERSION),
-            tokens=as_int(data.get("tokens", DEFAULT_RUN_TOKENS), default=DEFAULT_RUN_TOKENS),
+            tokens=DEFAULT_RUN_TOKENS,
             party_level=as_int(data.get("party_level", DEFAULT_PARTY_LEVEL), default=DEFAULT_PARTY_LEVEL),
             party_level_up_cost=as_int(
                 data.get("party_level_up_cost", DEFAULT_PARTY_LEVEL_UP_COST),
                 default=DEFAULT_PARTY_LEVEL_UP_COST,
             ),
-            fight_number=as_int(data.get("fight_number", DEFAULT_FIGHT_NUMBER), default=DEFAULT_FIGHT_NUMBER),
+            fight_number=DEFAULT_FIGHT_NUMBER,
             party_hp_max=as_int(data.get("party_hp_max", DEFAULT_PARTY_HP_MAX), default=DEFAULT_PARTY_HP_MAX),
             party_hp_current=as_int(
                 data.get("party_hp_current", DEFAULT_PARTY_HP_CURRENT),
@@ -124,10 +124,8 @@ class SaveManager:
                 data.get("party_hp_last_idle_heal_at", DEFAULT_PARTY_HP_LAST_IDLE_HEAL_AT),
                 default=DEFAULT_PARTY_HP_LAST_IDLE_HEAL_AT,
             ),
-            bar=as_optional_str_list(data.get("bar", [])),
             onsite=as_optional_str_list(data.get("onsite", [])),
             offsite=as_optional_str_list(data.get("offsite", [])),
-            standby=as_optional_str_list(data.get("standby", [])),
             stacks=as_int_dict(data.get("stacks", {})),
             character_progress=as_character_progress_dict(data.get("character_progress", {})),
             character_stats=as_character_stats_dict(data.get("character_stats", {})),
@@ -137,9 +135,7 @@ class SaveManager:
             idle_exp_penalty_seconds=penalty_seconds,
             idle_shared_exp_percentage=shared_exp_percentage,
             idle_risk_reward_level=risk_reward_level,
-            winstreak=as_int(data.get("winstreak", 0), default=0),
             idle_exp_mult=as_float(data.get("idle_exp_mult", 1.0), default=1.0),
-            battle_start_time=as_float(data.get("battle_start_time", 0.0), default=0.0),
         )
         return _normalized_save(save)
 
@@ -147,17 +143,13 @@ class SaveManager:
         save = _normalized_save(save)
         payload = {
             "version": save.version,
-            "tokens": save.tokens,
             "party_level": save.party_level,
             "party_level_up_cost": save.party_level_up_cost,
-            "fight_number": save.fight_number,
             "party_hp_max": save.party_hp_max,
             "party_hp_current": save.party_hp_current,
             "party_hp_last_idle_heal_at": save.party_hp_last_idle_heal_at,
-            "bar": save.bar,
             "onsite": save.onsite,
             "offsite": save.offsite,
-            "standby": save.standby,
             "stacks": save.stacks,
             "character_progress": save.character_progress,
             "character_stats": save.character_stats,
@@ -167,9 +159,7 @@ class SaveManager:
             "idle_exp_penalty_seconds": save.idle_exp_penalty_seconds,
             "idle_shared_exp_percentage": save.idle_shared_exp_percentage,
             "idle_risk_reward_level": save.idle_risk_reward_level,
-            "winstreak": save.winstreak,
             "idle_exp_mult": save.idle_exp_mult,
-            "battle_start_time": save.battle_start_time,
         }
 
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -185,12 +175,12 @@ def _default_save_path() -> Path:
 
     home = Path.home()
     if home.exists():
-        return home / ".midoriai" / "idlesave.json"
+        return home / ".midoriai" / "stainedlgassodysseyidle" / "idlesave.json"
 
     base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
     if not base:
         base = str(Path.cwd())
-    return Path(base) / "idlesave.json"
+    return Path(base) / "stainedlgassodysseyidle" / "idlesave.json"
 
 
 def _normalized_save(save: RunSave) -> RunSave:
@@ -321,15 +311,14 @@ def next_party_level_up_cost(*, new_level: int, previous_cost: int) -> int:
     return max(1, previous_cost * 4 + 2)
 
 
-def new_run_save(*, available_char_ids: list[str], rng: random.Random) -> RunSave:
-    bar: list[str | None] = [None] * BAR_SLOTS
-    available_char_ids = [str(item) for item in available_char_ids if item]
-    if available_char_ids:
-        count = min(BAR_SLOTS, len(available_char_ids))
-        chosen = [str(item) for item in rng.sample(available_char_ids, k=count)]
-        bar[: len(chosen)] = chosen
-
-    return RunSave(tokens=DEFAULT_RUN_TOKENS, bar=bar)
+def new_run_save(
+    *,
+    available_char_ids: list[str] | None = None,
+    rng: random.Random | None = None,
+) -> RunSave:
+    del available_char_ids
+    del rng
+    return RunSave(tokens=DEFAULT_RUN_TOKENS)
 
 
 def sanitize_save_characters(*, save: RunSave, allowed_char_ids: set[str]) -> RunSave:

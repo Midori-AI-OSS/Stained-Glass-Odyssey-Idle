@@ -107,6 +107,7 @@ class OnsiteCharacterCardBase(QFrame):
         self.setFixedWidth(max(220, int(card_width)))
         onsite_mode = (mode or "idle").strip().lower()
         self.setProperty("onsiteMode", onsite_mode)
+        self.setProperty("elementId", "generic")
 
         root = QHBoxLayout()
         root.setContentsMargins(12, 12, 12, 12)
@@ -257,12 +258,16 @@ class OnsiteCharacterCardBase(QFrame):
         self._apply_element_tint(stats)
     
     def _apply_element_tint(self, stats: Stats) -> None:
-        from endless_idler.ui.battle.colors import color_for_damage_type_id
-        element_id = getattr(stats, "element_id", "generic")
-        color = color_for_damage_type_id(element_id)
-        
-        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 60)"
-        self.setStyleSheet(f"QFrame#onsiteCharacterCard {{ background-color: {tint_color} !important; }}")
+        element_id = str(getattr(stats, "element_id", "generic") or "generic")
+        element_id = element_id.strip().lower().replace(" ", "_").replace("-", "_")
+        if self.property("elementId") == element_id:
+            return
+        self.setProperty("elementId", element_id)
+        style = self.style()
+        if style is not None:
+            style.unpolish(self)
+            style.polish(self)
+        self.update()
 
     def pulse_anchor_global(self) -> QPointF:
         rect = self.rect()

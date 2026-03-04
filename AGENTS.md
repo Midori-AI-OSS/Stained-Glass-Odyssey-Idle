@@ -49,6 +49,31 @@ This document summarizes common development practices for the Stained Glass Odys
      from rich.console import Console
      ```
 
+## UI Theme Architecture (Mandatory)
+
+- All persistent Qt styling must live in `endless_idler/ui/theme/`.
+- Theme ownership rule: one reusable widget class per theme module file in `endless_idler/ui/theme/`.
+- Theme assembly must be explicit through `endless_idler/ui/theme/registry.py` imports. No auto-discovery.
+- Every new themable `objectName` or style-driving property must ship with a selector in the owning theme module in the same change.
+- When changing a style-driving property at runtime, the widget must be repolished (`unpolish/polish/update`).
+
+### Prohibited UI Patterns
+
+- Do not add persistent inline `setStyleSheet(...)` styling for widgets.
+- Do not add `!important` style overrides for normal UI components.
+- Do not add monolithic theme files or append new persistent styles outside `endless_idler/ui/theme/`.
+- Do not use soft compliance language such as:
+  - `TODO: update standards later`
+  - `follow-up agent will fix theme`
+  - `temporary standards exception`
+
+### Review Gates (Fail Conditions)
+
+- Missing theme module for a new reusable widget class.
+- Missing registry wiring for a new theme module.
+- Missing selector coverage for a new themable `objectName` or dynamic property.
+- Any new persistent inline widget stylesheet.
+
 ## File Size and Readability (Repository-wide Rule)
 
 - Aim for ~300 lines or fewer per file.
