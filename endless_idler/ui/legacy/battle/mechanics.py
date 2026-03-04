@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from endless_idler.ui.battle.sim import Combatant
+from endless_idler.ui.legacy.battle.sim import Combatant
 
 
 MIN_REMAINING_HP_FRACTION: float = 0.20

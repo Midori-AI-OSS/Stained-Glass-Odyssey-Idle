@@ -23,9 +23,9 @@ from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
 from endless_idler.characters.foe_shape_selector import select_shape_for_foe
-from endless_idler.ui.battle.colors import color_for_damage_type_id
-from endless_idler.ui.battle.shape_palette import get_shape_template
-from endless_idler.ui.battle.sim import Combatant
+from endless_idler.ui.legacy.battle.colors import color_for_damage_type_id
+from endless_idler.ui.legacy.battle.shape_palette import get_shape_template
+from endless_idler.ui.legacy.battle.sim import Combatant
 
 
 class ShapeRenderer(QWidget):

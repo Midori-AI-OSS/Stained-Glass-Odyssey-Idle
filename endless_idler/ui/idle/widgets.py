@@ -21,6 +21,9 @@ from endless_idler.ui.tooltip import hide_stained_tooltip
 from endless_idler.ui.tooltip import show_stained_tooltip
 
 
+IDLE_OFFSITE_PORTRAIT_SIZE = 56
+
+
 class IdleArena(QFrame):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -58,7 +61,7 @@ class IdleOffsiteCard(QFrame):
 
         self._portrait = QLabel()
         self._portrait.setObjectName("idleOffsitePortrait")
-        self._portrait.setFixedSize(48, 72)
+        self._portrait.setFixedSize(IDLE_OFFSITE_PORTRAIT_SIZE, IDLE_OFFSITE_PORTRAIT_SIZE)
         self._portrait.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._portrait.setScaledContents(False)
 
@@ -69,8 +72,8 @@ class IdleOffsiteCard(QFrame):
             self._portrait.setText(display_name[:2].upper())
         else:
             scaled = pixmap.scaled(
-                48,
-                72,
+                IDLE_OFFSITE_PORTRAIT_SIZE,
+                IDLE_OFFSITE_PORTRAIT_SIZE,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )

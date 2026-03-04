@@ -37,16 +37,16 @@ from endless_idler.save import (
     reset_character_progress_for_new_run,
     sanitize_save_characters,
 )
-from endless_idler.ui.party_builder_bar import CharacterBar
-from endless_idler.ui.party_builder_fight_bar import FightBar
-from endless_idler.ui.party_builder_idle_bar import IdleBar
-from endless_idler.ui.party_builder_merge_fx import MergeFxOverlay
-from endless_idler.ui.party_builder_party_level_tile import StandbyPartyLevelTile
-from endless_idler.ui.party_builder_planes import PulsingPlane
-from endless_idler.ui.party_builder_rewards_plane import RewardsPlane
-from endless_idler.ui.party_builder_sell import SellZone
-from endless_idler.ui.party_builder_shop_tile import StandbyShopTile
-from endless_idler.ui.party_builder_slot import DropSlot
+from endless_idler.ui.legacy.party_builder_bar import CharacterBar
+from endless_idler.ui.legacy.party_builder_fight_bar import FightBar
+from endless_idler.ui.legacy.party_builder_idle_bar import IdleBar
+from endless_idler.ui.legacy.party_builder_merge_fx import MergeFxOverlay
+from endless_idler.ui.legacy.party_builder_party_level_tile import StandbyPartyLevelTile
+from endless_idler.ui.legacy.party_builder_planes import PulsingPlane
+from endless_idler.ui.legacy.party_builder_rewards_plane import RewardsPlane
+from endless_idler.ui.legacy.party_builder_sell import SellZone
+from endless_idler.ui.legacy.party_builder_shop_tile import StandbyShopTile
+from endless_idler.ui.legacy.party_builder_slot import DropSlot
 from endless_idler.ui.party_hp_bar import PartyHpHeader
 from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
 from endless_idler.ui.idle.idle_state import IdleGameState
@@ -129,7 +129,7 @@ class PartyBuilderWidget(QWidget):
         self._party_hp_header = party_hp
         header.addWidget(party_hp, 0, 1, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
         
-        from endless_idler.ui.next_fight_info import NextFightInfo
+        from endless_idler.ui.legacy.next_fight_info import NextFightInfo
         next_fight = NextFightInfo()
         self._next_fight_info = next_fight
         header.addWidget(next_fight, 0, 2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)

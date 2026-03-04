@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 from endless_idler.combat.stats import Stats
-from endless_idler.ui.battle.sim import Combatant
+from endless_idler.ui.legacy.battle.sim import Combatant
 
 
 def test_action_interval_calculation():

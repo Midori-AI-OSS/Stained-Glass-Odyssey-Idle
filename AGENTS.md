@@ -24,6 +24,11 @@ This document summarizes common development practices for the Stained Glass Odys
 
 - Use [`uv`](https://github.com/astral-sh/uv) for Python environments and running code. Avoid `python` or `pip` directly.
 - Use [`bun`](https://bun.sh/) for Node/React tooling instead of `npm` or `yarn`.
+- Run `uv sync --group ci` once at the start of a work session before lint/type/test commands.
+- Standard validation command flow:
+  - `uv run ruff check .`
+  - `uv run basedpyright`
+  - `uv run pytest -q` (or targeted tests when appropriate)
 - Verification-first: confirm current behavior in the codebase before changing code; reproduce/confirm the issue (or missing behavior); verify the fix with clear checks.
 - No broad fallbacks: do not add “fallback behavior everywhere”; only add a narrow fallback when the task explicitly requires it, and justify it.
 - No backward compatibility shims by default: do not preserve old code paths “just in case”; only add compatibility layers when the task explicitly requires it.

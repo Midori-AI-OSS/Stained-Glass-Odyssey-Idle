@@ -18,7 +18,7 @@ from PySide6.QtWidgets import QLabel
 
 from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.combat.stats import Stats
-from endless_idler.ui.party_builder_bar import ShopItem
+from endless_idler.ui.legacy.party_builder_bar import ShopItem
 from endless_idler.ui.party_builder_common import apply_star_rank_visuals
 from endless_idler.ui.party_builder_common import build_character_stats_tooltip
 from endless_idler.ui.party_builder_common import clear_star_rank_visuals

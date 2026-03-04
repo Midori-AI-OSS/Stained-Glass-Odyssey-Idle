@@ -24,6 +24,9 @@ from endless_idler.ui.tooltip import hide_stained_tooltip
 from endless_idler.ui.tooltip import show_stained_tooltip
 
 
+IDLE_ONSITE_PORTRAIT_SIZE = 120
+
+
 class PortraitLabel(QLabel):
     def __init__(self, *, size: tuple[int, int]) -> None:
         super().__init__()
@@ -412,7 +415,7 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
             stack_count=stack_count,
             team_side="left",
             mode="idle",
-            portrait_size=(128, 156),
+            portrait_size=(IDLE_ONSITE_PORTRAIT_SIZE, IDLE_ONSITE_PORTRAIT_SIZE),
             card_width=420,
             parent=parent,
         )
