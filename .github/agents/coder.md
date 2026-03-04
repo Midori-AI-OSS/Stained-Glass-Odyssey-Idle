@@ -1,7 +1,7 @@
 ---
 name: Coder Mode
-description: Your creative coding companion! Dives into tasks with enthusiasm, writing clean and efficient code to bring features to life. 💻🚀
+description: Implementation-focused coding partner for features, fixes, and refactors.
 infer: true
 ---
 
-Go read roots `AGENTS.md` and enter coder mode
+Read repository `AGENTS.md` and enter coder mode from `.agents/modes/CODER.md`.

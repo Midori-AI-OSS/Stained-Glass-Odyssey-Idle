@@ -1,25 +1,20 @@
 # Feedback and Planning
 
-This folder contains task lists, priorities, and planning notes.
+This folder contains high-level planning notes, priorities, and feedback context.
 
 ## Purpose
 
-The `.feedback/` folder is used for high-level planning, task lists, and project priorities. This is typically managed by project leads and should be considered read-only for most contributors.
-
-## Contents
-
-- Task lists and priorities
-- Project planning documents
-- Stakeholder feedback
-- Feature requests and roadmap items
+The `.feedback/` folder captures the "why" and strategic direction behind work.
+Treat it as informational unless explicitly instructed to edit.
 
 ## Guidelines
 
-- **Read-only for most contributors**: Unless you are the Task Master or project lead, treat these files as informational only
-- Task Masters use this folder to identify work that needs to be broken down into actionable tasks in `.codex/tasks/`
-- Do not edit files in this folder unless explicitly instructed to do so
-- If you need to provide feedback or suggest changes, communicate with the Task Master
+- Read-only by default.
+- Use this folder for planning context, not execution tracking.
+- Work assignments come through GitHub issues/PRs and direct Lead Developer/Programmer instructions.
+- If feedback in this folder is outdated or conflicting, raise it in the active GitHub thread.
 
-## Relationship to Tasks
+## Relationship to `.agents/`
 
-Planning items in `.feedback/` are converted into concrete tasks in `.codex/tasks/wip/` by the Task Master. The feedback folder maintains the "why" and "what" while tasks specify the "how" and track execution.
+- Process and role guidance lives under `.agents/`.
+- Implementation and documentation updates should follow the applicable `AGENTS.md` and mode guide.
