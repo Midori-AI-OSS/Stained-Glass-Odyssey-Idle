@@ -24,6 +24,11 @@ This document summarizes common development practices for the Stained Glass Odys
 
 - Use [`uv`](https://github.com/astral-sh/uv) for Python environments and running code. Avoid `python` or `pip` directly.
 - Use [`bun`](https://bun.sh/) for Node/React tooling instead of `npm` or `yarn`.
+- Run `uv sync --group ci` once at the start of a work session before lint/type/test commands.
+- Standard validation command flow:
+  - `uv run ruff check .`
+  - `uv run basedpyright`
+  - `uv run pytest -q` (or targeted tests when appropriate)
 - Verification-first: confirm current behavior in the codebase before changing code; reproduce/confirm the issue (or missing behavior); verify the fix with clear checks.
 - No broad fallbacks: do not add “fallback behavior everywhere”; only add a narrow fallback when the task explicitly requires it, and justify it.
 - No backward compatibility shims by default: do not preserve old code paths “just in case”; only add compatibility layers when the task explicitly requires it.
@@ -48,6 +53,31 @@ This document summarizes common development practices for the Stained Glass Odys
      from datetime import datetime
      from rich.console import Console
      ```
+
+## UI Theme Architecture (Mandatory)
+
+- All persistent Qt styling must live in `endless_idler/ui/theme/`.
+- Theme ownership rule: one reusable widget class per theme module file in `endless_idler/ui/theme/`.
+- Theme assembly must be explicit through `endless_idler/ui/theme/registry.py` imports. No auto-discovery.
+- Every new themable `objectName` or style-driving property must ship with a selector in the owning theme module in the same change.
+- When changing a style-driving property at runtime, the widget must be repolished (`unpolish/polish/update`).
+
+### Prohibited UI Patterns
+
+- Do not add persistent inline `setStyleSheet(...)` styling for widgets.
+- Do not add `!important` style overrides for normal UI components.
+- Do not add monolithic theme files or append new persistent styles outside `endless_idler/ui/theme/`.
+- Do not use soft compliance language such as:
+  - `TODO: update standards later`
+  - `follow-up agent will fix theme`
+  - `temporary standards exception`
+
+### Review Gates (Fail Conditions)
+
+- Missing theme module for a new reusable widget class.
+- Missing registry wiring for a new theme module.
+- Missing selector coverage for a new themable `objectName` or dynamic property.
+- Any new persistent inline widget stylesheet.
 
 ## File Size and Readability (Repository-wide Rule)
 

@@ -21,6 +21,12 @@ from endless_idler.ui.tooltip import hide_stained_tooltip
 from endless_idler.ui.tooltip import show_stained_tooltip
 
 
+IDLE_OFFSITE_PORTRAIT_SIZE = 56
+IDLE_OFFSITE_PORTRAIT_TARGET_SIZE = 72
+IDLE_OFFSITE_PORTRAIT_MIN_SIZE = 56
+IDLE_OFFSITE_PORTRAIT_MAX_SIZE = 72
+
+
 class IdleArena(QFrame):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -40,6 +46,7 @@ class IdleOffsiteCard(QFrame):
     ) -> None:
         super().__init__()
         self.setObjectName("idleOffsiteCard")
+        self.setProperty("elementId", "generic")
         self._char_id = char_id
         self._plugin = plugin
         self._idle_state = idle_state
@@ -47,6 +54,8 @@ class IdleOffsiteCard(QFrame):
         self._stack_count = stack_count
         self._on_rebirth = on_rebirth
         self._on_prestige = on_prestige
+        self._portrait_placeholder = ""
+        self._portrait_source_pixmap: QPixmap | None = None
 
         self.setFixedSize(220, 96)
 
@@ -57,31 +66,30 @@ class IdleOffsiteCard(QFrame):
 
         self._portrait = QLabel()
         self._portrait.setObjectName("idleOffsitePortrait")
-        self._portrait.setFixedSize(48, 72)
+        self._portrait.setFixedSize(IDLE_OFFSITE_PORTRAIT_SIZE, IDLE_OFFSITE_PORTRAIT_SIZE)
         self._portrait.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._portrait.setScaledContents(False)
 
         display_name = getattr(plugin, "display_name", char_id) if plugin else char_id
+        self._portrait_placeholder = str(display_name[:2].upper())
         portrait_path = plugin.random_image_path(rng) if plugin else None
         pixmap = QPixmap(str(portrait_path)) if portrait_path else QPixmap()
         if pixmap.isNull():
-            self._portrait.setText(display_name[:2].upper())
+            self._portrait_source_pixmap = None
+            self._portrait.setText(self._portrait_placeholder)
         else:
-            scaled = pixmap.scaled(
-                48,
-                72,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            self._portrait.setPixmap(scaled)
-        layout.addWidget(self._portrait, 0, Qt.AlignmentFlag.AlignTop)
+            self._portrait_source_pixmap = pixmap
+            self._portrait.setText("")
+        self._apply_portrait_size()
+        layout.addWidget(self._portrait, 0, Qt.AlignmentFlag.AlignBottom)
 
         body = QVBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(4)
         layout.addLayout(body, 1)
 
-        self._name_label = QLabel(display_name)
+        self._display_name = str(display_name)
+        self._name_label = QLabel(f"{self._display_name} (1)")
         self._name_label.setObjectName("idleOffsiteName")
         name_row = QHBoxLayout()
         name_row.setContentsMargins(0, 0, 0, 0)
@@ -89,10 +97,6 @@ class IdleOffsiteCard(QFrame):
         body.addLayout(name_row)
 
         name_row.addWidget(self._name_label, 0, Qt.AlignmentFlag.AlignVCenter)
-        plus = QLabel(f"+{max(0, stack_count - 1)}")
-        plus.setObjectName("idleStackPlus")
-        plus.setVisible(stack_count > 1)
-        name_row.addWidget(plus, 0, Qt.AlignmentFlag.AlignVCenter)
 
         self._rebirth_button = QPushButton("Rebirth")
         self._rebirth_button.setObjectName("idleRebirthButton")
@@ -109,10 +113,7 @@ class IdleOffsiteCard(QFrame):
         name_row.addWidget(self._prestige_button, 0, Qt.AlignmentFlag.AlignVCenter)
         
         name_row.addStretch(1)
-
-        self._level_label = QLabel("Level: 1")
-        self._level_label.setObjectName("idleOffsiteLevel")
-        body.addWidget(self._level_label)
+        body.addStretch(1)
 
         self._hp_bar = QProgressBar()
         self._hp_bar.setObjectName("idleHpBar")
@@ -131,18 +132,59 @@ class IdleOffsiteCard(QFrame):
         self._exp_bar.setValue(0)
         self._exp_bar.setFormat("EXP 0 / 30")
         body.addWidget(self._exp_bar)
-
-        body.addStretch(1)
         
         # Element tint will be applied on first update_display call
         for widget in (
             self._portrait,
             self._name_label,
-            self._level_label,
             self._hp_bar,
             self._exp_bar,
         ):
             widget.installEventFilter(self)
+
+    def _compute_portrait_size(self) -> int:
+        root_layout = self.layout()
+        if isinstance(root_layout, QHBoxLayout):
+            margins = root_layout.contentsMargins()
+            available_height = max(12, self.height() - margins.top() - margins.bottom())
+            available_width = max(12, self.width() - margins.left() - margins.right())
+        else:
+            available_height = max(12, self.height())
+            available_width = max(12, self.width())
+
+        width_cap = max(
+            IDLE_OFFSITE_PORTRAIT_MIN_SIZE,
+            int(round(float(available_width) * 0.40)),
+        )
+        upper_bound = min(IDLE_OFFSITE_PORTRAIT_MAX_SIZE, available_height, width_cap)
+        lower_bound = min(IDLE_OFFSITE_PORTRAIT_MIN_SIZE, upper_bound)
+        if upper_bound <= 0:
+            return 12
+        return max(lower_bound, min(IDLE_OFFSITE_PORTRAIT_TARGET_SIZE, upper_bound))
+
+    def _apply_portrait_size(self) -> None:
+        size = self._compute_portrait_size()
+        self._portrait.setFixedSize(size, size)
+        source = self._portrait_source_pixmap
+        if source is None or source.isNull():
+            self._portrait.setPixmap(QPixmap())
+            self._portrait.setText(self._portrait_placeholder)
+            return
+        scaled = source.scaled(
+            size,
+            size,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self._portrait.setText("")
+        self._portrait.setPixmap(scaled)
+
+    def resizeEvent(self, event: object) -> None:
+        self._apply_portrait_size()
+        try:
+            super().resizeEvent(event)  # type: ignore[misc]
+        except Exception:
+            return
 
     def update_display(self) -> None:
         data = self._idle_state.get_char_data(self._char_id)
@@ -163,7 +205,7 @@ class IdleOffsiteCard(QFrame):
             except Exception:
                 gain_per_second = 0.0
 
-        self._level_label.setText(f"Level: {level}")
+        self._name_label.setText(f"{self._display_name} ({max(1, level)})")
         self._exp_bar.setRange(0, max(1, int(next_exp)))
         self._exp_bar.setValue(int(exp))
         if gain_per_second > 0:
@@ -303,12 +345,16 @@ class IdleOffsiteCard(QFrame):
             saved_base_stats=saved_base_stats,
         )
         
-        from endless_idler.ui.battle.colors import color_for_damage_type_id
-        element_id = getattr(stats, "element_id", "generic")
-        color = color_for_damage_type_id(element_id)
-        
-        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 60)"
-        self.setStyleSheet(f"QFrame#idleOffsiteCard {{ background-color: {tint_color} !important; }}")
+        element_id = str(getattr(stats, "element_id", "generic") or "generic")
+        element_id = element_id.strip().lower().replace(" ", "_").replace("-", "_")
+        if self.property("elementId") == element_id:
+            return
+        self.setProperty("elementId", element_id)
+        style = self.style()
+        if style is not None:
+            style.unpolish(self)
+            style.polish(self)
+        self.update()
 
     def _request_rebirth(self) -> None:
         if self._on_rebirth is None:

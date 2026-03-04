@@ -4,10 +4,10 @@ Tests for the shape palette system.
 
 import pytest
 
-from endless_idler.ui.battle.shape_palette import get_all_shape_ids
-from endless_idler.ui.battle.shape_palette import get_all_shape_templates
-from endless_idler.ui.battle.shape_palette import get_shape_template
-from endless_idler.ui.battle.shape_palette import ShapeTemplate
+from endless_idler.ui.legacy.battle.shape_palette import get_all_shape_ids
+from endless_idler.ui.legacy.battle.shape_palette import get_all_shape_templates
+from endless_idler.ui.legacy.battle.shape_palette import get_shape_template
+from endless_idler.ui.legacy.battle.shape_palette import ShapeTemplate
 
 
 def test_get_all_shape_ids():

@@ -15,9 +15,8 @@ from PySide6.QtWidgets import (
 )
 
 from endless_idler.ui.assets import asset_path
-from endless_idler.ui.battle import BattleScreenWidget
+from endless_idler.ui.idle import IdleHubWidget
 from endless_idler.ui.idle import IdleScreenWidget
-from endless_idler.ui.party_builder import PartyBuilderWidget
 
 
 class MainMenuWidget(QWidget):
@@ -66,7 +65,7 @@ class MainMenuWidget(QWidget):
     def _make_button(self, label: str, on_click: Callable[[], None]) -> QPushButton:
         button = QPushButton(label)
         button.setObjectName(f"mainMenuButton_{label.lower().replace(' ', '_')}")
-        button.setProperty("stainedMenu", "true")
+        button.setProperty("stainedMenu", True)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setMinimumHeight(52)
         button.clicked.connect(on_click)
@@ -99,8 +98,7 @@ class MainMenuBackground(QWidget):
 class MainMenuWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self._party_builder: PartyBuilderWidget | None = None
-        self._battle_screen: BattleScreenWidget | None = None
+        self._idle_hub: IdleHubWidget | None = None
         self._idle_screen: IdleScreenWidget | None = None
         self._menu_screen: QWidget | None = None
 
@@ -108,7 +106,7 @@ class MainMenuWindow(QMainWindow):
         self.resize(1280, 820)
 
         menu = MainMenuWidget()
-        menu.play_requested.connect(self._open_party_builder)
+        menu.play_requested.connect(self._open_idle_hub)
         menu.settings_requested.connect(self._stub_settings)
         menu.warp_requested.connect(self._stub_warp)
         menu.inventory_requested.connect(self._stub_inventory)
@@ -126,38 +124,18 @@ class MainMenuWindow(QMainWindow):
         self._stack.addWidget(self._menu_screen)
         self.setCentralWidget(self._stack)
 
-    def _open_party_builder(self) -> None:
-        if self._party_builder is None:
-            self._party_builder = PartyBuilderWidget()
-            self._party_builder.back_requested.connect(self._open_main_menu)
-            self._party_builder.fight_requested.connect(self._open_battle_screen)
-            self._party_builder.idle_requested.connect(self._open_idle_screen)
-            self._stack.addWidget(self._party_builder)
-        self._stack.setCurrentWidget(self._party_builder)
+    def _open_idle_hub(self) -> None:
+        if self._idle_hub is None:
+            self._idle_hub = IdleHubWidget()
+            self._idle_hub.back_requested.connect(self._open_main_menu)
+            self._idle_hub.start_requested.connect(self._open_idle_screen)
+            self._stack.addWidget(self._idle_hub)
+        self._idle_hub.reload_save()
+        self._stack.setCurrentWidget(self._idle_hub)
 
     def _open_main_menu(self) -> None:
         if self._menu_screen is not None:
             self._stack.setCurrentWidget(self._menu_screen)
-
-    def _open_battle_screen(self, payload: object) -> None:
-        if self._battle_screen is not None:
-            self._cleanup_widget(self._battle_screen)
-            self._battle_screen = None
-
-        battle = BattleScreenWidget(payload=payload)
-        battle.finished.connect(self._close_battle_screen)
-        self._battle_screen = battle
-        self._stack.addWidget(battle)
-        self._stack.setCurrentWidget(battle)
-
-    def _close_battle_screen(self) -> None:
-        if self._party_builder is not None:
-            self._stack.setCurrentWidget(self._party_builder)
-            self._party_builder.reload_save()
-        if self._battle_screen is None:
-            return
-        self._cleanup_widget(self._battle_screen)
-        self._battle_screen = None
 
     def _open_idle_screen(self, payload: object) -> None:
         if self._idle_screen is not None:
@@ -171,9 +149,9 @@ class MainMenuWindow(QMainWindow):
         self._stack.setCurrentWidget(idle)
 
     def _close_idle_screen(self) -> None:
-        if self._party_builder is not None:
-            self._stack.setCurrentWidget(self._party_builder)
-            self._party_builder.reload_save()
+        if self._idle_hub is not None:
+            self._idle_hub.reload_save()
+            self._stack.setCurrentWidget(self._idle_hub)
         if self._idle_screen is None:
             return
         self._cleanup_widget(self._idle_screen)

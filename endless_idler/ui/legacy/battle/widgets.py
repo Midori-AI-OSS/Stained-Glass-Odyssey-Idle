@@ -21,7 +21,7 @@ from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
 from endless_idler.characters.plugins import CharacterPlugin
-from endless_idler.ui.battle.sim import Combatant
+from endless_idler.ui.legacy.battle.sim import Combatant
 from endless_idler.ui.party_builder_common import build_character_stats_tooltip
 from endless_idler.ui.tooltip import hide_stained_tooltip
 from endless_idler.ui.tooltip import show_stained_tooltip
@@ -158,7 +158,7 @@ class CombatantCard(QFrame):
             widget.installEventFilter(self)
     
     def _apply_element_tint(self) -> None:
-        from endless_idler.ui.battle.colors import color_for_damage_type_id
+        from endless_idler.ui.legacy.battle.colors import color_for_damage_type_id
         element_id = getattr(self._combatant.stats, "element_id", "generic")
         color = color_for_damage_type_id(element_id)
         

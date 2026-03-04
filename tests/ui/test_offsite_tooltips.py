@@ -7,8 +7,8 @@ import random
 from PySide6.QtWidgets import QApplication
 
 from endless_idler.combat.stats import Stats
-from endless_idler.ui.battle.sim import Combatant
-from endless_idler.ui.battle.widgets import CombatantCard
+from endless_idler.ui.legacy.battle.sim import Combatant
+from endless_idler.ui.legacy.battle.widgets import CombatantCard
 
 
 def test_offsite_card_generates_tooltip():

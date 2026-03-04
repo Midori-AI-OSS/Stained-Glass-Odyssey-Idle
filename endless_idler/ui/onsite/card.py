@@ -24,6 +24,9 @@ from endless_idler.ui.tooltip import hide_stained_tooltip
 from endless_idler.ui.tooltip import show_stained_tooltip
 
 
+IDLE_ONSITE_PORTRAIT_SIZE = 120
+
+
 class PortraitLabel(QLabel):
     def __init__(self, *, size: tuple[int, int]) -> None:
         super().__init__()
@@ -97,6 +100,7 @@ class OnsiteCharacterCardBase(QFrame):
         super().__init__(parent)
         self._team_side = (team_side or "left").strip().lower()
         self._stack_count = max(1, int(stack_count))
+        self._base_name = str(name)
         self._tooltip_html = ""
         self._stats_panel: StatBarsPanel | None = None
         self._stats_popup: OnsiteStatsPopup | None = None
@@ -106,7 +110,9 @@ class OnsiteCharacterCardBase(QFrame):
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setFixedWidth(max(220, int(card_width)))
         onsite_mode = (mode or "idle").strip().lower()
+        self._is_idle_mode = onsite_mode == "idle"
         self.setProperty("onsiteMode", onsite_mode)
+        self.setProperty("elementId", "generic")
 
         root = QHBoxLayout()
         root.setContentsMargins(12, 12, 12, 12)
@@ -128,14 +134,17 @@ class OnsiteCharacterCardBase(QFrame):
         header.setSpacing(8)
         body.addLayout(header)
 
-        self._name_label = QLabel(str(name))
+        self._name_label = QLabel(self._base_name)
         self._name_label.setObjectName("onsiteCharName")
         header.addWidget(self._name_label, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        self._stack_plus = QLabel(f"+{max(0, self._stack_count - 1)}")
-        self._stack_plus.setObjectName("onsiteStackPlus")
-        self._stack_plus.setVisible(self._stack_count > 1)
-        header.addWidget(self._stack_plus, 0, Qt.AlignmentFlag.AlignVCenter)
+        self._stack_plus: QLabel | None = None
+        if not self._is_idle_mode:
+            stack_plus = QLabel(f"+{max(0, self._stack_count - 1)}")
+            stack_plus.setObjectName("onsiteStackPlus")
+            stack_plus.setVisible(self._stack_count > 1)
+            header.addWidget(stack_plus, 0, Qt.AlignmentFlag.AlignVCenter)
+            self._stack_plus = stack_plus
 
         header.addStretch(1)
 
@@ -158,13 +167,19 @@ class OnsiteCharacterCardBase(QFrame):
         self._action_button.setVisible(False)
         header.addWidget(self._action_button, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        self._level_label = QLabel("Level: 1")
-        self._level_label.setObjectName("onsiteCharLevel")
-        body.addWidget(self._level_label)
+        self._level_label: QLabel | None = None
+        if not self._is_idle_mode:
+            level_label = QLabel("Level: 1")
+            level_label.setObjectName("onsiteCharLevel")
+            body.addWidget(level_label)
+            self._level_label = level_label
 
-        self._stack_label = QLabel(f"Stack: {self._stack_count}")
-        self._stack_label.setObjectName("onsiteCharStack")
-        body.addWidget(self._stack_label)
+        self._stack_label: QLabel | None = None
+        if not self._is_idle_mode:
+            stack_label = QLabel(f"Stack: {self._stack_count}")
+            stack_label.setObjectName("onsiteCharStack")
+            body.addWidget(stack_label)
+            self._stack_label = stack_label
 
         self._hp_bar = QProgressBar()
         self._hp_bar.setObjectName("onsiteHpBar")
@@ -172,6 +187,9 @@ class OnsiteCharacterCardBase(QFrame):
         self._hp_bar.setRange(0, 1000)
         self._hp_bar.setValue(1000)
         self._hp_bar.setFormat("1000 / 1000")
+
+        if self._is_idle_mode:
+            body.addStretch(1)
         body.addWidget(self._hp_bar)
 
         self._exp_bar = QProgressBar()
@@ -182,16 +200,25 @@ class OnsiteCharacterCardBase(QFrame):
         self._exp_bar.setFormat("EXP 0 / 30")
         body.addWidget(self._exp_bar)
 
-        body.addStretch(1)
+        if not self._is_idle_mode:
+            body.addStretch(1)
+        self.set_level(1)
 
     def set_stack_count(self, stack_count: int) -> None:
         self._stack_count = max(1, int(stack_count))
-        self._stack_plus.setText(f"+{max(0, self._stack_count - 1)}")
-        self._stack_plus.setVisible(self._stack_count > 1)
-        self._stack_label.setText(f"Stack: {self._stack_count}")
+        if self._stack_plus is not None:
+            self._stack_plus.setText(f"+{max(0, self._stack_count - 1)}")
+            self._stack_plus.setVisible(self._stack_count > 1)
+        if self._stack_label is not None:
+            self._stack_label.setText(f"Stack: {self._stack_count}")
 
     def set_level(self, level: int) -> None:
-        self._level_label.setText(f"Level: {max(1, int(level))}")
+        normalized = max(1, int(level))
+        if self._is_idle_mode:
+            self._name_label.setText(f"{self._base_name} ({normalized})")
+            return
+        if self._level_label is not None:
+            self._level_label.setText(f"Level: {normalized}")
 
     def set_hp(self, *, current: float, max_hp: float) -> None:
         current_hp = max(0, int(current))
@@ -257,12 +284,16 @@ class OnsiteCharacterCardBase(QFrame):
         self._apply_element_tint(stats)
     
     def _apply_element_tint(self, stats: Stats) -> None:
-        from endless_idler.ui.battle.colors import color_for_damage_type_id
-        element_id = getattr(stats, "element_id", "generic")
-        color = color_for_damage_type_id(element_id)
-        
-        tint_color = f"rgba({color.red()}, {color.green()}, {color.blue()}, 60)"
-        self.setStyleSheet(f"QFrame#onsiteCharacterCard {{ background-color: {tint_color} !important; }}")
+        element_id = str(getattr(stats, "element_id", "generic") or "generic")
+        element_id = element_id.strip().lower().replace(" ", "_").replace("-", "_")
+        if self.property("elementId") == element_id:
+            return
+        self.setProperty("elementId", element_id)
+        style = self.style()
+        if style is not None:
+            style.unpolish(self)
+            style.polish(self)
+        self.update()
 
     def pulse_anchor_global(self) -> QPointF:
         rect = self.rect()
@@ -407,7 +438,7 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
             stack_count=stack_count,
             team_side="left",
             mode="idle",
-            portrait_size=(128, 156),
+            portrait_size=(IDLE_ONSITE_PORTRAIT_SIZE, IDLE_ONSITE_PORTRAIT_SIZE),
             card_width=420,
             parent=parent,
         )
