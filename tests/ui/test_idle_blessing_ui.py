@@ -211,7 +211,7 @@ def test_idle_offsite_name_includes_level_and_stack_ui_removed() -> None:
     assert name_label.text() == "offsite_hero (7)"
 
 
-def test_idle_offsite_portrait_is_centered_and_auto_sizes_to_target() -> None:
+def test_idle_offsite_portrait_is_bottom_aligned_and_auto_sizes_to_target() -> None:
     _ = QApplication.instance() or QApplication([])
 
     card = IdleOffsiteCard(
@@ -224,21 +224,22 @@ def test_idle_offsite_portrait_is_centered_and_auto_sizes_to_target() -> None:
 
     portrait = card.findChild(QLabel, "idleOffsitePortrait")
     assert portrait is not None
-    assert portrait.width() == 64
-    assert portrait.height() == 64
+    assert portrait.width() == 72
+    assert portrait.height() == 72
 
     root_layout = card.layout()
     assert root_layout is not None
     first_item = root_layout.itemAt(0)
     alignment = first_item.alignment()
-    assert int(alignment & Qt.AlignmentFlag.AlignVCenter) != 0
+    assert int(alignment & Qt.AlignmentFlag.AlignBottom) != 0
+    assert int(alignment & Qt.AlignmentFlag.AlignVCenter) == 0
     assert int(alignment & Qt.AlignmentFlag.AlignTop) == 0
 
     card.setFixedSize(180, 80)
     card.resize(180, 80)
     card._apply_portrait_size()
-    assert 56 <= portrait.width() <= 64
-    assert 56 <= portrait.height() <= 64
+    assert 56 <= portrait.width() <= 72
+    assert 56 <= portrait.height() <= 72
 
 
 def test_idle_bars_are_bottom_anchored_for_onsite_and_offsite() -> None:

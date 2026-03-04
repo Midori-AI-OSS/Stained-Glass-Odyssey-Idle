@@ -22,9 +22,9 @@ from endless_idler.ui.tooltip import show_stained_tooltip
 
 
 IDLE_OFFSITE_PORTRAIT_SIZE = 56
-IDLE_OFFSITE_PORTRAIT_TARGET_SIZE = 64
+IDLE_OFFSITE_PORTRAIT_TARGET_SIZE = 72
 IDLE_OFFSITE_PORTRAIT_MIN_SIZE = 56
-IDLE_OFFSITE_PORTRAIT_MAX_SIZE = 64
+IDLE_OFFSITE_PORTRAIT_MAX_SIZE = 72
 
 
 class IdleArena(QFrame):
@@ -81,7 +81,7 @@ class IdleOffsiteCard(QFrame):
             self._portrait_source_pixmap = pixmap
             self._portrait.setText("")
         self._apply_portrait_size()
-        layout.addWidget(self._portrait, 0, Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(self._portrait, 0, Qt.AlignmentFlag.AlignBottom)
 
         body = QVBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
@@ -154,7 +154,7 @@ class IdleOffsiteCard(QFrame):
 
         width_cap = max(
             IDLE_OFFSITE_PORTRAIT_MIN_SIZE,
-            int(round(float(available_width) * 0.34)),
+            int(round(float(available_width) * 0.40)),
         )
         upper_bound = min(IDLE_OFFSITE_PORTRAIT_MAX_SIZE, available_height, width_cap)
         lower_bound = min(IDLE_OFFSITE_PORTRAIT_MIN_SIZE, upper_bound)
