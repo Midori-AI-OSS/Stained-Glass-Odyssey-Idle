@@ -10,13 +10,12 @@ dependencies = [
 
 [build-system]
 requires = [
-    "setuptools>=69.0",
-    "wheel",
+    "hatchling",
 ]
-build-backend = "setuptools.build_meta"
+build-backend = "hatchling.build"
 
-[tool.setuptools]
-include-package-data = true
+[tool.hatch.build.targets.wheel]
+packages = ["endless_idler"]
 
 [dependency-groups]
 ci = [
