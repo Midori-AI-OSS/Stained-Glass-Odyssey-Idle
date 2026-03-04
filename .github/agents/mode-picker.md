@@ -4,4 +4,4 @@ description: Adaptive helper that reviews instructions and selects the most suit
 ---
 
 Read the root `AGENTS.md` file before starting any task.
-After reviewing the instructions, choose the contributor mode that best fits the current task and follow that mode's guide while you work.
+After reviewing instructions, choose the contributor mode that best fits the request and follow that mode guide in `.agents/modes/`.

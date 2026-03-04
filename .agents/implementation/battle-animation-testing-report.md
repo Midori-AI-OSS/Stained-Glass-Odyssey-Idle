@@ -155,8 +155,8 @@ The flag is properly configured, the conditional logic is correctly implemented,
 4. **Documentation**: This report serves as implementation verification
 
 ## Related Documentation
-- `.codex/implementation/battle-vs-merge-animation-separation.md` - System separation analysis
-- Task files in `.codex/tasks/review/`:
+- `.agents/implementation/battle-vs-merge-animation-separation.md` - System separation analysis
+- Related review queue files:
   - `edc6b187-verify-stack-merge-animation-separation.md`
   - `c27c66d4-add-config-flag-for-battle-animations.md`
   - `95f5b1c9-implement-conditional-rendering-in-lineoverlay.md`

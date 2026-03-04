@@ -80,7 +80,7 @@ Completed three task categories as requested:
 
 ## Tasks Now Ready for Review
 
-All four tasks have been moved to `.codex/tasks/review/` with detailed completion notes:
+All four tasks were moved to the review queue with detailed completion notes:
 - 4e8c80e3-stacks-passive-modifier-formula.md
 - d41b6f12-passive-mod-buffs-stat-usage.md
 - efb44191-tooltip-glass-effect.md
