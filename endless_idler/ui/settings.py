@@ -587,7 +587,6 @@ class SettingsPage(QWidget):
     def apply_radio_state(self, state: Mapping[str, object] | None) -> None:
         state = state or {}
         qt_available = bool(state.get("qt_available") or False)
-        status_text = str(state.get("status_text") or "Radio unavailable.").strip()
         self._radio_runtime_available = qt_available
 
         self._radio_enabled.setEnabled(qt_available)
@@ -601,22 +600,6 @@ class SettingsPage(QWidget):
             qt_available and bool(self._radio_loudness_boost_enabled.isChecked())
         )
         self._radio_channel.setEnabled(qt_available and self._radio_channel_enabled)
-
-        tooltip = (
-            f"Midori AI Radio controls are unavailable in this runtime: {status_text}"
-            if not qt_available
-            else ""
-        )
-        for widget in (
-            self._radio_enabled,
-            self._radio_autostart,
-            self._radio_channel,
-            self._radio_quality,
-            self._radio_volume,
-            self._radio_loudness_boost_enabled,
-            self._radio_loudness_boost_factor,
-        ):
-            widget.setToolTip(tooltip)
 
     def _on_radio_volume_value_changed(self, value: int) -> None:
         _ = value

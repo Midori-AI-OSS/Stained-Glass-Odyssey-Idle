@@ -115,8 +115,10 @@ class MainMenuWindow(QMainWindow):
 
         self._settings_manager = AppSettingsManager()
         self._app_settings = self._settings_manager.load()
-        self._radio_controller: RadioController | None = None
+        self._radio_controller: RadioController | None = RadioController(self)
         self._radio_channel_options: list[str] = []
+
+        self._radio_controller.state_changed.connect(self._on_radio_state_changed)
 
         self.setWindowTitle("Stained Glass Odyssey Idle")
         self.resize(1280, 820)
@@ -140,9 +142,7 @@ class MainMenuWindow(QMainWindow):
         self._stack.addWidget(self._menu_screen)
         self.setCentralWidget(self._stack)
 
-        if self._app_settings.radio_enabled and self._app_settings.radio_autostart:
-            _ = self._ensure_radio_controller()
-            self._sync_radio_controller_from_settings(user_initiated=False)
+        self._sync_radio_controller_from_settings(user_initiated=False)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._radio_controller is not None:
@@ -226,6 +226,9 @@ class MainMenuWindow(QMainWindow):
                 return
             controller = self._ensure_radio_controller()
         if controller is None:
+            return
+
+        if not controller.qt_available:
             return
 
         controller.set_channel(self._app_settings.radio_channel)

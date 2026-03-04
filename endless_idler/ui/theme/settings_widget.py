@@ -3,24 +3,19 @@ from __future__ import annotations
 
 STYLESHEET = """
 QWidget#SettingsPageRoot {
-    background-color: rgba(0, 0, 0, 150);
+    background-color: rgba(0, 0, 0, 105);
 }
 
 QWidget#SettingsHeader,
-QWidget#SettingsCard,
-QWidget#SettingsPaneHost {
-    background-color: rgba(18, 20, 28, 95);
-    border: 1px solid rgba(255, 255, 255, 14);
+QWidget#SettingsCard {
+    background-color: rgba(18, 20, 28, 165);
+    border: 1px solid rgba(255, 255, 255, 25);
     border-radius: 0px;
 }
 
-QWidget#SettingsPaneHost {
-    padding: 10px;
-}
-
 QLabel#SettingsHeaderTitle {
-    font-size: 16px;
-    font-weight: 760;
+    font-size: 18px;
+    font-weight: 750;
     color: rgba(237, 239, 245, 245);
 }
 
@@ -94,9 +89,31 @@ QLabel#SettingsPaneSubtitle {
     color: rgba(237, 239, 245, 160);
 }
 
-QWidget#SettingsPageRoot QCheckBox,
-QWidget#SettingsPageRoot QLabel {
-    color: rgba(237, 239, 245, 230);
+QWidget#SettingsPageRoot QCheckBox {
+    spacing: 10px;
+}
+
+QWidget#SettingsPageRoot QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    border-radius: 0px;
+    border: 1px solid rgba(255, 255, 255, 35);
+    background-color: rgba(18, 20, 28, 170);
+}
+
+QWidget#SettingsPageRoot QCheckBox::indicator:hover {
+    border: 1px solid rgba(56, 189, 248, 70);
+    background-color: rgba(18, 20, 28, 200);
+}
+
+QWidget#SettingsPageRoot QCheckBox::indicator:checked {
+    background-color: rgba(16, 185, 129, 165);
+    border: 1px solid rgba(16, 185, 129, 180);
+}
+
+QWidget#SettingsPageRoot QCheckBox::indicator:checked:hover {
+    background-color: rgba(16, 185, 129, 195);
+    border: 1px solid rgba(16, 185, 129, 220);
 }
 
 QWidget#SettingsPageRoot QComboBox {

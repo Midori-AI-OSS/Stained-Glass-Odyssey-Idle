@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import subprocess
-
 import endless_idler.ui.radio.controller as controller_module
 
 from endless_idler.ui.radio.controller import RadioController
@@ -40,44 +38,49 @@ def test_probe_returns_false_when_multimedia_import_is_missing(monkeypatch) -> N
     assert RadioController.probe_qt_multimedia_available() is False
 
 
-def test_probe_returns_false_when_subprocess_raises(monkeypatch) -> None:
-    monkeypatch.setattr(controller_module, "QAudioOutput", object)
+def test_probe_returns_false_when_audio_output_init_raises(monkeypatch) -> None:
+    class _BrokenAudioOutput:
+        def __init__(self) -> None:
+            raise OSError("boom")
+
+    monkeypatch.setattr(controller_module, "QAudioOutput", _BrokenAudioOutput)
     monkeypatch.setattr(controller_module, "QMediaPlayer", object)
-
-    def _raise(*args, **kwargs):
-        del args
-        del kwargs
-        raise OSError("boom")
-
-    monkeypatch.setattr(controller_module.subprocess, "run", _raise)
     assert RadioController.probe_qt_multimedia_available() is False
 
 
-def test_probe_returns_false_on_nonzero_subprocess(monkeypatch) -> None:
-    monkeypatch.setattr(controller_module, "QAudioOutput", object)
-    monkeypatch.setattr(controller_module, "QMediaPlayer", object)
+def test_probe_returns_false_when_player_init_raises(monkeypatch) -> None:
+    class _AudioOutput:
+        def deleteLater(self) -> None:
+            return
 
-    result = subprocess.CompletedProcess(
-        args=["python", "-c", "pass"],
-        returncode=1,
-        stdout="",
-        stderr="probe failed",
-    )
-    monkeypatch.setattr(controller_module.subprocess, "run", lambda *a, **k: result)
+    class _BrokenPlayer:
+        def __init__(self) -> None:
+            raise RuntimeError("boom")
 
+    monkeypatch.setattr(controller_module, "QAudioOutput", _AudioOutput)
+    monkeypatch.setattr(controller_module, "QMediaPlayer", _BrokenPlayer)
     assert RadioController.probe_qt_multimedia_available() is False
 
 
-def test_probe_returns_true_on_ok_subprocess(monkeypatch) -> None:
-    monkeypatch.setattr(controller_module, "QAudioOutput", object)
-    monkeypatch.setattr(controller_module, "QMediaPlayer", object)
+def test_probe_returns_true_when_multimedia_probe_succeeds(monkeypatch) -> None:
+    class _AudioOutput:
+        def __init__(self) -> None:
+            self.deleted = False
 
-    result = subprocess.CompletedProcess(
-        args=["python", "-c", "pass"],
-        returncode=0,
-        stdout="ok\n",
-        stderr="",
-    )
-    monkeypatch.setattr(controller_module.subprocess, "run", lambda *a, **k: result)
+        def deleteLater(self) -> None:
+            self.deleted = True
 
+    class _Player:
+        def __init__(self) -> None:
+            self.audio = None
+            self.deleted = False
+
+        def setAudioOutput(self, audio) -> None:
+            self.audio = audio
+
+        def deleteLater(self) -> None:
+            self.deleted = True
+
+    monkeypatch.setattr(controller_module, "QAudioOutput", _AudioOutput)
+    monkeypatch.setattr(controller_module, "QMediaPlayer", _Player)
     assert RadioController.probe_qt_multimedia_available() is True

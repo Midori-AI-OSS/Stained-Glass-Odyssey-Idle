@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
-import subprocess
-import sys
 import time
 from typing import Any
 
@@ -213,45 +210,21 @@ class RadioController(QObject):
     def probe_qt_multimedia_available(cls) -> bool:
         if QAudioOutput is None or QMediaPlayer is None:
             return False
-        return cls._probe_qt_multimedia_available_subprocess()
-
-    @classmethod
-    def _probe_qt_multimedia_available_subprocess(cls) -> bool:
-        code = (
-            "from PySide6.QtWidgets import QApplication\n"
-            "from PySide6.QtMultimedia import QAudioOutput\n"
-            "from PySide6.QtMultimedia import QMediaPlayer\n"
-            "app = QApplication.instance() or QApplication([])\n"
-            "audio = QAudioOutput()\n"
-            "player = QMediaPlayer()\n"
-            "player.setAudioOutput(audio)\n"
-            "print('ok')\n"
-        )
-        env = os.environ.copy()
-        env.setdefault("QT_QPA_PLATFORM", "offscreen")
+        probe_audio: Any | None = None
+        probe_player: Any | None = None
         try:
-            result = subprocess.run(
-                [sys.executable, "-c", code],
-                capture_output=True,
-                env=env,
-                text=True,
-                timeout=4.0,
-            )
+            probe_audio = QAudioOutput()
+            probe_player = QMediaPlayer()
+            probe_player.setAudioOutput(probe_audio)
+            return True
         except Exception as exc:
-            logger.warning("radio probe subprocess failed: %s", exc)
+            logger.warning("radio probe failed: %s", exc)
             return False
-
-        if result.returncode != 0:
-            stderr = " ".join(str(result.stderr or "").split())
-            if stderr:
-                logger.warning("radio probe failed (%s): %s", result.returncode, stderr)
-            else:
-                logger.warning("radio probe failed (%s)", result.returncode)
-            return False
-        if "ok" not in str(result.stdout or ""):
-            logger.warning("radio probe returned unexpected output")
-            return False
-        return True
+        finally:
+            if probe_player is not None:
+                probe_player.deleteLater()
+            if probe_audio is not None:
+                probe_audio.deleteLater()
 
     @property
     def qt_available(self) -> bool:
