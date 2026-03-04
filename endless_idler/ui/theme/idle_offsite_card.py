@@ -25,12 +25,6 @@ QLabel#idleOffsiteName {
     font-weight: 700;
 }
 
-QLabel#idleOffsiteLevel,
-QLabel#idleStackPlus {
-    color: rgba(255, 255, 255, 170);
-    font-size: 11px;
-}
-
 QPushButton#idleRebirthButton,
 QPushButton#idlePrestigeButton {
     background-color: rgba(255, 255, 255, 14);

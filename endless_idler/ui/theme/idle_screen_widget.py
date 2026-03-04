@@ -35,10 +35,17 @@ QFrame#idleModsPanel {
     border: 1px solid rgba(255, 255, 255, 18);
 }
 
+QFrame#idleBlessingPanel {
+    background-color: rgba(20, 30, 60, 120);
+    border: 1px solid rgba(255, 255, 255, 18);
+}
+
 QLabel#idleModsTitle,
 QLabel#idleRRTitle,
 QLabel#idleSharedExpLabel,
-QLabel#idleRRLabel {
+QLabel#idleRRLabel,
+QLabel#idleBlessingTitle,
+QLabel#idleBlessingValueLabel {
     color: rgba(255, 255, 255, 235);
     font-size: 14px;
     font-weight: 700;
@@ -47,6 +54,11 @@ QLabel#idleRRLabel {
 QLabel#idleModsHelp {
     color: rgba(255, 255, 255, 160);
     font-size: 10px;
+}
+
+QLabel#idleBlessingValueLabel {
+    font-size: 13px;
+    color: rgba(255, 230, 170, 235);
 }
 
 QSlider#idleSharedExpSlider,

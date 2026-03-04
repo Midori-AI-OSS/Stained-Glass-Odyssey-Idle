@@ -85,7 +85,8 @@ class IdleOffsiteCard(QFrame):
         body.setSpacing(4)
         layout.addLayout(body, 1)
 
-        self._name_label = QLabel(display_name)
+        self._display_name = str(display_name)
+        self._name_label = QLabel(f"{self._display_name} (1)")
         self._name_label.setObjectName("idleOffsiteName")
         name_row = QHBoxLayout()
         name_row.setContentsMargins(0, 0, 0, 0)
@@ -93,10 +94,6 @@ class IdleOffsiteCard(QFrame):
         body.addLayout(name_row)
 
         name_row.addWidget(self._name_label, 0, Qt.AlignmentFlag.AlignVCenter)
-        plus = QLabel(f"+{max(0, stack_count - 1)}")
-        plus.setObjectName("idleStackPlus")
-        plus.setVisible(stack_count > 1)
-        name_row.addWidget(plus, 0, Qt.AlignmentFlag.AlignVCenter)
 
         self._rebirth_button = QPushButton("Rebirth")
         self._rebirth_button.setObjectName("idleRebirthButton")
@@ -113,10 +110,6 @@ class IdleOffsiteCard(QFrame):
         name_row.addWidget(self._prestige_button, 0, Qt.AlignmentFlag.AlignVCenter)
         
         name_row.addStretch(1)
-
-        self._level_label = QLabel("Level: 1")
-        self._level_label.setObjectName("idleOffsiteLevel")
-        body.addWidget(self._level_label)
 
         self._hp_bar = QProgressBar()
         self._hp_bar.setObjectName("idleHpBar")
@@ -142,7 +135,6 @@ class IdleOffsiteCard(QFrame):
         for widget in (
             self._portrait,
             self._name_label,
-            self._level_label,
             self._hp_bar,
             self._exp_bar,
         ):
@@ -167,7 +159,7 @@ class IdleOffsiteCard(QFrame):
             except Exception:
                 gain_per_second = 0.0
 
-        self._level_label.setText(f"Level: {level}")
+        self._name_label.setText(f"{self._display_name} ({max(1, level)})")
         self._exp_bar.setRange(0, max(1, int(next_exp)))
         self._exp_bar.setValue(int(exp))
         if gain_per_second > 0:

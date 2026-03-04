@@ -23,8 +23,10 @@ from endless_idler.run_rules import apply_idle_party_heal
 from endless_idler.run_rules import start_idle_heal_timer
 from endless_idler.save import SaveManager
 from endless_idler.save import new_run_save
+from endless_idler.ui.idle.blessing_meter import IdleBlessingMeterWidget
 from endless_idler.ui.idle.widgets import IdleArena
 from endless_idler.ui.idle.widgets import IdleOffsiteCard
+from endless_idler.ui.idle.idle_state import IDLE_BLESSING_STEP_MULTIPLIER
 from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
 from endless_idler.ui.idle.idle_state import IdleGameState
 from endless_idler.ui.onsite import IdleOnsiteCharacterCard
@@ -101,6 +103,8 @@ class IdleScreenWidget(QWidget):
             risk_reward_level=int(getattr(self._save, "idle_risk_reward_level", 0)),
             battle_start_time=float(getattr(self._save, "battle_start_time", 0.0)),
         )
+        self._last_blessing_step_count = self._idle_state.get_idle_blessing_step_count()
+        self._blessing_reset_remaining_seconds = 0.0
 
         self._onsite_cards: list[IdleOnsiteCharacterCard] = []
         self._offsite_cards: list[IdleOffsiteCard] = []
@@ -207,16 +211,28 @@ class IdleScreenWidget(QWidget):
             left_side_layout.addWidget(reserves_panel, 0, Qt.AlignmentFlag.AlignVCenter)
         left_side_layout.addWidget(left, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        right_panel = self._make_mods_panel()
+        right_column = QWidget()
+        right_column_layout = QVBoxLayout()
+        right_column_layout.setContentsMargins(0, 0, 0, 0)
+        right_column_layout.setSpacing(10)
+        right_column.setLayout(right_column_layout)
+        right_column.setFixedWidth(220)
+
+        blessing_panel = self._make_blessing_panel()
+        mods_panel = self._make_mods_panel()
+        right_column_layout.addWidget(blessing_panel)
+        right_column_layout.addWidget(mods_panel)
+        right_column_layout.addStretch(1)
 
         arena_layout.addWidget(left_side, 0, 0, 1, 1, Qt.AlignmentFlag.AlignVCenter)
         arena_layout.addWidget(QWidget(), 0, 1, 1, 1)
-        arena_layout.addWidget(right_panel, 0, 2, 1, 1, Qt.AlignmentFlag.AlignTop)
+        arena_layout.addWidget(right_column, 0, 2, 1, 1, Qt.AlignmentFlag.AlignTop)
         arena_layout.setColumnStretch(0, 0)
         arena_layout.setColumnStretch(1, 1)
         arena_layout.setColumnStretch(2, 0)
 
         self._update_mods_ui()
+        self._update_blessing_ui()
 
         self._idle_state.tick_update.connect(self._on_tick)
         self._idle_timer = QTimer(self)
@@ -295,6 +311,100 @@ class IdleScreenWidget(QWidget):
         layout.addStretch(1)
 
         return panel
+
+    def _make_blessing_panel(self) -> QFrame:
+        panel = QFrame()
+        panel.setObjectName("idleBlessingPanel")
+        panel.setFixedWidth(220)
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
+        panel.setLayout(layout)
+
+        title = QLabel("Odyssey's Blessing")
+        title.setObjectName("idleBlessingTitle")
+        layout.addWidget(title)
+        self._blessing_title_label = title
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        layout.addLayout(row)
+
+        meter = IdleBlessingMeterWidget()
+        meter.setObjectName("idleBlessingMeter")
+        row.addWidget(meter, 1)
+        self._blessing_meter = meter
+
+        value_label = QLabel("x1.0000")
+        value_label.setObjectName("idleBlessingValueLabel")
+        value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        row.addWidget(value_label, 0)
+        self._blessing_value_label = value_label
+
+        return panel
+
+    def _format_seconds(self, seconds: int) -> str:
+        value = max(0, int(seconds))
+        minutes = value // 60
+        remainder = value % 60
+        return f"{minutes:02d}:{remainder:02d}"
+
+    def _build_blessing_tooltip(self, *, multiplier: float, steps: int, seconds_to_next: int) -> str:
+        return (
+            "<b>Odyssey's Blessing</b><br>"
+            f"Current: <b>x{multiplier:.4f}</b><br>"
+            f"Stacks gained: <b>{max(0, int(steps))}</b><br>"
+            f"Next blessing in: <b>{self._format_seconds(seconds_to_next)}</b><br><br>"
+            f"+{(IDLE_BLESSING_STEP_MULTIPLIER - 1.0) * 100.0:.3f}% every 5 minutes."
+        )
+
+    def _compute_blessing_shimmer(self, *, seconds_to_next: int) -> float:
+        if seconds_to_next > 30:
+            return 0.0
+        if seconds_to_next <= 5:
+            return 1.0
+        return max(0.0, min(1.0, (30.0 - float(seconds_to_next)) / 25.0))
+
+    def _update_blessing_ui(self) -> None:
+        steps = self._idle_state.get_idle_blessing_step_count()
+        cycle_progress = self._idle_state.get_idle_blessing_cycle_progress()
+        seconds_to_next = self._idle_state.get_idle_blessing_seconds_to_next_step()
+        multiplier = self._idle_state.get_idle_blessing_multiplier()
+
+        if steps > self._last_blessing_step_count:
+            self._last_blessing_step_count = steps
+            self._blessing_reset_remaining_seconds = 3.0
+
+        shimmer = self._compute_blessing_shimmer(seconds_to_next=seconds_to_next)
+        reset_active = self._blessing_reset_remaining_seconds > 0.0
+        if reset_active:
+            normalized = self._blessing_reset_remaining_seconds / 3.0
+            visual_progress = max(0.0, min(1.0, normalized))
+            shimmer = max(0.0, min(1.0, normalized))
+            self._blessing_reset_remaining_seconds = max(
+                0.0,
+                self._blessing_reset_remaining_seconds - IDLE_TICK_INTERVAL_SECONDS,
+            )
+        else:
+            visual_progress = cycle_progress
+
+        self._blessing_meter.set_visual_state(
+            progress=visual_progress,
+            shimmer=shimmer,
+            reset_active=reset_active,
+        )
+        self._blessing_value_label.setText(f"x{multiplier:.4f}")
+
+        tooltip = self._build_blessing_tooltip(
+            multiplier=multiplier,
+            steps=steps,
+            seconds_to_next=seconds_to_next,
+        )
+        self._blessing_title_label.setToolTip(tooltip)
+        self._blessing_meter.setToolTip(tooltip)
+        self._blessing_value_label.setToolTip(tooltip)
 
     def _on_shared_exp_changed(self, value: int) -> None:
         self._idle_state.set_shared_exp_percentage(value)
@@ -381,6 +491,8 @@ class IdleScreenWidget(QWidget):
             card.update_display()
 
     def _on_tick(self, tick_count: int) -> None:
+        del tick_count
+        self._update_blessing_ui()
         self._refresh_character_cards()
         healed = 0
         try:

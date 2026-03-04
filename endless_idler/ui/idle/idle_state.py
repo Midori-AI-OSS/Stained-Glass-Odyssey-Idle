@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time
 import random
 
@@ -20,6 +21,8 @@ DEATH_EXP_DEBUFF_PER_STACK = 0.05
 SHARED_EXP_ONSITE_MULTIPLIER = 0.75
 SHARED_EXP_OFFSITE_MULTIPLIER = 1.5
 IDLE_TICK_INTERVAL_SECONDS = 0.1
+IDLE_BLESSING_STEP_SECONDS = 300.0
+IDLE_BLESSING_STEP_MULTIPLIER = 1.025 ** (1.0 / 6.0)
 
 
 def calculate_rebirth_power(level: int) -> float:
@@ -83,6 +86,7 @@ class IdleGameState(QObject):
         self._time = time.time
         self._offsite_exp_share = OFFSITE_EXP_SHARE_PER_CHAR
         self._battle_start_time = float(max(0.0, battle_start_time))
+        self._idle_session_started_at = float(self._time())
 
         self._tick_count = 0
         self._shared_exp_percentage = max(1, min(95, int(shared_exp_percentage)))
@@ -619,22 +623,32 @@ class IdleGameState(QObject):
         return multiplier
     
     def _calculate_idle_exp_mult(self) -> float:
-        """
-        Calculate idle exp multiplier based on survival time.
-        Every 1 second the party is alive: idle_exp_mult *= 1.00001
-        
-        Returns:
-            Current idle exp multiplier based on time survived
-        """
-        if self._battle_start_time <= 0.0:
-            return 1.0
-        
-        current_time = float(self._time())
-        seconds_survived = max(0.0, current_time - self._battle_start_time)
-        
-        # idle_exp_mult = 1.0 * (1.00001 ^ seconds_survived)
-        # Using exponentiation for compounding effect
-        return 1.00001 ** seconds_survived
+        return self.get_idle_blessing_multiplier()
+
+    def _idle_blessing_elapsed_seconds(self) -> float:
+        now = float(self._time())
+        return max(0.0, now - self._idle_session_started_at)
+
+    def get_idle_blessing_step_count(self) -> int:
+        elapsed = self._idle_blessing_elapsed_seconds()
+        return max(0, int(elapsed // IDLE_BLESSING_STEP_SECONDS))
+
+    def get_idle_blessing_multiplier(self) -> float:
+        steps = self.get_idle_blessing_step_count()
+        return float(IDLE_BLESSING_STEP_MULTIPLIER ** steps)
+
+    def get_idle_blessing_cycle_progress(self) -> float:
+        elapsed = self._idle_blessing_elapsed_seconds()
+        phase = elapsed % IDLE_BLESSING_STEP_SECONDS
+        return max(0.0, min(1.0, phase / IDLE_BLESSING_STEP_SECONDS))
+
+    def get_idle_blessing_seconds_to_next_step(self) -> int:
+        elapsed = self._idle_blessing_elapsed_seconds()
+        phase = elapsed % IDLE_BLESSING_STEP_SECONDS
+        remaining = IDLE_BLESSING_STEP_SECONDS - phase
+        if remaining <= 1e-9:
+            remaining = IDLE_BLESSING_STEP_SECONDS
+        return max(0, int(math.ceil(remaining)))
 
     def export_run_buff_seconds(self) -> tuple[float, float]:
         return (float(max(0.0, self._exp_bonus_seconds)), float(max(0.0, self._exp_penalty_seconds)))
