@@ -187,6 +187,9 @@ class OnsiteCharacterCardBase(QFrame):
         self._hp_bar.setRange(0, 1000)
         self._hp_bar.setValue(1000)
         self._hp_bar.setFormat("1000 / 1000")
+
+        if self._is_idle_mode:
+            body.addStretch(1)
         body.addWidget(self._hp_bar)
 
         self._exp_bar = QProgressBar()
@@ -197,7 +200,8 @@ class OnsiteCharacterCardBase(QFrame):
         self._exp_bar.setFormat("EXP 0 / 30")
         body.addWidget(self._exp_bar)
 
-        body.addStretch(1)
+        if not self._is_idle_mode:
+            body.addStretch(1)
         self.set_level(1)
 
     def set_stack_count(self, stack_count: int) -> None:

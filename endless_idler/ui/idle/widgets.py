@@ -22,6 +22,9 @@ from endless_idler.ui.tooltip import show_stained_tooltip
 
 
 IDLE_OFFSITE_PORTRAIT_SIZE = 56
+IDLE_OFFSITE_PORTRAIT_TARGET_SIZE = 64
+IDLE_OFFSITE_PORTRAIT_MIN_SIZE = 56
+IDLE_OFFSITE_PORTRAIT_MAX_SIZE = 64
 
 
 class IdleArena(QFrame):
@@ -51,6 +54,8 @@ class IdleOffsiteCard(QFrame):
         self._stack_count = stack_count
         self._on_rebirth = on_rebirth
         self._on_prestige = on_prestige
+        self._portrait_placeholder = ""
+        self._portrait_source_pixmap: QPixmap | None = None
 
         self.setFixedSize(220, 96)
 
@@ -66,19 +71,17 @@ class IdleOffsiteCard(QFrame):
         self._portrait.setScaledContents(False)
 
         display_name = getattr(plugin, "display_name", char_id) if plugin else char_id
+        self._portrait_placeholder = str(display_name[:2].upper())
         portrait_path = plugin.random_image_path(rng) if plugin else None
         pixmap = QPixmap(str(portrait_path)) if portrait_path else QPixmap()
         if pixmap.isNull():
-            self._portrait.setText(display_name[:2].upper())
+            self._portrait_source_pixmap = None
+            self._portrait.setText(self._portrait_placeholder)
         else:
-            scaled = pixmap.scaled(
-                IDLE_OFFSITE_PORTRAIT_SIZE,
-                IDLE_OFFSITE_PORTRAIT_SIZE,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            self._portrait.setPixmap(scaled)
-        layout.addWidget(self._portrait, 0, Qt.AlignmentFlag.AlignTop)
+            self._portrait_source_pixmap = pixmap
+            self._portrait.setText("")
+        self._apply_portrait_size()
+        layout.addWidget(self._portrait, 0, Qt.AlignmentFlag.AlignVCenter)
 
         body = QVBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
@@ -110,6 +113,7 @@ class IdleOffsiteCard(QFrame):
         name_row.addWidget(self._prestige_button, 0, Qt.AlignmentFlag.AlignVCenter)
         
         name_row.addStretch(1)
+        body.addStretch(1)
 
         self._hp_bar = QProgressBar()
         self._hp_bar.setObjectName("idleHpBar")
@@ -128,8 +132,6 @@ class IdleOffsiteCard(QFrame):
         self._exp_bar.setValue(0)
         self._exp_bar.setFormat("EXP 0 / 30")
         body.addWidget(self._exp_bar)
-
-        body.addStretch(1)
         
         # Element tint will be applied on first update_display call
         for widget in (
@@ -139,6 +141,50 @@ class IdleOffsiteCard(QFrame):
             self._exp_bar,
         ):
             widget.installEventFilter(self)
+
+    def _compute_portrait_size(self) -> int:
+        root_layout = self.layout()
+        if isinstance(root_layout, QHBoxLayout):
+            margins = root_layout.contentsMargins()
+            available_height = max(12, self.height() - margins.top() - margins.bottom())
+            available_width = max(12, self.width() - margins.left() - margins.right())
+        else:
+            available_height = max(12, self.height())
+            available_width = max(12, self.width())
+
+        width_cap = max(
+            IDLE_OFFSITE_PORTRAIT_MIN_SIZE,
+            int(round(float(available_width) * 0.34)),
+        )
+        upper_bound = min(IDLE_OFFSITE_PORTRAIT_MAX_SIZE, available_height, width_cap)
+        lower_bound = min(IDLE_OFFSITE_PORTRAIT_MIN_SIZE, upper_bound)
+        if upper_bound <= 0:
+            return 12
+        return max(lower_bound, min(IDLE_OFFSITE_PORTRAIT_TARGET_SIZE, upper_bound))
+
+    def _apply_portrait_size(self) -> None:
+        size = self._compute_portrait_size()
+        self._portrait.setFixedSize(size, size)
+        source = self._portrait_source_pixmap
+        if source is None or source.isNull():
+            self._portrait.setPixmap(QPixmap())
+            self._portrait.setText(self._portrait_placeholder)
+            return
+        scaled = source.scaled(
+            size,
+            size,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self._portrait.setText("")
+        self._portrait.setPixmap(scaled)
+
+    def resizeEvent(self, event: object) -> None:
+        self._apply_portrait_size()
+        try:
+            super().resizeEvent(event)  # type: ignore[misc]
+        except Exception:
+            return
 
     def update_display(self) -> None:
         data = self._idle_state.get_char_data(self._char_id)

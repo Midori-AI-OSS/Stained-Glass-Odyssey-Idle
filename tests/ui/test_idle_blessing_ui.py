@@ -7,9 +7,11 @@ from types import SimpleNamespace
 
 import endless_idler.ui.idle.screen as screen_module
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QProgressBar
 
 from endless_idler.ui.idle.screen import IdleScreenWidget
 from endless_idler.ui.idle.widgets import IdleOffsiteCard
@@ -207,3 +209,72 @@ def test_idle_offsite_name_includes_level_and_stack_ui_removed() -> None:
     name_label = card.findChild(QLabel, "idleOffsiteName")
     assert name_label is not None
     assert name_label.text() == "offsite_hero (7)"
+
+
+def test_idle_offsite_portrait_is_centered_and_auto_sizes_to_target() -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    card = IdleOffsiteCard(
+        char_id="offsite_hero",
+        plugin=None,
+        idle_state=_FakeIdleStateForOffsite(),
+        rng=random.Random(3),
+        stack_count=1,
+    )
+
+    portrait = card.findChild(QLabel, "idleOffsitePortrait")
+    assert portrait is not None
+    assert portrait.width() == 64
+    assert portrait.height() == 64
+
+    root_layout = card.layout()
+    assert root_layout is not None
+    first_item = root_layout.itemAt(0)
+    alignment = first_item.alignment()
+    assert int(alignment & Qt.AlignmentFlag.AlignVCenter) != 0
+    assert int(alignment & Qt.AlignmentFlag.AlignTop) == 0
+
+    card.setFixedSize(180, 80)
+    card.resize(180, 80)
+    card._apply_portrait_size()
+    assert 56 <= portrait.width() <= 64
+    assert 56 <= portrait.height() <= 64
+
+
+def test_idle_bars_are_bottom_anchored_for_onsite_and_offsite() -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    offsite = IdleOffsiteCard(
+        char_id="offsite_hero",
+        plugin=None,
+        idle_state=_FakeIdleStateForOffsite(),
+        rng=random.Random(3),
+        stack_count=1,
+    )
+    offsite_body = offsite.layout().itemAt(1).layout()
+    assert offsite_body is not None
+    offsite_last = offsite_body.itemAt(offsite_body.count() - 1).widget()
+    offsite_second_last = offsite_body.itemAt(offsite_body.count() - 2).widget()
+    assert isinstance(offsite_second_last, QProgressBar)
+    assert isinstance(offsite_last, QProgressBar)
+    assert offsite_second_last.objectName() == "idleHpBar"
+    assert offsite_last.objectName() == "idleExpBar"
+
+    onsite_idle = OnsiteCharacterCardBase(
+        name="Nova",
+        portrait_path=None,
+        placeholder="Nova",
+        stack_count=1,
+        team_side="left",
+        mode="idle",
+        portrait_size=(32, 32),
+        card_width=220,
+    )
+    onsite_body = onsite_idle.layout().itemAt(1).layout()
+    assert onsite_body is not None
+    onsite_last = onsite_body.itemAt(onsite_body.count() - 1).widget()
+    onsite_second_last = onsite_body.itemAt(onsite_body.count() - 2).widget()
+    assert isinstance(onsite_second_last, QProgressBar)
+    assert isinstance(onsite_last, QProgressBar)
+    assert onsite_second_last.objectName() == "onsiteHpBar"
+    assert onsite_last.objectName() == "onsiteExpBar"
