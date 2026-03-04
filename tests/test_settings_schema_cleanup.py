@@ -10,7 +10,7 @@ from endless_idler.settings import AppSettings
 from endless_idler.settings import AppSettingsManager
 
 
-def test_default_settings_path_uses_stainedlgassodysseyidle_folder(
+def test_default_settings_path_uses_stainedglassodysseyidle_folder(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -20,7 +20,7 @@ def test_default_settings_path_uses_stainedlgassodysseyidle_folder(
     manager = AppSettingsManager()
     assert (
         manager.path
-        == tmp_path / ".midoriai" / "stainedlgassodysseyidle" / "settings.json"
+        == tmp_path / ".midoriai" / "stainedglassodysseyidle" / "settings.json"
     )
 
 

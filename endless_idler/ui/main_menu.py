@@ -163,9 +163,6 @@ class MainMenuWindow(QMainWindow):
             self._settings_screen = SettingsPage()
             self._settings_screen.back_requested.connect(self._open_main_menu)
             self._settings_screen.settings_changed.connect(self._on_settings_changed)
-            self._settings_screen.play_toggle_requested.connect(
-                self._on_radio_control_play_requested
-            )
             self._stack.addWidget(self._settings_screen)
 
         _ = self._ensure_radio_controller()
@@ -264,25 +261,6 @@ class MainMenuWindow(QMainWindow):
             user_initiated=True,
             previous_enabled=previous_enabled,
         )
-
-    def _on_radio_control_play_requested(self) -> None:
-        controller = self._ensure_radio_controller()
-        if controller is None:
-            return
-
-        if not self._app_settings.radio_enabled:
-            self._app_settings = AppSettings.from_mapping(
-                {
-                    **self._app_settings.as_dict(),
-                    "radio_enabled": True,
-                }
-            )
-            self._settings_manager.save(self._app_settings)
-            controller.set_enabled(True, start_when_enabled=False)
-            if self._settings_screen is not None:
-                self._settings_screen.set_settings(self._app_settings)
-
-        controller.toggle_playback()
 
     def _on_radio_state_changed(self, state: object) -> None:
         if self._settings_screen is None:

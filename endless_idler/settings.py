@@ -140,9 +140,9 @@ def _default_settings_path() -> Path:
 
     home = Path.home()
     if home.exists():
-        return home / ".midoriai" / "stainedlgassodysseyidle" / "settings.json"
+        return home / ".midoriai" / "stainedglassodysseyidle" / "settings.json"
 
     base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
     if not base:
         base = str(Path.cwd())
-    return Path(base) / "stainedlgassodysseyidle" / "settings.json"
+    return Path(base) / "stainedglassodysseyidle" / "settings.json"

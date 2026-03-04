@@ -18,7 +18,6 @@ from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QGraphicsOpacityEffect
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QSizePolicy
 from PySide6.QtWidgets import QSlider
 from PySide6.QtWidgets import QStackedWidget
@@ -35,16 +34,15 @@ from endless_idler.settings import clamp_volume
 from endless_idler.settings import normalize_channel
 from endless_idler.settings import normalize_loudness_boost_factor
 from endless_idler.settings import normalize_quality
-from endless_idler.ui.radio_control import RadioControlWidget
 
 
-MAIN_LAYOUT_MARGINS = (20, 20, 20, 20)
+MAIN_LAYOUT_MARGINS = (0, 0, 0, 0)
 MAIN_LAYOUT_SPACING = 14
-HEADER_MARGINS = (12, 10, 12, 10)
+HEADER_MARGINS = (18, 16, 18, 16)
 HEADER_SPACING = 10
-CARD_MARGINS = (14, 14, 14, 14)
+CARD_MARGINS = (18, 16, 18, 16)
 CARD_SPACING = 12
-GRID_HORIZONTAL_SPACING = 12
+GRID_HORIZONTAL_SPACING = 10
 GRID_VERTICAL_SPACING = 10
 
 
@@ -59,11 +57,11 @@ class _SettingsPaneSpec:
 class SettingsPage(QWidget):
     back_requested = Signal()
     settings_changed = Signal(dict)
-    play_toggle_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("SettingsPageRoot")
+        self._radio_runtime_available = True
 
         self._suppress_autosave = False
         self._autosave_timer = QTimer(self)
@@ -171,7 +169,7 @@ class SettingsPage(QWidget):
     def _build_controls(self) -> None:
         self._radio_enabled = QCheckBox("Enable Midori AI Radio")
         self._radio_enabled.setToolTip(
-            "Allows starting radio playback from the player controls."
+            "Allows starting radio playback from the navbar control."
         )
 
         self._radio_autostart = QCheckBox("Auto-start radio on app launch")
@@ -224,29 +222,11 @@ class SettingsPage(QWidget):
         self._radio_loudness_boost_factor.setSuffix("x")
         self._radio_loudness_boost_factor.setEnabled(False)
         self._radio_loudness_boost_factor.setToolTip(
-            "Boost multiplier for radio loudness. Effective output is capped by Qt "
-            "audio output at 100%."
+            "Boost multiplier for radio loudness. Effective output is capped by Qt audio output at 100%."
         )
         self._radio_loudness_boost_factor.valueChanged.connect(
             self._on_radio_loudness_boost_factor_changed
         )
-
-        self._radio_control = RadioControlWidget()
-        self._radio_control.setObjectName("SettingsRadioControl")
-        self._radio_control.play_requested.connect(self.play_toggle_requested.emit)
-        self._radio_control.volume_changed.connect(self._on_player_volume_changed)
-
-        self._radio_play_button = QPushButton("Play / Stop Now")
-        self._radio_play_button.setObjectName("SettingsRadioPlayButton")
-        self._radio_play_button.clicked.connect(self.play_toggle_requested.emit)
-
-        self._radio_status_value = QLabel("Radio unavailable.")
-        self._radio_status_value.setObjectName("SettingsPaneSubtitle")
-        self._radio_status_value.setWordWrap(True)
-
-        self._radio_track_value = QLabel("No track")
-        self._radio_track_value.setObjectName("SettingsPaneSubtitle")
-        self._radio_track_value.setWordWrap(True)
 
         self._radio_enabled.toggled.connect(self._radio_autostart.setEnabled)
 
@@ -254,27 +234,6 @@ class SettingsPage(QWidget):
         specs_by_key = {spec.key: spec for spec in self._pane_specs}
         radio_spec = specs_by_key["radio"]
         radio_page, radio_body = self._create_page(radio_spec)
-
-        player_title = QLabel("Player")
-        player_title.setObjectName("SettingsPaneLabel")
-        radio_body.addWidget(player_title)
-
-        player_row = QHBoxLayout()
-        player_row.setSpacing(8)
-        player_row.addWidget(self._radio_control)
-        player_row.addWidget(self._radio_play_button)
-        player_row.addStretch(1)
-        radio_body.addLayout(player_row)
-
-        status_title = QLabel("Status")
-        status_title.setObjectName("SettingsPaneLabel")
-        radio_body.addWidget(status_title)
-        radio_body.addWidget(self._radio_status_value)
-
-        track_title = QLabel("Current Track")
-        track_title.setObjectName("SettingsPaneLabel")
-        radio_body.addWidget(track_title)
-        radio_body.addWidget(self._radio_track_value)
 
         radio_body.addWidget(self._radio_enabled)
         radio_body.addWidget(self._radio_autostart)
@@ -569,7 +528,9 @@ class SettingsPage(QWidget):
                     normalized_selected,
                 )
             self._set_combo_value(self._radio_channel, normalized_selected, fallback="")
-        self._radio_channel.setEnabled(self._radio_channel_enabled)
+        self._radio_channel.setEnabled(
+            self._radio_channel_enabled and self._radio_runtime_available
+        )
 
     def set_settings(self, settings: Mapping[str, object] | AppSettings) -> None:
         if isinstance(settings, AppSettings):
@@ -626,41 +587,45 @@ class SettingsPage(QWidget):
     def apply_radio_state(self, state: Mapping[str, object] | None) -> None:
         state = state or {}
         qt_available = bool(state.get("qt_available") or False)
-        service_available = bool(state.get("service_available") or False)
-        is_playing = bool(state.get("is_playing") or False)
-        enabled = bool(state.get("enabled") or False)
-        volume = clamp_volume(state.get("volume"))
-        status_text = str(state.get("status_text") or "Radio unavailable.")
-        current_track = str(state.get("current_track") or "").strip() or "No track"
-        connection_state = str(state.get("connection_state") or "")
+        status_text = str(state.get("status_text") or "Radio unavailable.").strip()
+        self._radio_runtime_available = qt_available
 
-        self._radio_control.setVisible(qt_available)
-        self._radio_control.set_service_available(service_available)
-        self._radio_control.set_playing(is_playing)
-        self._radio_control.set_connection_state(connection_state)
-        self._radio_control.set_radio_enabled(enabled)
-        self._radio_control.set_volume(volume)
-        self._radio_control.set_status_tooltip(status_text)
+        self._radio_enabled.setEnabled(qt_available)
+        self._radio_autostart.setEnabled(
+            qt_available and bool(self._radio_enabled.isChecked())
+        )
+        self._radio_quality.setEnabled(qt_available)
+        self._radio_volume.setEnabled(qt_available)
+        self._radio_loudness_boost_enabled.setEnabled(qt_available)
+        self._radio_loudness_boost_factor.setEnabled(
+            qt_available and bool(self._radio_loudness_boost_enabled.isChecked())
+        )
+        self._radio_channel.setEnabled(qt_available and self._radio_channel_enabled)
 
-        self._radio_play_button.setEnabled(qt_available)
-        self._radio_status_value.setText(status_text)
-        self._radio_track_value.setText(current_track)
+        tooltip = (
+            f"Midori AI Radio controls are unavailable in this runtime: {status_text}"
+            if not qt_available
+            else ""
+        )
+        for widget in (
+            self._radio_enabled,
+            self._radio_autostart,
+            self._radio_channel,
+            self._radio_quality,
+            self._radio_volume,
+            self._radio_loudness_boost_enabled,
+            self._radio_loudness_boost_factor,
+        ):
+            widget.setToolTip(tooltip)
 
     def _on_radio_volume_value_changed(self, value: int) -> None:
         _ = value
         self._refresh_radio_volume_label()
-        with QSignalBlocker(self._radio_control):
-            self._radio_control.set_volume(self._radio_volume.value())
-
-    def _on_player_volume_changed(self, value: int) -> None:
-        clamped = clamp_volume(value)
-        with QSignalBlocker(self._radio_volume):
-            self._radio_volume.setValue(clamped)
-        self._refresh_radio_volume_label()
-        self._queue_debounced_autosave()
 
     def _on_radio_loudness_boost_toggled(self, enabled: bool) -> None:
-        self._radio_loudness_boost_factor.setEnabled(bool(enabled))
+        self._radio_loudness_boost_factor.setEnabled(
+            bool(enabled) and self._radio_runtime_available
+        )
         self._refresh_radio_volume_label()
 
     def _on_radio_loudness_boost_factor_changed(self, _value: float) -> None:
