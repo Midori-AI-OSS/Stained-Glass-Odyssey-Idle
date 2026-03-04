@@ -61,6 +61,8 @@ class RunSave:
     idle_shared_exp_percentage: int = 1
     idle_risk_reward_level: int = 0
     winstreak: int = 0
+    idle_exp_mult: float = 1.0
+    battle_start_time: float = 0.0
 
 
 class SaveManager:
@@ -136,6 +138,8 @@ class SaveManager:
             idle_shared_exp_percentage=shared_exp_percentage,
             idle_risk_reward_level=risk_reward_level,
             winstreak=as_int(data.get("winstreak", 0), default=0),
+            idle_exp_mult=as_float(data.get("idle_exp_mult", 1.0), default=1.0),
+            battle_start_time=as_float(data.get("battle_start_time", 0.0), default=0.0),
         )
         return _normalized_save(save)
 
@@ -164,6 +168,8 @@ class SaveManager:
             "idle_shared_exp_percentage": save.idle_shared_exp_percentage,
             "idle_risk_reward_level": save.idle_risk_reward_level,
             "winstreak": save.winstreak,
+            "idle_exp_mult": save.idle_exp_mult,
+            "battle_start_time": save.battle_start_time,
         }
 
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -302,6 +308,8 @@ def _normalized_save(save: RunSave) -> RunSave:
         idle_shared_exp_percentage=max(1, min(95, int(getattr(save, "idle_shared_exp_percentage", 1)))),
         idle_risk_reward_level=max(0, min(150, int(getattr(save, "idle_risk_reward_level", 0)))),
         winstreak=max(0, int(getattr(save, "winstreak", 0))),
+        idle_exp_mult=max(1.0, float(getattr(save, "idle_exp_mult", 1.0))),
+        battle_start_time=float(max(0.0, getattr(save, "battle_start_time", 0.0))),
     )
 
 

@@ -587,13 +587,14 @@ class LineOverlay(QWidget):
 
 
 class Arena(QFrame):
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, *, show_engagement_line: bool = False) -> None:
         super().__init__(parent)
         self.setObjectName("battleArena")
         self.setFrameShape(QFrame.Shape.NoFrame)
         self._overlay = LineOverlay(self)
         self._overlay.raise_()
         self._combat_midpoint: QPointF | None = None
+        self._show_engagement_line = show_engagement_line
 
         timer = QTimer(self)
         timer.setInterval(30)
@@ -642,6 +643,27 @@ class Arena(QFrame):
         self._combat_midpoint = QPointF(rect.width() / 2.0, rect.height() / 2.0)
         self._overlay.setGeometry(rect)
         self._overlay.raise_()
+
+    def paintEvent(self, event: object) -> None:
+        """Paint the arena, including optional engagement line."""
+        super().paintEvent(event)  # type: ignore[misc]
+        
+        if self._show_engagement_line:
+            painter = QPainter(self)
+            try:
+                # Draw engagement line at 80% down the arena
+                engagement_y = int(self.height() * 0.8)
+                
+                # Use a subtle dashed line
+                pen = QPen(QColor(100, 100, 100, 80))  # Gray with transparency
+                pen.setStyle(Qt.PenStyle.DashLine)
+                pen.setWidth(2)
+                painter.setPen(pen)
+                
+                # Draw horizontal line across the arena
+                painter.drawLine(0, engagement_y, self.width(), engagement_y)
+            finally:
+                painter.end()
 
     def _tick(self) -> None:
         self._overlay.tick(30)

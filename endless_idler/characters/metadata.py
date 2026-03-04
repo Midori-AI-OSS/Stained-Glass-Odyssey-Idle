@@ -26,7 +26,7 @@ DEFAULT_BASE_STATS: dict[str, float] = {
     "dodge_odds": 0.05,
     "effect_resistance": 0.05,
     "vitality": 1.0,
-    "spd": 2.0,
+    "atk_speed": 1.0,
 }
 
 _BASE_STAT_KEYS = frozenset(DEFAULT_BASE_STATS.keys())

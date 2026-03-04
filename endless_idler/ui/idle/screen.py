@@ -95,6 +95,7 @@ class IdleScreenWidget(QWidget):
             exp_penalty_seconds=float(self._save.idle_exp_penalty_seconds),
             shared_exp_percentage=int(getattr(self._save, "idle_shared_exp_percentage", 1)),
             risk_reward_level=int(getattr(self._save, "idle_risk_reward_level", 0)),
+            battle_start_time=float(getattr(self._save, "battle_start_time", 0.0)),
         )
 
         self._onsite_cards: list[IdleOnsiteCharacterCard] = []
