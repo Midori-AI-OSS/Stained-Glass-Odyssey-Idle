@@ -19,25 +19,6 @@ QLabel#SettingsHeaderTitle {
     color: rgba(237, 239, 245, 245);
 }
 
-QToolButton#SettingsBackButton {
-    color: rgba(237, 239, 245, 235);
-    background-color: rgba(18, 20, 28, 135);
-    border: 1px solid rgba(255, 255, 255, 22);
-    border-radius: 0px;
-    padding: 9px 12px;
-    font-weight: 600;
-}
-
-QToolButton#SettingsBackButton:hover {
-    background-color: rgba(56, 189, 248, 30);
-    border: 1px solid rgba(56, 189, 248, 80);
-}
-
-QToolButton#SettingsBackButton:pressed {
-    background-color: rgba(56, 189, 248, 70);
-    border: 1px solid rgba(56, 189, 248, 100);
-}
-
 QWidget#SettingsNavPanel {
     background-color: rgba(18, 20, 28, 95);
     border: 1px solid rgba(255, 255, 255, 14);

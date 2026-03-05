@@ -9,7 +9,6 @@ from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QMessageBox
-from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QSlider
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
@@ -118,12 +117,6 @@ class IdleScreenWidget(QWidget):
         header.setContentsMargins(0, 0, 0, 0)
         header.setSpacing(10)
         root.addLayout(header)
-
-        back = QPushButton("Back")
-        back.setObjectName("idleBackButton")
-        back.setCursor(Qt.CursorShape.PointingHandCursor)
-        back.clicked.connect(self._finish)
-        header.addWidget(back, 0, Qt.AlignmentFlag.AlignLeft)
 
         header.addStretch(1)
         title = QLabel("Idle Mode")
@@ -636,27 +629,12 @@ class IdleScreenWidget(QWidget):
             pass
 
     def _finish(self) -> None:
+        self.shutdown()
+        self.finished.emit()
+
+    def shutdown(self) -> None:
         if self._idle_timer:
             self._idle_timer.stop()
         if self._autosave_timer:
             self._autosave_timer.stop()
-        try:
-            save = self._save
-            progress = dict(save.character_progress)
-            progress.update(self._idle_state.export_progress())
-            save.character_progress = progress
-            stats = dict(save.character_stats)
-            stats.update(self._idle_state.export_character_stats())
-            save.character_stats = stats
-            initial_stats = dict(getattr(save, "character_initial_stats", {}) or {})
-            initial_stats.update(self._idle_state.export_initial_stats())
-            save.character_initial_stats = initial_stats
-            bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
-            save.idle_exp_bonus_seconds = bonus_seconds
-            save.idle_exp_penalty_seconds = penalty_seconds
-            save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
-            save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
-            self._save_manager.save(save)
-        except Exception:
-            pass
-        self.finished.emit()
+        self._autosave()
