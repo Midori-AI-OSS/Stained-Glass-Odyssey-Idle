@@ -95,14 +95,26 @@ Locked decisions:
   - 1 YOLO banner
 - Failed pulls on all banners grant item rewards for non-character progression systems
   (city, housing, gear, or equivalent development paths).
-- Pity is per-banner.
-- Every 10 pulls adds +1% to 5 star odds on that banner.
-- Pity resets when a 5 star drops on that banner.
-- YOLO banner uses a 50x buff concept affecting all rarity odds.
+- Pity is per-banner, with a single pity track per banner.
+- 5 star odds follow the Endless linear pity curve:
+  - `p5(pity) = 0.00001 + pity * ((0.05 - 0.00001) / 159)`
+  - hard guarantee at `pity >= 179`
+- High-tier roll order is: 5 star pity branch first, then 6 star branch.
+- 6 star base chance remains 0.01% (1 in 10,000).
+- 7 star is derived from successful 6 star branch promotion (not a primary roll tier):
+  - `p_promote = 0.00001%` of successful 6 star branch outcomes
+  - implied base 7 star odds are approximately 1 in 100,000,000,000 pulls before modifiers
+- 7 star constraints:
+  - current 7 star pool is a single character (Luna)
+  - current 7 star character uses Generic (non-normal) damage typing
+  - 7 star outcomes can never be banner-featured
+  - on elemental banners, if same-element eligibility fails, no 7 star can occur on that pull
+- Pity resets on any 5 star, 6 star, or 7 star outcome.
+- YOLO banner applies 50x to raw rates (including 7 star), then normalizes to a valid distribution.
 
 Pending:
-- Final normalization math for YOLO all-rarity behavior.
-- Final 6 star and 7 star odds math, to be aligned with Endless Autofighter reference behavior.
+- Translate the locked formulas into Warp runtime constants/helpers during implementation.
+- Add validation fixtures/simulations for pity progression and 6/7 star probability sanity checks.
 
 ### Rebirth Currency for Warp: Upgrade Stones
 
@@ -166,7 +178,7 @@ Pending:
 - Exact shard odds unit conversions and tick-to-time expectations.
 - Exact rebirth drop formula and caps/floors policy.
 - Final energy model details (drain, regen, minimums, persistence fields).
-- Final Warp rarity math including YOLO normalization and 6/7 star distribution.
+- Warp implementation sequencing and simulation verification for locked rarity math.
 - Final Upgrade Stone extra-reward math.
 - Final 3-4 star Salvage Dust costs.
 - Final overflow craft-bonus math ordering and payout details.
