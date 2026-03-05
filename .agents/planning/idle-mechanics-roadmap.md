@@ -18,8 +18,34 @@ Last updated: 2026-03-05
 - No current energy subsystem exists for blessing channeling.
 - No current Upgrade Stone currency exists in save/runtime models.
 - Offsite EXP is currently sourced from onsite-driven pools in idle processing.
+- Character stacks currently affect two live lanes:
+  - stat scaling via `party_scaling` stack multiplier: `1.0 + 0.12 * (stacks - 1)`
+  - idle EXP via passive modifier: `(stacks * 0.05) + 1.0` (onsite and offsite gain paths)
 
 ## Planned Mechanics (Target Design)
+
+### Mech 0: New-Save Onboarding and Layout Menu
+
+Planned intent:
+- Lower starter complexity by giving exactly one starter character on brand-new saves.
+- Add a dedicated menu for party layout management without coupling to shop/combat systems.
+
+Locked decisions:
+- New save starts with exactly 1 character.
+- Starter pool is a random pick between:
+  - `lady_darkness`
+  - `persona_light_and_dark`
+- `lady_light` is excluded from this starter pool because current placement is offsite-only.
+- Forced new-save resets are allowed for beta updates only.
+- Stable/non-beta updates should preserve saves (migrate as needed).
+- Layout/Plan menu reuses legacy drag/drop slot behavior from the old party-builder/shop layout flow.
+- Layout/Plan menu excludes shop/reroll/sell/merge/fight/reward behavior.
+- Bottom row lists owned, unassigned characters and supports scrolling when overflow occurs.
+
+Pending:
+- Final menu label decision ("Layout" vs "Plan").
+- Final ordering rule for bottom-row owned characters (for example: manual, rarity, alphabetical, or recent).
+- Final save-write cadence for drag/drop edits (immediate save vs explicit confirm action).
 
 ### Mech 1: Star Bands and Character Progression Weighting
 
@@ -174,6 +200,7 @@ Pending:
 
 ## Open High-Impact Decisions
 
+- Final Layout/Plan menu naming, bottom-row ordering policy, and save-write cadence.
 - Final star-to-weapon-power mapping for 1-4 weapon parts.
 - Exact shard odds unit conversions and tick-to-time expectations.
 - Exact rebirth drop formula and caps/floors policy.
