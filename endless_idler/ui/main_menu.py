@@ -1,210 +1,264 @@
 from __future__ import annotations
 
+import random
+
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtCore import Signal
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QCloseEvent
-from PySide6.QtGui import QPainter
-from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFrame
-from PySide6.QtWidgets import QGraphicsDropShadowEffect
 from PySide6.QtWidgets import QHBoxLayout
+from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QMainWindow
 from PySide6.QtWidgets import QMessageBox
-from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QStackedWidget
+from PySide6.QtWidgets import QToolButton
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
+from endless_idler.characters.plugins import discover_character_plugins
+from endless_idler.save import SaveManager
+from endless_idler.save import new_run_save
+from endless_idler.save import sanitize_save_characters
 from endless_idler.settings import AppSettings
 from endless_idler.settings import AppSettingsManager
+from endless_idler.settings import clamp_volume
 from endless_idler.settings import normalize_channel
-from endless_idler.ui.assets import asset_path
-from endless_idler.ui.idle import IdleHubWidget
+from endless_idler.ui.home import HomePage
 from endless_idler.ui.idle import IdleScreenWidget
+from endless_idler.ui.idle.bootstrap import bootstrap_party
+from endless_idler.ui.idle.bootstrap import should_bootstrap_party
+from endless_idler.ui.lucide_icons import lucide_icon
 from endless_idler.ui.radio import RadioController
+from endless_idler.ui.radio_control import RadioControlWidget
 from endless_idler.ui.settings import SettingsPage
 
 
-class MainMenuWidget(QWidget):
-    play_requested = Signal()
-    settings_requested = Signal()
-    warp_requested = Signal()
-    inventory_requested = Signal()
-    guidebook_requested = Signal()
-    feedback_requested = Signal()
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-
-        root = QHBoxLayout()
-        root.setContentsMargins(24, 24, 24, 24)
-        root.setSpacing(24)
-        self.setLayout(root)
-
-        root.addStretch(1)
-
-        menu_panel = QFrame()
-        menu_panel.setObjectName("mainMenuPanel")
-        menu_panel.setFrameShape(QFrame.Shape.NoFrame)
-        menu_panel.setFixedWidth(220)
-        root.addWidget(menu_panel, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
-
-        glow = QGraphicsDropShadowEffect(menu_panel)
-        glow.setBlurRadius(44)
-        glow.setOffset(0, 0)
-        glow.setColor(QColor(255, 120, 80, 95))
-        menu_panel.setGraphicsEffect(glow)
-
-        menu_layout = QVBoxLayout()
-        menu_layout.setContentsMargins(10, 10, 10, 10)
-        menu_layout.setSpacing(10)
-        menu_panel.setLayout(menu_layout)
-
-        menu_layout.addWidget(self._make_button("Run", self.play_requested.emit))
-        menu_layout.addWidget(self._make_button("Warp", self.warp_requested.emit))
-        menu_layout.addWidget(self._make_button("Inventory", self.inventory_requested.emit))
-        menu_layout.addWidget(self._make_button("Guidebook", self.guidebook_requested.emit))
-        menu_layout.addWidget(self._make_button("Settings", self.settings_requested.emit))
-        menu_layout.addWidget(self._make_button("Feedback", self.feedback_requested.emit))
-        menu_layout.addStretch(1)
-
-    def _make_button(self, label: str, on_click: Callable[[], None]) -> QPushButton:
-        button = QPushButton(label)
-        button.setObjectName(f"mainMenuButton_{label.lower().replace(' ', '_')}")
-        button.setProperty("stainedMenu", True)
-        button.setCursor(Qt.CursorShape.PointingHandCursor)
-        button.setMinimumHeight(52)
-        button.clicked.connect(on_click)
-        return button
-
-
-class MainMenuBackground(QWidget):
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._background = QPixmap(asset_path("backgrounds", "main_menu_cityscape.png"))
-
-    def paintEvent(self, event: object) -> None:
-        _ = event
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-
-        if not self._background.isNull():
-            scaled = self._background.scaled(
-                self.size(),
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            x = (scaled.width() - self.width()) // 2
-            y = (scaled.height() - self.height()) // 2
-            painter.drawPixmap(0, 0, scaled, x, y, self.width(), self.height())
-
-        painter.fillRect(self.rect(), QColor(0, 0, 0, 110))
-        painter.end()
-
-
 class MainMenuWindow(QMainWindow):
+    _PAGE_HOME = "home"
+    _PAGE_IDLE = "idle"
+    _PAGE_SETTINGS = "settings"
+
     def __init__(self) -> None:
         super().__init__()
-        self._idle_hub: IdleHubWidget | None = None
-        self._idle_screen: IdleScreenWidget | None = None
-        self._menu_screen: QWidget | None = None
-        self._settings_screen: SettingsPage | None = None
-
         self._settings_manager = AppSettingsManager()
         self._app_settings = self._settings_manager.load()
         self._radio_controller: RadioController | None = RadioController(self)
         self._radio_channel_options: list[str] = []
 
-        self._radio_controller.state_changed.connect(self._on_radio_state_changed)
+        self._idle_payload: dict[str, object] | None = None
+        self._idle_screen: IdleScreenWidget | None = None
+        self._nav_buttons: dict[str, QToolButton] = {}
 
         self.setWindowTitle("Stained Glass Odyssey Idle")
         self.resize(1280, 820)
 
-        menu = MainMenuWidget()
-        menu.play_requested.connect(self._open_idle_hub)
-        menu.settings_requested.connect(self._open_settings)
-        menu.warp_requested.connect(self._stub_warp)
-        menu.inventory_requested.connect(self._stub_inventory)
-        menu.guidebook_requested.connect(self._stub_guidebook)
-        menu.feedback_requested.connect(self._stub_feedback)
+        shell = QWidget(self)
+        shell.setObjectName("AppShellRoot")
+        shell_layout = QVBoxLayout(shell)
+        shell_layout.setContentsMargins(16, 16, 16, 16)
+        shell_layout.setSpacing(12)
+        self.setCentralWidget(shell)
 
-        background = MainMenuBackground()
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        background.setLayout(layout)
-        layout.addWidget(menu)
+        topbar = QFrame(shell)
+        topbar.setObjectName("AppTopBar")
+        topbar_layout = QHBoxLayout(topbar)
+        topbar_layout.setContentsMargins(12, 10, 12, 10)
+        topbar_layout.setSpacing(8)
+        shell_layout.addWidget(topbar)
 
-        self._stack = QStackedWidget()
-        self._menu_screen = background
-        self._stack.addWidget(self._menu_screen)
-        self.setCentralWidget(self._stack)
+        topbar_layout.addWidget(
+            self._make_nav_button(
+                label="Home",
+                icon_name="house",
+                page_key=self._PAGE_HOME,
+                on_click=self._show_home,
+            )
+        )
+        topbar_layout.addWidget(
+            self._make_nav_button(
+                label="Idle",
+                icon_name="play",
+                page_key=self._PAGE_IDLE,
+                on_click=self._show_idle,
+            )
+        )
+        topbar_layout.addWidget(
+            self._make_stub_button(
+                label="Warp",
+                on_click=self._stub_warp,
+            )
+        )
+        topbar_layout.addWidget(
+            self._make_stub_button(
+                label="Inventory",
+                on_click=self._stub_inventory,
+            )
+        )
+        topbar_layout.addWidget(
+            self._make_stub_button(
+                label="Guidebook",
+                on_click=self._stub_guidebook,
+            )
+        )
+        topbar_layout.addWidget(
+            self._make_nav_button(
+                label="Settings",
+                icon_name="settings",
+                page_key=self._PAGE_SETTINGS,
+                on_click=self._show_settings,
+            )
+        )
+        topbar_layout.addWidget(
+            self._make_stub_button(
+                label="Feedback",
+                on_click=self._stub_feedback,
+            )
+        )
+        topbar_layout.addStretch(1)
 
+        self._radio_control = RadioControlWidget(topbar)
+        topbar_layout.addWidget(self._radio_control, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+        self._stack = QStackedWidget(shell)
+        shell_layout.addWidget(self._stack, 1)
+
+        self._home_screen = HomePage(self)
+        self._settings_screen = SettingsPage(self)
+        self._settings_screen.settings_changed.connect(self._on_settings_changed)
+        self._idle_placeholder = self._build_idle_placeholder(self)
+
+        self._stack.addWidget(self._home_screen)
+        self._stack.addWidget(self._idle_placeholder)
+        self._stack.addWidget(self._settings_screen)
+
+        self._startup_idle_timer = QTimer(self)
+        self._startup_idle_timer.setSingleShot(True)
+        self._startup_idle_timer.setInterval(2000)
+        self._startup_idle_timer.timeout.connect(self._initialize_idle_runtime)
+
+        self._radio_control.play_requested.connect(self._on_radio_control_play_requested)
+        self._radio_control.volume_changed.connect(self._on_radio_control_volume_changed)
+        if self._radio_controller is not None:
+            self._radio_controller.state_changed.connect(self._on_radio_state_changed)
+
+        self._set_active_nav(self._PAGE_HOME)
+        self._stack.setCurrentWidget(self._home_screen)
         self._sync_radio_controller_from_settings(user_initiated=False)
+        self._on_radio_state_changed(self._radio_state_snapshot())
+        self._startup_idle_timer.start()
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        self._startup_idle_timer.stop()
+        if self._idle_screen is not None:
+            self._idle_screen.shutdown()
         if self._radio_controller is not None:
             self._radio_controller.shutdown()
         super().closeEvent(event)
 
-    def _open_idle_hub(self) -> None:
-        if self._idle_hub is None:
-            self._idle_hub = IdleHubWidget()
-            self._idle_hub.back_requested.connect(self._open_main_menu)
-            self._idle_hub.start_requested.connect(self._open_idle_screen)
-            self._stack.addWidget(self._idle_hub)
-        self._idle_hub.reload_save()
-        self._stack.setCurrentWidget(self._idle_hub)
+    def _make_nav_button(
+        self,
+        *,
+        label: str,
+        icon_name: str,
+        page_key: str,
+        on_click: Callable[[], None],
+    ) -> QToolButton:
+        button = QToolButton(self)
+        button.setText(label)
+        button.setIcon(lucide_icon(icon_name))
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        button.setCheckable(True)
+        button.setAutoExclusive(True)
+        button.setProperty("appNav", True)
+        button.clicked.connect(on_click)
+        self._nav_buttons[page_key] = button
+        return button
 
-    def _open_settings(self) -> None:
-        if self._settings_screen is None:
-            self._settings_screen = SettingsPage()
-            self._settings_screen.back_requested.connect(self._open_main_menu)
-            self._settings_screen.settings_changed.connect(self._on_settings_changed)
-            self._stack.addWidget(self._settings_screen)
+    def _make_stub_button(
+        self,
+        *,
+        label: str,
+        on_click: Callable[[], None],
+    ) -> QToolButton:
+        button = QToolButton(self)
+        button.setText(label)
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        button.setProperty("appStub", True)
+        button.clicked.connect(on_click)
+        return button
 
+    @staticmethod
+    def _build_idle_placeholder(parent: QWidget | None = None) -> QWidget:
+        holder = QWidget(parent)
+        layout = QVBoxLayout(holder)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addStretch(1)
+        label = QLabel("Preparing idle runtime...")
+        label.setObjectName("AppIdleStartupLabel")
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(label, 0, Qt.AlignmentFlag.AlignCenter)
+        layout.addStretch(1)
+        return holder
+
+    def _set_active_nav(self, key: str) -> None:
+        for page_key, button in self._nav_buttons.items():
+            button.setChecked(page_key == key)
+
+    def _show_home(self) -> None:
+        self._stack.setCurrentWidget(self._home_screen)
+        self._set_active_nav(self._PAGE_HOME)
+
+    def _show_idle(self) -> None:
+        if self._idle_screen is None:
+            self._stack.setCurrentWidget(self._idle_placeholder)
+        else:
+            self._stack.setCurrentWidget(self._idle_screen)
+        self._set_active_nav(self._PAGE_IDLE)
+
+    def _show_settings(self) -> None:
         _ = self._ensure_radio_controller()
         self._sync_radio_controller_from_settings(user_initiated=False)
         self._refresh_radio_channel_options(disable_on_failure=True)
         self._settings_screen.set_settings(self._app_settings)
         self._settings_screen.apply_radio_state(self._radio_state_snapshot())
         self._stack.setCurrentWidget(self._settings_screen)
+        self._set_active_nav(self._PAGE_SETTINGS)
 
-    def _open_main_menu(self) -> None:
-        if self._menu_screen is not None:
-            self._stack.setCurrentWidget(self._menu_screen)
+    def _prepare_idle_payload(self) -> dict[str, object]:
+        save_manager = SaveManager()
+        plugins = discover_character_plugins()
+        allowed_ids = {plugin.char_id for plugin in plugins}
 
-    def _open_idle_screen(self, payload: object) -> None:
+        save = save_manager.load() or new_run_save()
+        save = sanitize_save_characters(save=save, allowed_char_ids=allowed_ids)
+        if should_bootstrap_party(save):
+            bootstrap_party(save, plugins=plugins, rng=random.Random())
+        save_manager.save(save)
+
+        return {
+            "party_level": int(save.party_level),
+            "onsite": list(save.onsite),
+            "offsite": list(save.offsite),
+            "stacks": dict(save.stacks),
+        }
+
+    def _initialize_idle_runtime(self) -> None:
         if self._idle_screen is not None:
-            self._cleanup_widget(self._idle_screen)
-            self._idle_screen = None
+            return
 
-        idle = IdleScreenWidget(payload=payload)
-        idle.finished.connect(self._close_idle_screen)
+        if self._idle_payload is None:
+            self._idle_payload = self._prepare_idle_payload()
+
+        idle = IdleScreenWidget(payload=self._idle_payload, parent=self)
+        idle.finished.connect(self._show_home)
         self._idle_screen = idle
         self._stack.addWidget(idle)
-        self._stack.setCurrentWidget(idle)
 
-    def _close_idle_screen(self) -> None:
-        if self._idle_hub is not None:
-            self._idle_hub.reload_save()
-            self._stack.setCurrentWidget(self._idle_hub)
-        if self._idle_screen is None:
-            return
-        self._cleanup_widget(self._idle_screen)
-        self._idle_screen = None
-
-    def _cleanup_widget(self, widget: QWidget) -> None:
-        try:
-            self._stack.removeWidget(widget)
-        except Exception:
-            pass
-        try:
-            widget.deleteLater()
-        except Exception:
-            pass
+        if self._stack.currentWidget() is self._idle_placeholder:
+            self._stack.setCurrentWidget(idle)
 
     def _ensure_radio_controller(self) -> RadioController | None:
         if self._radio_controller is not None:
@@ -220,15 +274,12 @@ class MainMenuWindow(QMainWindow):
         user_initiated: bool,
         previous_enabled: bool | None = None,
     ) -> None:
-        controller = self._radio_controller
-        if controller is None:
-            if not self._app_settings.radio_enabled and self._settings_screen is None:
-                return
-            controller = self._ensure_radio_controller()
+        controller = self._ensure_radio_controller()
         if controller is None:
             return
 
         if not controller.qt_available:
+            self._on_radio_state_changed(self._radio_state_snapshot())
             return
 
         controller.set_channel(self._app_settings.radio_channel)
@@ -264,15 +315,54 @@ class MainMenuWindow(QMainWindow):
             user_initiated=True,
             previous_enabled=previous_enabled,
         )
+        self._on_radio_state_changed(self._radio_state_snapshot())
+
+    def _on_radio_control_play_requested(self) -> None:
+        controller = self._ensure_radio_controller()
+        if controller is None or not controller.qt_available:
+            return
+
+        if not self._app_settings.radio_enabled:
+            self._app_settings.radio_enabled = True
+            self._settings_manager.save(self._app_settings)
+            self._sync_radio_controller_from_settings(
+                user_initiated=True,
+                previous_enabled=False,
+            )
+            self._settings_screen.set_settings(self._app_settings)
+
+        controller.toggle_playback()
+
+    def _on_radio_control_volume_changed(self, value: int) -> None:
+        clamped = clamp_volume(value)
+        if clamped == self._app_settings.radio_volume:
+            return
+        self._app_settings.radio_volume = clamped
+        self._settings_manager.save(self._app_settings)
+
+        controller = self._ensure_radio_controller()
+        if controller is not None and controller.qt_available:
+            controller.set_volume(clamped)
+        self._settings_screen.set_settings(self._app_settings)
+        self._on_radio_state_changed(self._radio_state_snapshot())
 
     def _on_radio_state_changed(self, state: object) -> None:
-        if self._settings_screen is None:
-            return
         if isinstance(state, dict):
             snapshot = state
         else:
             snapshot = self._radio_state_snapshot()
+
         self._settings_screen.apply_radio_state(snapshot)
+
+        qt_available = bool(snapshot.get("qt_available") or False)
+        service_available = bool(snapshot.get("service_available") or False)
+        self._radio_control.setVisible(qt_available)
+        self._radio_control.set_service_available(qt_available and service_available)
+        self._radio_control.set_playing(bool(snapshot.get("is_playing") or False))
+        self._radio_control.set_radio_enabled(self._app_settings.radio_enabled)
+        self._radio_control.set_connection_state(str(snapshot.get("connection_state") or "idle"))
+        self._radio_control.set_volume(clamp_volume(snapshot.get("volume")))
+        self._radio_control.set_status_tooltip(str(snapshot.get("status_text") or ""))
 
     def _radio_state_snapshot(self) -> dict[str, object]:
         if self._radio_controller is None:
@@ -306,9 +396,6 @@ class MainMenuWindow(QMainWindow):
         return self._radio_controller.state_snapshot()
 
     def _refresh_radio_channel_options(self, *, disable_on_failure: bool) -> None:
-        if self._settings_screen is None:
-            return
-
         selected_channel = normalize_channel(self._app_settings.radio_channel)
         controller = self._radio_controller
         if controller is None or not controller.qt_available:
@@ -322,7 +409,7 @@ class MainMenuWindow(QMainWindow):
         def _handle_channels(channels: object, error_text: str) -> None:
             current_selected = normalize_channel(self._app_settings.radio_channel)
             if error_text or not isinstance(channels, list):
-                if disable_on_failure and self._settings_screen is not None:
+                if disable_on_failure:
                     self._settings_screen.set_radio_channel_options(
                         self._radio_channel_options,
                         selected=current_selected,
@@ -338,12 +425,11 @@ class MainMenuWindow(QMainWindow):
                 normalized.append(channel)
             normalized.sort()
             self._radio_channel_options = normalized
-            if self._settings_screen is not None:
-                self._settings_screen.set_radio_channel_options(
-                    normalized,
-                    selected=current_selected,
-                    enabled=True,
-                )
+            self._settings_screen.set_radio_channel_options(
+                normalized,
+                selected=current_selected,
+                enabled=True,
+            )
 
         controller.fetch_channels(_handle_channels)
 

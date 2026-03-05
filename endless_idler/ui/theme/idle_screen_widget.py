@@ -11,19 +11,6 @@ QFrame#idleArena {
     border: 1px solid rgba(255, 255, 255, 18);
 }
 
-QPushButton#idleBackButton {
-    background-color: rgba(255, 255, 255, 16);
-    border: 1px solid rgba(255, 255, 255, 22);
-    border-radius: 0px;
-    padding: 8px 16px;
-    color: rgba(255, 255, 255, 235);
-    font-size: 13px;
-}
-
-QPushButton#idleBackButton:hover {
-    background-color: rgba(120, 180, 255, 44);
-}
-
 QLabel#idleTitle {
     color: rgba(255, 255, 255, 240);
     font-size: 18px;

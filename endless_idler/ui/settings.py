@@ -55,7 +55,6 @@ class _SettingsPaneSpec:
 
 
 class SettingsPage(QWidget):
-    back_requested = Signal()
     settings_changed = Signal(dict)
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -91,15 +90,8 @@ class SettingsPage(QWidget):
         title = QLabel("Settings")
         title.setObjectName("SettingsHeaderTitle")
 
-        back = QToolButton()
-        back.setObjectName("SettingsBackButton")
-        back.setText("Back")
-        back.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-        back.clicked.connect(self._on_back)
-
         header_layout.addWidget(title)
         header_layout.addStretch(1)
-        header_layout.addWidget(back, 0, Qt.AlignmentFlag.AlignRight)
         layout.addWidget(header)
 
         card = QWidget(self)
@@ -338,10 +330,6 @@ class SettingsPage(QWidget):
         self._radio_loudness_boost_factor.valueChanged.connect(
             self._queue_debounced_autosave
         )
-
-    def _on_back(self) -> None:
-        self.try_autosave()
-        self.back_requested.emit()
 
     def _on_nav_button_clicked(self, key: str) -> None:
         self._navigate_to_pane(key, user_initiated=True)
