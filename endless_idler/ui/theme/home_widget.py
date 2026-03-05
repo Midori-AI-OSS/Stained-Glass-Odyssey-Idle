@@ -48,15 +48,6 @@ QTabBar#HomeTabs::tab:selected {
     border: 1px solid rgba(16, 185, 129, 140);
 }
 
-QWidget#HomeHeadersRow {
-    background: transparent;
-}
-
-QLabel#HomeHeaderLabel {
-    color: rgba(237, 239, 245, 150);
-    font-weight: 650;
-}
-
 QFrame#HomeDecorRow {
     border: 1px solid rgba(255, 255, 255, 12);
     border-left: 4px solid rgba(148, 163, 184, 110);

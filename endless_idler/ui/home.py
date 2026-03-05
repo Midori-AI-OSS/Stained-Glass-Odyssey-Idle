@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame
-from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QTabBar
 from PySide6.QtWidgets import QVBoxLayout
@@ -40,25 +39,6 @@ class HomePage(QWidget):
         tabs.addTab("Upgrades")
         tabs.setCurrentIndex(0)
         panel_layout.addWidget(tabs)
-
-        headers = QWidget(panel)
-        headers.setObjectName("HomeHeadersRow")
-        headers_layout = QHBoxLayout(headers)
-        headers_layout.setContentsMargins(0, 0, 0, 0)
-        headers_layout.setSpacing(12)
-        panel_layout.addWidget(headers)
-
-        h1 = QLabel("Section")
-        h1.setObjectName("HomeHeaderLabel")
-        headers_layout.addWidget(h1, 5)
-
-        h2 = QLabel("Status")
-        h2.setObjectName("HomeHeaderLabel")
-        headers_layout.addWidget(h2, 2)
-
-        h3 = QLabel("Notes")
-        h3.setObjectName("HomeHeaderLabel")
-        headers_layout.addWidget(h3, 5)
 
         for stain in ("slate", "cyan", "emerald"):
             row = QFrame(panel)
