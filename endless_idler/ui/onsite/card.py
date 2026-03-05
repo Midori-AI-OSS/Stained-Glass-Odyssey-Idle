@@ -282,6 +282,10 @@ class OnsiteCharacterCardBase(QFrame):
             self._stats_popup.set_panel(self._stats_panel)
         
         self._apply_element_tint(stats)
+        
+        if self.underMouse() and self._tooltip_html:
+            element_id = getattr(getattr(self, "_stats", None), "element_id", None)
+            show_stained_tooltip(self, self._tooltip_html, element_id=element_id)
     
     def _apply_element_tint(self, stats: Stats) -> None:
         element_id = str(getattr(stats, "element_id", "generic") or "generic")

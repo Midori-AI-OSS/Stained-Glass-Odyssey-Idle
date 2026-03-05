@@ -57,7 +57,7 @@ class IdleOffsiteCard(QFrame):
         self._portrait_placeholder = ""
         self._portrait_source_pixmap: QPixmap | None = None
 
-        self.setFixedSize(220, 96)
+        self.setFixedSize(280, 96)
 
         layout = QHBoxLayout()
         layout.setContentsMargins(10, 10, 10, 10)
