@@ -18,12 +18,6 @@ QFrame#HomePanel {
     border-radius: 0px;
 }
 
-QLabel#HomeTitle {
-    color: rgba(237, 239, 245, 240);
-    font-size: 22px;
-    font-weight: 760;
-}
-
 QTabBar#HomeTabs::tab {
     background-color: rgba(18, 20, 28, 135);
     border: 1px solid rgba(255, 255, 255, 18);

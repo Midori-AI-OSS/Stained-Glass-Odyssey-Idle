@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QTabBar
@@ -25,11 +24,6 @@ class HomePage(QWidget):
         panel_layout.setContentsMargins(12, 12, 12, 12)
         panel_layout.setSpacing(10)
         root.addWidget(panel, 1)
-
-        title = QLabel("Stained Glass Odyssey")
-        title.setObjectName("HomeTitle")
-        title.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        panel_layout.addWidget(title)
 
         tabs = QTabBar()
         tabs.setObjectName("HomeTabs")
