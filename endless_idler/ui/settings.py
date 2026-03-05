@@ -516,9 +516,7 @@ class SettingsPage(QWidget):
                     normalized_selected,
                 )
             self._set_combo_value(self._radio_channel, normalized_selected, fallback="")
-        self._radio_channel.setEnabled(
-            self._radio_channel_enabled and self._radio_runtime_available
-        )
+        self._radio_channel.setEnabled(self._radio_channel_enabled)
 
     def set_settings(self, settings: Mapping[str, object] | AppSettings) -> None:
         if isinstance(settings, AppSettings):
@@ -574,29 +572,24 @@ class SettingsPage(QWidget):
 
     def apply_radio_state(self, state: Mapping[str, object] | None) -> None:
         state = state or {}
-        qt_available = bool(state.get("qt_available") or False)
-        self._radio_runtime_available = qt_available
+        self._radio_runtime_available = bool(state.get("qt_available") or False)
 
-        self._radio_enabled.setEnabled(qt_available)
-        self._radio_autostart.setEnabled(
-            qt_available and bool(self._radio_enabled.isChecked())
-        )
-        self._radio_quality.setEnabled(qt_available)
-        self._radio_volume.setEnabled(qt_available)
-        self._radio_loudness_boost_enabled.setEnabled(qt_available)
+        self._radio_enabled.setEnabled(True)
+        self._radio_autostart.setEnabled(bool(self._radio_enabled.isChecked()))
+        self._radio_quality.setEnabled(True)
+        self._radio_volume.setEnabled(True)
+        self._radio_loudness_boost_enabled.setEnabled(True)
         self._radio_loudness_boost_factor.setEnabled(
-            qt_available and bool(self._radio_loudness_boost_enabled.isChecked())
+            bool(self._radio_loudness_boost_enabled.isChecked())
         )
-        self._radio_channel.setEnabled(qt_available and self._radio_channel_enabled)
+        self._radio_channel.setEnabled(self._radio_channel_enabled)
 
     def _on_radio_volume_value_changed(self, value: int) -> None:
         _ = value
         self._refresh_radio_volume_label()
 
     def _on_radio_loudness_boost_toggled(self, enabled: bool) -> None:
-        self._radio_loudness_boost_factor.setEnabled(
-            bool(enabled) and self._radio_runtime_available
-        )
+        self._radio_loudness_boost_factor.setEnabled(bool(enabled))
         self._refresh_radio_volume_label()
 
     def _on_radio_loudness_boost_factor_changed(self, _value: float) -> None:

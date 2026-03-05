@@ -62,7 +62,7 @@ def test_probe_returns_false_when_player_init_raises(monkeypatch) -> None:
     assert RadioController.probe_qt_multimedia_available() is False
 
 
-def test_probe_returns_true_when_multimedia_probe_succeeds(monkeypatch) -> None:
+def test_probe_returns_true_when_multimedia_probe_succeeds(monkeypatch, tmp_path) -> None:
     class _AudioOutput:
         def __init__(self) -> None:
             self.deleted = False
@@ -83,4 +83,11 @@ def test_probe_returns_true_when_multimedia_probe_succeeds(monkeypatch) -> None:
 
     monkeypatch.setattr(controller_module, "QAudioOutput", _AudioOutput)
     monkeypatch.setattr(controller_module, "QMediaPlayer", _Player)
+    socket_path = tmp_path / "pipewire-0"
+    socket_path.write_text("", encoding="utf-8")
+    monkeypatch.setattr(
+        RadioController,
+        "_pipewire_socket_path",
+        staticmethod(lambda: socket_path),
+    )
     assert RadioController.probe_qt_multimedia_available() is True
