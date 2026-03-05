@@ -12,6 +12,26 @@ QToolButton#RadioControlButton {
     min-height: 40px;
     max-height: 40px;
     padding: 0px;
+    color: rgba(237, 239, 245, 235);
+    background-color: rgba(18, 20, 28, 135);
+    border: 1px solid rgba(255, 255, 255, 22);
+    border-radius: 0px;
+}
+
+QToolButton#RadioControlButton:hover {
+    background-color: rgba(56, 189, 248, 30);
+    border: 1px solid rgba(56, 189, 248, 80);
+}
+
+QToolButton#RadioControlButton:pressed {
+    background-color: rgba(56, 189, 248, 70);
+    border: 1px solid rgba(56, 189, 248, 100);
+}
+
+QToolButton#RadioControlButton:disabled {
+    background-color: rgba(18, 20, 28, 90);
+    color: rgba(237, 239, 245, 130);
+    border: 1px solid rgba(255, 255, 255, 14);
 }
 
 QWidget#RadioControlSliderWrap {
