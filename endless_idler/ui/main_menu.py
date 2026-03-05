@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import random
 
 from collections.abc import Callable
@@ -36,6 +37,7 @@ from endless_idler.ui.settings import SettingsPage
 
 
 class MainMenuWindow(QMainWindow):
+    APP_TITLE = "Stained Glass Odyssey Idle"
     _PAGE_HOME = "home"
     _PAGE_IDLE = "idle"
     _PAGE_SETTINGS = "settings"
@@ -51,7 +53,7 @@ class MainMenuWindow(QMainWindow):
         self._idle_screen: IdleScreenWidget | None = None
         self._nav_buttons: dict[str, QToolButton] = {}
 
-        self.setWindowTitle("Stained Glass Odyssey Idle")
+        self.setWindowTitle(self.APP_TITLE)
         self.resize(1280, 820)
 
         shell = QWidget(self)
@@ -328,21 +330,31 @@ class MainMenuWindow(QMainWindow):
         if controller is None or not controller.qt_available:
             return
 
+        snapshot = controller.state_snapshot()
+        connection_state = str(snapshot.get("connection_state") or "").strip().lower()
+        is_active = bool(snapshot.get("is_playing")) or bool(
+            snapshot.get("desired_playing")
+        )
+        if connection_state == "reconnecting":
+            is_active = True
+
+        if is_active:
+            self._app_settings.radio_enabled = False
+            controller.set_enabled(False, start_when_enabled=False)
+            self._settings_manager.save(self._app_settings)
+            self._settings_screen.set_settings(self._app_settings)
+            return
+
         if not self._app_settings.radio_enabled:
             self._app_settings.radio_enabled = True
+            controller.set_enabled(True, start_when_enabled=False)
             self._settings_manager.save(self._app_settings)
-            self._sync_radio_controller_from_settings(
-                user_initiated=True,
-                previous_enabled=False,
-            )
             self._settings_screen.set_settings(self._app_settings)
 
-        controller.toggle_playback()
+        controller.start_playback()
 
     def _on_radio_control_volume_changed(self, value: int) -> None:
         clamped = clamp_volume(value)
-        if clamped == self._app_settings.radio_volume:
-            return
         self._app_settings.radio_volume = clamped
         self._settings_manager.save(self._app_settings)
 
@@ -363,12 +375,64 @@ class MainMenuWindow(QMainWindow):
         qt_available = bool(snapshot.get("qt_available") or False)
         service_available = bool(snapshot.get("service_available") or False)
         self._radio_control.setVisible(qt_available)
-        self._radio_control.set_service_available(qt_available and service_available)
+        self._radio_control.set_service_available(service_available)
         self._radio_control.set_playing(bool(snapshot.get("is_playing") or False))
-        self._radio_control.set_radio_enabled(self._app_settings.radio_enabled)
+        self._radio_control.set_radio_enabled(bool(snapshot.get("enabled") or False))
         self._radio_control.set_connection_state(str(snapshot.get("connection_state") or "idle"))
         self._radio_control.set_volume(clamp_volume(snapshot.get("volume")))
         self._radio_control.set_status_tooltip(str(snapshot.get("status_text") or ""))
+        self._update_window_title_from_radio_state(snapshot)
+
+    def _update_window_title_from_radio_state(self, state: dict[str, object]) -> None:
+        if not bool(state.get("qt_available")):
+            self.setWindowTitle(self.APP_TITLE)
+            return
+
+        if (not bool(state.get("enabled"))) and (not bool(state.get("is_playing"))):
+            self.setWindowTitle(self.APP_TITLE)
+            return
+
+        channel_label = str(state.get("channel_label") or "all").strip() or "all"
+        current_track = self._normalize_radio_window_track_title(state.get("current_track"))
+        last_track = self._normalize_radio_window_track_title(state.get("last_track"))
+        service_available = bool(state.get("service_available"))
+        degraded_from_playback = bool(state.get("degraded_from_playback"))
+
+        if degraded_from_playback and (not service_available) and last_track:
+            self.setWindowTitle(f"{last_track} [{channel_label}] [Radio unavailable]")
+            return
+
+        if current_track:
+            self.setWindowTitle(f"{current_track} [{channel_label}]")
+            return
+
+        self.setWindowTitle(f"{self.APP_TITLE} [{channel_label}]")
+
+    @classmethod
+    def _normalize_radio_window_track_title(cls, value: object) -> str:
+        track = " ".join(str(value or "").split())
+        if not track:
+            return ""
+
+        parts = [
+            part.strip() for part in re.split(r"\s+[—–-]\s+", track) if part.strip()
+        ]
+        if not parts:
+            return ""
+
+        app_title = cls.APP_TITLE.casefold()
+        while parts and parts[0].casefold() == app_title:
+            parts.pop(0)
+        while len(parts) >= 2 and parts[-1].casefold() == parts[-2].casefold():
+            parts.pop()
+        while len(parts) >= 2 and parts[0].casefold() == parts[-1].casefold():
+            parts.pop()
+        while parts and parts[-1].casefold() == app_title:
+            parts.pop()
+
+        if not parts:
+            return ""
+        return " - ".join(parts)
 
     def _radio_state_snapshot(self) -> dict[str, object]:
         if self._radio_controller is None:

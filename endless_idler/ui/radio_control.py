@@ -29,7 +29,7 @@ class RadioControlWidget(QWidget):
     COLLAPSED_WIDTH = 44
     EXPANDED_WIDTH = 230
     ANIMATION_MS = 170
-    COLLAPSE_DELAY_MS = 350
+    COLLAPSE_DELAY_MS = 3000
     PLAY_BUTTON_WIDTH = 40
     PLAY_BUTTON_HEIGHT = 40
     VOLUME_RIGHT_GAP = 8
@@ -90,10 +90,7 @@ class RadioControlWidget(QWidget):
         volume_section_layout.addWidget(self._slider_wrap, 1)
 
         self._play_section = QWidget(self)
-        self._play_section.setFixedSize(
-            self.PLAY_BUTTON_WIDTH,
-            self.PLAY_BUTTON_HEIGHT,
-        )
+        self._play_section.setFixedSize(self.PLAY_BUTTON_WIDTH, self.PLAY_BUTTON_HEIGHT)
         play_section_layout = QHBoxLayout(self._play_section)
         play_section_layout.setContentsMargins(0, 0, 0, 0)
         play_section_layout.setSpacing(0)
@@ -104,16 +101,9 @@ class RadioControlWidget(QWidget):
         self._play_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         self._play_button.setAutoRaise(False)
         self._play_button.setCheckable(True)
-        self._play_button.setFixedSize(
-            self.PLAY_BUTTON_WIDTH,
-            self.PLAY_BUTTON_HEIGHT,
-        )
+        self._play_button.setFixedSize(self.PLAY_BUTTON_WIDTH, self.PLAY_BUTTON_HEIGHT)
         self._play_button.clicked.connect(self.play_requested.emit)
-        play_section_layout.addWidget(
-            self._play_button,
-            0,
-            Qt.AlignmentFlag.AlignCenter,
-        )
+        play_section_layout.addWidget(self._play_button, 0, Qt.AlignmentFlag.AlignCenter)
 
         root.addStretch(1)
         root.addWidget(self._volume_section, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -326,6 +316,7 @@ class RadioControlWidget(QWidget):
         self._expanded = expanded
         self._volume_width_anim.stop()
         self._opacity_anim.stop()
+        self._set_root_width(self.EXPANDED_WIDTH)
 
         current_volume_width = int(self._volume_section.maximumWidth())
         target_volume_width = (
@@ -347,11 +338,11 @@ class RadioControlWidget(QWidget):
         except Exception:
             return
         self._volume_section.setMinimumWidth(width)
-        # Smoothly update the root width to follow the internal wrap
-        self._set_root_width(width + self.PLAY_BUTTON_WIDTH)
 
     def _on_volume_width_animation_finished(self) -> None:
-        pass
+        if self._expanded:
+            return
+        self._set_root_width(self.COLLAPSED_WIDTH)
 
     def _set_root_width(self, width: int) -> None:
         self.setMinimumWidth(width)
