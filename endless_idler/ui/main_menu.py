@@ -78,8 +78,8 @@ class MainMenuWindow(QMainWindow):
         )
         topbar_layout.addWidget(
             self._make_nav_button(
-                label="Idle",
-                icon_name="play",
+                label="Party",
+                icon_name="group",
                 page_key=self._PAGE_IDLE,
                 on_click=self._show_idle,
             )

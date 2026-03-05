@@ -326,7 +326,6 @@ class RadioControlWidget(QWidget):
         self._expanded = expanded
         self._volume_width_anim.stop()
         self._opacity_anim.stop()
-        self._set_root_width(self.EXPANDED_WIDTH)
 
         current_volume_width = int(self._volume_section.maximumWidth())
         target_volume_width = (
@@ -348,11 +347,11 @@ class RadioControlWidget(QWidget):
         except Exception:
             return
         self._volume_section.setMinimumWidth(width)
+        # Smoothly update the root width to follow the internal wrap
+        self._set_root_width(width + self.PLAY_BUTTON_WIDTH)
 
     def _on_volume_width_animation_finished(self) -> None:
-        if self._expanded:
-            return
-        self._set_root_width(self.COLLAPSED_WIDTH)
+        pass
 
     def _set_root_width(self, width: int) -> None:
         self.setMinimumWidth(width)

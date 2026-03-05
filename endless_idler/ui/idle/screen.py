@@ -30,7 +30,6 @@ from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
 from endless_idler.ui.idle.idle_state import IdleGameState
 from endless_idler.ui.onsite import IdleOnsiteCharacterCard
 from endless_idler.ui.onsite import compute_stat_maxima
-from endless_idler.ui.party_hp_bar import PartyHpHeader
 
 
 class IdleScreenWidget(QWidget):
@@ -119,18 +118,6 @@ class IdleScreenWidget(QWidget):
         root.addLayout(header)
 
         header.addStretch(1)
-        title = QLabel("Idle Mode")
-        title.setObjectName("idleTitle")
-        header.addWidget(title, 0, Qt.AlignmentFlag.AlignCenter)
-        header.addStretch(1)
-
-        party_hp = PartyHpHeader()
-        party_hp.set_hp(
-            current=int(getattr(self._save, "party_hp_current", 0)),
-            max_hp=int(getattr(self._save, "party_hp_max", 0)),
-        )
-        header.addWidget(party_hp, 0, Qt.AlignmentFlag.AlignVCenter)
-        self._party_hp_header = party_hp
 
         arena = IdleArena()
         self._arena = arena
@@ -235,14 +222,6 @@ class IdleScreenWidget(QWidget):
         self._autosave_timer = QTimer(self)
         self._autosave_timer.timeout.connect(self._autosave)
         self._autosave_timer.start(5000)  # Auto-save every 5 seconds
-
-    def _refresh_party_hp(self) -> None:
-        if getattr(self, "_party_hp_header", None) is None:
-            return
-        self._party_hp_header.set_hp(
-            current=int(getattr(self._save, "party_hp_current", 0)),
-            max_hp=int(getattr(self._save, "party_hp_max", 0)),
-        )
 
     def _make_mods_panel(self) -> QFrame:
         panel = QFrame()
@@ -494,7 +473,6 @@ class IdleScreenWidget(QWidget):
             healed = 0
         if healed > 0:
             self._save_manager.save(self._save)
-            self._refresh_party_hp()
 
     def _rebirth_character(self, char_id: str) -> None:
         if not self._idle_state.rebirth_character(char_id):
