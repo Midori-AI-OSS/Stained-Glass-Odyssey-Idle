@@ -6,9 +6,15 @@ QWidget#HomePageRoot {
     background: transparent;
 }
 
-QFrame#HomeScrim {
-    background-color: rgba(18, 20, 28, 120);
-    border: 1px solid rgba(255, 255, 255, 16);
+QFrame#HomePanel {
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 rgba(18, 20, 28, 0),
+        stop: 0.08 rgba(18, 20, 28, 86),
+        stop: 0.92 rgba(18, 20, 28, 86),
+        stop: 1 rgba(18, 20, 28, 0)
+    );
+    border: 1px solid rgba(255, 255, 255, 14);
     border-radius: 0px;
 }
 
@@ -16,12 +22,6 @@ QLabel#HomeTitle {
     color: rgba(237, 239, 245, 240);
     font-size: 22px;
     font-weight: 760;
-}
-
-QLabel#HomeSubtitle {
-    color: rgba(237, 239, 245, 165);
-    font-size: 13px;
-    font-weight: 620;
 }
 
 QTabBar#HomeTabs::tab {
@@ -48,10 +48,8 @@ QTabBar#HomeTabs::tab:selected {
     border: 1px solid rgba(16, 185, 129, 140);
 }
 
-QFrame#HomePane {
-    background-color: rgba(18, 20, 28, 75);
-    border: 1px solid rgba(255, 255, 255, 14);
-    border-radius: 0px;
+QWidget#HomeHeadersRow {
+    background: transparent;
 }
 
 QLabel#HomeHeaderLabel {

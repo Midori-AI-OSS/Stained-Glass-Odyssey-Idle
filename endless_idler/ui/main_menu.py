@@ -87,18 +87,21 @@ class MainMenuWindow(QMainWindow):
         topbar_layout.addWidget(
             self._make_stub_button(
                 label="Warp",
+                icon_name="compass",
                 on_click=self._stub_warp,
             )
         )
         topbar_layout.addWidget(
             self._make_stub_button(
                 label="Inventory",
+                icon_name="backpack",
                 on_click=self._stub_inventory,
             )
         )
         topbar_layout.addWidget(
             self._make_stub_button(
                 label="Guidebook",
+                icon_name="book-open",
                 on_click=self._stub_guidebook,
             )
         )
@@ -113,6 +116,7 @@ class MainMenuWindow(QMainWindow):
         topbar_layout.addWidget(
             self._make_stub_button(
                 label="Feedback",
+                icon_name="bug",
                 on_click=self._stub_feedback,
             )
         )
@@ -180,11 +184,13 @@ class MainMenuWindow(QMainWindow):
         self,
         *,
         label: str,
+        icon_name: str,
         on_click: Callable[[], None],
     ) -> QToolButton:
         button = QToolButton(self)
         button.setText(label)
-        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        button.setIcon(lucide_icon(icon_name))
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         button.setProperty("appStub", True)
         button.clicked.connect(on_click)
         return button

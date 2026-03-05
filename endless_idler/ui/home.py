@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame
+from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QTabBar
 from PySide6.QtWidgets import QVBoxLayout
@@ -19,60 +20,48 @@ class HomePage(QWidget):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(12)
 
-        scrim = QFrame(self)
-        scrim.setObjectName("HomeScrim")
-        scrim_layout = QVBoxLayout(scrim)
-        scrim_layout.setContentsMargins(12, 12, 12, 12)
-        scrim_layout.setSpacing(10)
-        root.addWidget(scrim, 1)
+        panel = QFrame(self)
+        panel.setObjectName("HomePanel")
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(12, 12, 12, 12)
+        panel_layout.setSpacing(10)
+        root.addWidget(panel, 1)
 
         title = QLabel("Stained Glass Odyssey")
         title.setObjectName("HomeTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        scrim_layout.addWidget(title)
-
-        subtitle = QLabel("Home")
-        subtitle.setObjectName("HomeSubtitle")
-        subtitle.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        scrim_layout.addWidget(subtitle)
+        panel_layout.addWidget(title)
 
         tabs = QTabBar()
         tabs.setObjectName("HomeTabs")
         tabs.setDocumentMode(True)
         tabs.setExpanding(True)
         tabs.addTab("Overview")
-        tabs.addTab("Legacy")
+        tabs.addTab("Upgrades")
         tabs.setCurrentIndex(0)
-        scrim_layout.addWidget(tabs)
+        panel_layout.addWidget(tabs)
 
-        pane = QFrame(self)
-        pane.setObjectName("HomePane")
-        pane_layout = QVBoxLayout(pane)
-        pane_layout.setContentsMargins(12, 12, 12, 12)
-        pane_layout.setSpacing(8)
-        scrim_layout.addWidget(pane, 1)
-
-        headers = QWidget(pane)
-        headers.setObjectName("HomeHeaders")
-        headers_layout = QVBoxLayout(headers)
+        headers = QWidget(panel)
+        headers.setObjectName("HomeHeadersRow")
+        headers_layout = QHBoxLayout(headers)
         headers_layout.setContentsMargins(0, 0, 0, 0)
-        headers_layout.setSpacing(6)
-        pane_layout.addWidget(headers)
+        headers_layout.setSpacing(12)
+        panel_layout.addWidget(headers)
 
         h1 = QLabel("Section")
         h1.setObjectName("HomeHeaderLabel")
-        headers_layout.addWidget(h1)
+        headers_layout.addWidget(h1, 5)
 
         h2 = QLabel("Status")
         h2.setObjectName("HomeHeaderLabel")
-        headers_layout.addWidget(h2)
+        headers_layout.addWidget(h2, 2)
 
         h3 = QLabel("Notes")
         h3.setObjectName("HomeHeaderLabel")
-        headers_layout.addWidget(h3)
+        headers_layout.addWidget(h3, 5)
 
         for stain in ("slate", "cyan", "emerald"):
-            row = QFrame(pane)
+            row = QFrame(panel)
             row.setObjectName("HomeDecorRow")
             row.setProperty("stain", stain)
             row_layout = QVBoxLayout(row)
@@ -88,6 +77,6 @@ class HomePage(QWidget):
             row_note.setWordWrap(True)
             row_layout.addWidget(row_note)
 
-            pane_layout.addWidget(row)
+            panel_layout.addWidget(row)
 
-        pane_layout.addStretch(1)
+        panel_layout.addStretch(1)
