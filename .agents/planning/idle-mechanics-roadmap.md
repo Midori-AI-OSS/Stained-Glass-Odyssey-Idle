@@ -6,12 +6,14 @@ This planning doc captures the current mechanics baseline and the intended futur
 It is decision-oriented and separates implemented behavior from planned behavior to avoid confusion.
 
 Date captured: 2026-03-05
+Last updated: 2026-03-05
 
 ## Current Baseline (Fact-Checked)
 
 - Active runtime path is Home + Idle.
 - Battle/foe systems are legacy and not part of the active runtime flow.
 - Stars currently scale combat stats, not rebirth/prestige gain formulas.
+- Character plugin rarities are mostly 5-7 today, with metadata fallback behavior still allowing lower values when unspecified.
 - Warp is currently a stub entry in the menu.
 - No current energy subsystem exists for blessing channeling.
 - No current Upgrade Stone currency exists in save/runtime models.
@@ -19,19 +21,22 @@ Date captured: 2026-03-05
 
 ## Planned Mechanics (Target Design)
 
-### Mech 1: Star-Weighted Rebirth and Prestige Gains
+### Mech 1: Star Bands and Character Progression Weighting
 
 Locked anchors:
-- 7 star = 2.5x
-- 6 star = 1.0x
-- 5 star = 0.5x
+- 1-4 stars are weapon parts only, not character rarity tiers.
+- 5-7 stars are character rarity tiers.
+- Character-star progression anchors remain:
+  - 7 star = 2.5x
+  - 6 star = 1.0x
+  - 5 star = 0.5x
 
 Planned intent:
-- Star rank should affect rebirth/prestige gain-side progression values.
+- Character star rank (5-7 only) should affect rebirth/prestige gain-side progression values.
 
 Pending:
-- Exact 1-4 star mapping.
-- Exact rebirth/prestige gain terms affected by star multiplier.
+- Exact rebirth/prestige gain terms affected by 5-7 star multipliers.
+- Exact migration behavior for any character metadata that lands outside 5-7.
 
 ### Mech 2: Blessing Upgrade Layer and Shard Progression
 
@@ -118,14 +123,54 @@ Pending:
 - Exact extra-stone formula and deterministic rounding behavior.
 - Exact diminishing-returns algorithm for repeated extras in one rebirth.
 
+### Mech 5: Weapon Parts, Types, and Salvage Crafting
+
+Planned intent:
+- Build a long-term weapon progression layer that is independent from character rarity tiers.
+
+Locked decisions:
+- 1-4 stars are weapon parts.
+- 5-7 stars are character rarities.
+- Each character has one fixed `weapon_type_id`.
+- Target weapon catalog size is approximately 20 types.
+- Weapon parts are weapon-type bound:
+  - a part belongs to a weapon type
+  - it can be used by any character with that weapon type
+- Weapon types are expected to affect stats/progression behavior.
+- Unwanted parts can be salvaged into Salvage Dust.
+- Crafting anchors currently locked:
+  - 1 star craft cost = 100 Salvage Dust
+  - 2 star craft cost = 500 Salvage Dust
+- Craft duration baseline is 1 hour per star rank, then modified by buffs/debuffs.
+- Craft duration floor is 5 seconds.
+- If buffs would reduce craft duration below 5 seconds:
+  - each extra second converts to +0.01% bonus odds for random side weapon parts
+  - no cap is applied to overflow seconds or bonus odds
+- Bonus-odds payout model:
+  - use deterministic + remainder behavior when bonus odds exceed 100%
+  - reduce remaining bonus odds by geometric decay (0.5x) after each awarded extra part
+- Overflow bonus extra parts must be a different weapon type than the crafted target type.
+- Overflow bonus extra-part star rank can match the crafted rank or be lower.
+
+Pending:
+- Exact 3 star and 4 star Salvage Dust craft costs.
+- Exact formal equation for overflow seconds -> bonus odds conversion pipeline.
+- Exact implementation order for deterministic payouts and 0.5x post-award decay.
+- Exact distribution weights for "match-or-lower" extra-part star outcomes.
+- Exact `weapon_type_id` list and naming for the ~20-type catalog.
+- Exact stat/progression lanes impacted by weapon-type/weapon-part power.
+
 ## Open High-Impact Decisions
 
-- Final 1-4 star multiplier table.
+- Final star-to-weapon-power mapping for 1-4 weapon parts.
 - Exact shard odds unit conversions and tick-to-time expectations.
 - Exact rebirth drop formula and caps/floors policy.
 - Final energy model details (drain, regen, minimums, persistence fields).
 - Final Warp rarity math including YOLO normalization and 6/7 star distribution.
 - Final Upgrade Stone extra-reward math.
+- Final 3-4 star Salvage Dust costs.
+- Final overflow craft-bonus math ordering and payout details.
+- Final weapon-type stat/progression impact model.
 
 ## Notes
 
