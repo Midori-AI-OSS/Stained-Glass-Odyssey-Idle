@@ -27,20 +27,14 @@ def test_settings_page_save_pane_emits_management_signals() -> None:
     assert signals == {"save_now": 1, "backup": 1, "reset": 1}
 
 
-def test_settings_page_set_save_status_is_display_only() -> None:
+def test_settings_page_set_save_path_is_display_only() -> None:
     _ = QApplication.instance() or QApplication([])
 
     page = SettingsPage()
     emitted: list[dict[str, object]] = []
     page.settings_changed.connect(emitted.append)
 
-    page.set_save_status(
-        path_text="/tmp/idlesave.json",
-        status_text="Ready.",
-        autosave_text="Idle autosaves every 5s.",
-    )
+    page.set_save_path("/tmp/idlesave.json")
 
     assert page._save_path_value.text() == "/tmp/idlesave.json"
-    assert page._save_status_value.text() == "Ready."
-    assert page._save_help_value.text() == "Idle autosaves every 5s."
     assert emitted == []

@@ -77,10 +77,6 @@ QLabel#SettingsSaveValue {
     padding: 8px 10px;
 }
 
-QLabel#SettingsSaveHelp {
-    color: rgba(237, 239, 245, 150);
-}
-
 QWidget#SettingsPageRoot QCheckBox {
     spacing: 10px;
 }

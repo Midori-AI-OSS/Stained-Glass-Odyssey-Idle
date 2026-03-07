@@ -163,7 +163,7 @@ class SettingsPage(QWidget):
             _SettingsPaneSpec(
                 key="save",
                 title="Save",
-                subtitle="Run-save status and a few careful management actions.",
+                subtitle="Run-save path and a few careful management actions.",
                 section="Runtime",
             ),
         ]
@@ -237,14 +237,6 @@ class SettingsPage(QWidget):
         self._save_path_value.setWordWrap(True)
         self._save_path_value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
-        self._save_status_value = QLabel("")
-        self._save_status_value.setObjectName("SettingsSaveValue")
-        self._save_status_value.setWordWrap(True)
-
-        self._save_help_value = QLabel("")
-        self._save_help_value.setObjectName("SettingsSaveHelp")
-        self._save_help_value.setWordWrap(True)
-
         self._save_now_button = QPushButton("Save Now")
         self._save_now_button.setObjectName("SettingsSaveActionButton")
         self._save_now_button.clicked.connect(
@@ -307,10 +299,6 @@ class SettingsPage(QWidget):
         save_grid.setColumnStretch(1, 1)
         save_grid.addWidget(QLabel("Save path"), 0, 0)
         save_grid.addWidget(self._save_path_value, 0, 1)
-        save_grid.addWidget(QLabel("Status"), 1, 0)
-        save_grid.addWidget(self._save_status_value, 1, 1)
-        save_grid.addWidget(QLabel("Notes"), 2, 0)
-        save_grid.addWidget(self._save_help_value, 2, 1)
         save_body.addLayout(save_grid)
 
         action_row = QHBoxLayout()
@@ -650,16 +638,8 @@ class SettingsPage(QWidget):
         )
         self._radio_channel.setEnabled(self._radio_channel_enabled)
 
-    def set_save_status(
-        self,
-        *,
-        path_text: str,
-        status_text: str,
-        autosave_text: str,
-    ) -> None:
+    def set_save_path(self, path_text: str) -> None:
         self._save_path_value.setText(str(path_text))
-        self._save_status_value.setText(str(status_text))
-        self._save_help_value.setText(str(autosave_text))
 
     def _on_radio_volume_value_changed(self, value: int) -> None:
         _ = value

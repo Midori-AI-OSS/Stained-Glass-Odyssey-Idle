@@ -166,7 +166,7 @@ class MainMenuWindow(QMainWindow):
         self._stack.setCurrentWidget(self._home_screen)
         self._sync_radio_controller_from_settings(user_initiated=False)
         self._on_radio_state_changed(self._radio_state_snapshot())
-        self._update_save_status("Ready.")
+        self._settings_screen.set_save_path(str(self._save_store.path))
         self._startup_idle_timer.start()
 
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -250,7 +250,7 @@ class MainMenuWindow(QMainWindow):
         self._refresh_radio_channel_options(disable_on_failure=True)
         self._settings_screen.set_settings(self._app_settings)
         self._settings_screen.apply_radio_state(self._radio_state_snapshot())
-        self._update_save_status("Ready.")
+        self._settings_screen.set_save_path(str(self._save_store.path))
         self._stack.setCurrentWidget(self._settings_screen)
         self._set_active_nav(self._PAGE_SETTINGS)
 
@@ -324,16 +324,14 @@ class MainMenuWindow(QMainWindow):
         self._on_radio_state_changed(self._radio_state_snapshot())
 
     def _on_save_now_requested(self) -> None:
-        self._persist_shared_save(status_text="Save complete.")
+        self._persist_shared_save()
 
     def _on_save_backup_requested(self) -> None:
         try:
-            backup_path = self._save_store.backup_current()
+            _ = self._save_store.backup_current()
         except OSError as exc:
-            self._update_save_status(f"Backup failed: {exc}")
+            self._show_save_action_error("Backup failed", exc)
             return
-
-        self._update_save_status(f"Backup created: {backup_path.name}")
 
     def _on_save_reset_requested(self) -> None:
         result = QMessageBox.question(
@@ -356,11 +354,11 @@ class MainMenuWindow(QMainWindow):
             self._save_store.backup_current()
             self._save_store.delete_active_save()
         except OSError as exc:
-            self._update_save_status(f"Reset failed: {exc}")
+            self._show_save_action_error("Reset failed", exc)
             return
         QCoreApplication.quit()
 
-    def _persist_shared_save(self, *, status_text: str) -> None:
+    def _persist_shared_save(self) -> None:
         try:
             self._layout_screen.cancel_pending_persist()
             if self._idle_screen is not None:
@@ -368,15 +366,14 @@ class MainMenuWindow(QMainWindow):
             else:
                 self._save_store.persist()
         except OSError as exc:
-            self._update_save_status(f"Save failed: {exc}")
+            self._show_save_action_error("Save failed", exc)
             return
-        self._update_save_status(status_text)
 
-    def _update_save_status(self, status_text: str) -> None:
-        self._settings_screen.set_save_status(
-            path_text=str(self._save_store.path),
-            status_text=status_text,
-            autosave_text="Idle autosaves every 5s. Layout saves after changes. Reset backs up the save and closes the game.",
+    def _show_save_action_error(self, title: str, exc: OSError) -> None:
+        QMessageBox.warning(
+            self,
+            title,
+            str(exc),
         )
 
     def _on_radio_control_play_requested(self) -> None:
