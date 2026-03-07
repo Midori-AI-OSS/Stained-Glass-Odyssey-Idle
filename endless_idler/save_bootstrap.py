@@ -13,7 +13,14 @@ from endless_idler.save import RunSave
 
 _ONSITE_PLACEMENTS = frozenset({"onsite", "both"})
 _OFFSITE_PLACEMENTS = frozenset({"offsite", "both"})
-_STARTER_CHAR_IDS = ("lady_darkness", "persona_light_and_dark")
+_LADY_DARKNESS_ID = "lady_darkness"
+_LADY_LIGHT_ID = "lady_light"
+_PERSONA_LIGHT_AND_DARK_ID = "persona_light_and_dark"
+_TRINITY_CHAR_IDS = (
+    _LADY_DARKNESS_ID,
+    _LADY_LIGHT_ID,
+    _PERSONA_LIGHT_AND_DARK_ID,
+)
 
 
 def has_active_party(save: RunSave) -> bool:
@@ -34,21 +41,49 @@ def bootstrap_party(
     offsite: list[str | None] = [None] * OFFSITE_SLOTS
     standby: list[str | None] = [None] * STANDBY_SLOTS
 
-    starter_pool = [plugin for plugin in plugins if plugin.char_id in _STARTER_CHAR_IDS]
-    if not starter_pool:
-        raise ValueError("Starter pool is empty; expected at least one starter plugin.")
+    plugin_by_id = {plugin.char_id: plugin for plugin in plugins}
+    missing = [char_id for char_id in _TRINITY_CHAR_IDS if char_id not in plugin_by_id]
+    if missing:
+        raise ValueError(
+            "Missing required trinity plugins: " + ", ".join(sorted(missing))
+        )
 
-    starter = rng.choice(starter_pool)
-    starter_id = starter.char_id
+    lady_darkness = plugin_by_id[_LADY_DARKNESS_ID]
+    if lady_darkness.placement not in _ONSITE_PLACEMENTS:
+        raise ValueError(
+            f"Unsupported trinity placement for {_LADY_DARKNESS_ID}: {lady_darkness.placement!r}"
+        )
+    onsite[0] = _LADY_DARKNESS_ID
 
-    if starter.placement in _ONSITE_PLACEMENTS:
-        onsite[0] = starter_id
-    elif starter.placement in _OFFSITE_PLACEMENTS:
-        offsite[0] = starter_id
+    lady_light = plugin_by_id[_LADY_LIGHT_ID]
+    if lady_light.placement not in _OFFSITE_PLACEMENTS:
+        raise ValueError(
+            f"Unsupported trinity placement for {_LADY_LIGHT_ID}: {lady_light.placement!r}"
+        )
+    offsite[0] = _LADY_LIGHT_ID
+
+    persona = plugin_by_id[_PERSONA_LIGHT_AND_DARK_ID]
+    persona_lane_options: list[str] = []
+    if persona.placement in _ONSITE_PLACEMENTS and any(slot is None for slot in onsite):
+        persona_lane_options.append("onsite")
+    if persona.placement in _OFFSITE_PLACEMENTS and any(slot is None for slot in offsite):
+        persona_lane_options.append("offsite")
+    if not persona_lane_options:
+        raise ValueError(
+            "Unsupported trinity placement for "
+            + f"{_PERSONA_LIGHT_AND_DARK_ID}: {persona.placement!r}"
+        )
+
+    persona_lane = rng.choice(persona_lane_options)
+    if persona_lane == "onsite":
+        onsite[onsite.index(None)] = _PERSONA_LIGHT_AND_DARK_ID
     else:
-        raise ValueError(f"Unsupported starter placement for {starter_id}: {starter.placement!r}")
+        offsite[offsite.index(None)] = _PERSONA_LIGHT_AND_DARK_ID
 
     save.onsite = onsite
     save.offsite = offsite
     save.standby = standby
-    save.stacks = {starter_id: max(1, int(save.stacks.get(starter_id, 1)))}
+    save.stacks = {
+        char_id: max(1, int(save.stacks.get(char_id, 1)))
+        for char_id in _TRINITY_CHAR_IDS
+    }
