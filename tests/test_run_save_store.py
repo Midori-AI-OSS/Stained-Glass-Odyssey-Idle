@@ -14,13 +14,18 @@ def _plugin(char_id: str, placement: str) -> CharacterPlugin:
     return CharacterPlugin(char_id=char_id, display_name=char_id.title(), placement=placement)
 
 
+def _trinity_plugins() -> list[CharacterPlugin]:
+    return [
+        _plugin("lady_darkness", "onsite"),
+        _plugin("lady_light", "offsite"),
+        _plugin("persona_light_and_dark", "both"),
+    ]
+
+
 def test_run_save_store_load_or_create_bootstraps_new_save(tmp_path: Path) -> None:
     save_path = tmp_path / "save.json"
     store = RunSaveStore(
-        plugins=[
-            _plugin("lady_darkness", "onsite"),
-            _plugin("persona_light_and_dark", "both"),
-        ],
+        plugins=_trinity_plugins(),
         save_manager=SaveManager(path=save_path),
         rng=random.Random(7),
     )
@@ -28,15 +33,15 @@ def test_run_save_store_load_or_create_bootstraps_new_save(tmp_path: Path) -> No
     save = store.load_or_create()
 
     assigned = [item for item in [*save.onsite, *save.offsite] if item]
-    assert len(assigned) == 1
-    assert assigned[0] in {"lady_darkness", "persona_light_and_dark"}
+    assert len(assigned) == 3
+    assert set(assigned) == {"lady_darkness", "lady_light", "persona_light_and_dark"}
     assert save_path.exists()
 
 
 def test_run_save_store_backup_current_creates_collision_safe_files(tmp_path: Path) -> None:
     save_path = tmp_path / "save.json"
     store = RunSaveStore(
-        plugins=[_plugin("lady_darkness", "onsite")],
+        plugins=_trinity_plugins(),
         save_manager=SaveManager(path=save_path),
         rng=random.Random(3),
     )
@@ -55,10 +60,10 @@ def test_run_save_store_backup_current_creates_collision_safe_files(tmp_path: Pa
 def test_run_save_store_delete_active_save_removes_file(tmp_path: Path) -> None:
     save_path = tmp_path / "save.json"
     store = RunSaveStore(
-        plugins=[_plugin("lady_darkness", "onsite")],
+        plugins=_trinity_plugins(),
         save_manager=SaveManager(path=save_path),
     )
-    store.load_or_create()
+    _ = store.load_or_create()
 
     assert save_path.exists()
     store.delete_active_save()

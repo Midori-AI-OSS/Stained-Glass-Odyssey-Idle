@@ -2,60 +2,10 @@
 
 ## Summary
 
-This planning doc captures the current mechanics baseline and the intended future mechanics discussed so far.
-It is decision-oriented and separates implemented behavior from planned behavior to avoid confusion.
+This planning doc tracks forward-looking mechanics and unresolved design decisions.
 
 Date captured: 2026-03-05
 Last updated: 2026-03-07
-
-## Current Baseline (Fact-Checked)
-
-- Active runtime path is Home + Idle + Layout.
-- Battle/foe systems are legacy and not part of the active runtime flow.
-- Layout is a shipped menu entry.
-- Warp is currently a stub entry in the menu.
-- Brand-new saves bootstrap exactly 1 starter character.
-- Starter pool is:
-  - `lady_darkness`
-  - `persona_light_and_dark`
-- `lady_light` is excluded from the starter pool because current placement is offsite-only.
-- Older empty saves are not auto-repaired; bootstrap is only for truly missing saves.
-- Layout reuses dedicated drag/drop party management without the old shop/reroll/sell/merge/fight/reward flow.
-- Layout ordering is shipped with:
-  - `save_order`
-  - `rarity_desc`
-  - `alphabetical`
-  - heuristic `recent`
-- `recent` ordering is a reversed display heuristic, not persisted acquisition history.
-- Layout edits use debounced autosave and apply an idle cooldown before the next idle tick processing window.
-- No current energy subsystem exists for blessing channeling.
-- No current Upgrade Stone currency exists in save/runtime models.
-- Offsite EXP is currently sourced from onsite-driven pools in idle processing.
-- Character stacks currently affect two live lanes:
-  - stat scaling via `party_scaling` stack multiplier: `1.0 + 0.12 * (stacks - 1)`
-  - idle EXP via passive modifier: `(stacks * 0.05) + 1.0` (onsite and offsite gain paths)
-- Runtime character plugin rarity is now strict for discovered runtime characters:
-  - discovered runtime plugins must use stars `5-7`
-  - invalid discovered runtime stars fail plugin discovery with aggregated `ValueError`
-- Stars now affect both combat scaling and selected progression lanes.
-- Mech 1 live star-to-progression mapping is:
-  - 7 star = `2.5x`
-  - 6 star = `1.0x`
-  - 5 star = `0.5x`
-- Mech 1 live progression effects are:
-  - rebirth EXP reward gain is multiplied by star rank power
-  - post-50 rebirth EXP tax is softened by star rank power
-  - prestige weighted stat-growth magnitude is multiplied by star rank power
-- Mech 1 does not change:
-  - rebirth unlock gate
-  - rebirth reset behavior
-  - `rebirth_power`
-  - `rebirths`
-  - prestige unlock gate
-  - prestige EXP reset math
-  - prestige post-floor `req_multiplier` penalty
-  - weighted stat choice weights
-  - save schema
 
 ## Planned Mechanics (Target Design)
 
@@ -87,7 +37,7 @@ Locked decisions:
 - Keep both shard sources:
   - shard bars
   - rebirth drops
-- Rebirth drop baseline concept is 1 in 6, then modified by progression factors.
+- Rebirth drop starting concept is 1 in 6, then modified by progression factors.
 - Generic (Luna) rebirth shard outcome is random elemental.
 - Blessing management occurs via Home menu assignment flow.
 - Assigned channeling characters are removed from party assignment while channeling.
@@ -174,7 +124,7 @@ Locked decisions:
 - Crafting anchors currently locked:
   - 1 star craft cost = 100 Salvage Dust
   - 2 star craft cost = 500 Salvage Dust
-- Craft duration baseline is 1 hour per star rank, then modified by buffs/debuffs.
+- Craft duration starts at 1 hour per star rank, then is modified by buffs/debuffs.
 - Craft duration floor is 5 seconds.
 - If buffs would reduce craft duration below 5 seconds:
   - each extra second converts to +0.01% bonus odds for random side weapon parts
@@ -207,5 +157,4 @@ Pending:
 
 ## Notes
 
-- This doc is a planning artifact, not current implementation state.
-- Any implementation work should preserve the baseline/planned distinction until features are shipped.
+- This doc is a planning artifact and is intentionally future-facing.
