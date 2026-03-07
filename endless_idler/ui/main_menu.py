@@ -91,7 +91,7 @@ class MainMenuWindow(QMainWindow):
         topbar_layout.addWidget(
             self._make_nav_button(
                 label="Layout",
-                icon_name="layout-grid",
+                icon_name="layout-list",
                 page_key=self._PAGE_LAYOUT,
                 on_click=self._show_layout,
             )
