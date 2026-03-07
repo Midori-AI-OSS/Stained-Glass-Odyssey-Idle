@@ -60,15 +60,17 @@ class _FakeIdleState:
         return int(self._rr)
 
 
-class _FakeSaveManager:
+class _FakeSaveStore:
     def __init__(self, save: object) -> None:
-        self._save = save
+        self._current = save
+        self.persist_calls = 0
 
-    def load(self) -> object:
-        return self._save
+    @property
+    def current(self) -> object:
+        return self._current
 
-    def save(self, value: object) -> None:
-        del value
+    def persist(self) -> None:
+        self.persist_calls += 1
 
 
 class _FakeIdleStateForOffsite:
@@ -139,16 +141,11 @@ def test_idle_screen_panel_order_and_tooltip_text(monkeypatch) -> None:
         party_hp_max=1,
     )
 
-    monkeypatch.setattr(
-        screen_module,
-        "SaveManager",
-        lambda: _FakeSaveManager(save=fake_save),
-    )
     monkeypatch.setattr(screen_module, "start_idle_heal_timer", lambda save: None)
     monkeypatch.setattr(screen_module, "discover_character_plugins", lambda: [])
     monkeypatch.setattr(screen_module, "IdleGameState", _FakeIdleState)
 
-    screen = IdleScreenWidget(payload={})
+    screen = IdleScreenWidget(save_store=_FakeSaveStore(save=fake_save))
 
     blessing_panel = screen.findChild(QFrame, "idleBlessingPanel")
     mods_panel = screen.findChild(QFrame, "idleModsPanel")

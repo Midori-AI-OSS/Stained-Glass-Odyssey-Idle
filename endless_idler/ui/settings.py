@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QGraphicsOpacityEffect
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QSizePolicy
 from PySide6.QtWidgets import QSlider
 from PySide6.QtWidgets import QStackedWidget
@@ -56,6 +57,9 @@ class _SettingsPaneSpec:
 
 class SettingsPage(QWidget):
     settings_changed = Signal(dict)
+    save_now_requested = Signal()
+    save_backup_requested = Signal()
+    save_reset_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -155,7 +159,13 @@ class SettingsPage(QWidget):
                 title="Radio",
                 subtitle="Midori AI Radio playback controls and defaults.",
                 section="Runtime",
-            )
+            ),
+            _SettingsPaneSpec(
+                key="save",
+                title="Save",
+                subtitle="Run-save status and a few careful management actions.",
+                section="Runtime",
+            ),
         ]
 
     def _build_controls(self) -> None:
@@ -222,6 +232,37 @@ class SettingsPage(QWidget):
 
         self._radio_enabled.toggled.connect(self._radio_autostart.setEnabled)
 
+        self._save_path_value = QLabel("")
+        self._save_path_value.setObjectName("SettingsSaveValue")
+        self._save_path_value.setWordWrap(True)
+        self._save_path_value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+
+        self._save_status_value = QLabel("")
+        self._save_status_value.setObjectName("SettingsSaveValue")
+        self._save_status_value.setWordWrap(True)
+
+        self._save_help_value = QLabel("")
+        self._save_help_value.setObjectName("SettingsSaveHelp")
+        self._save_help_value.setWordWrap(True)
+
+        self._save_now_button = QPushButton("Save Now")
+        self._save_now_button.setObjectName("SettingsSaveActionButton")
+        self._save_now_button.clicked.connect(
+            lambda _checked=False: self.save_now_requested.emit()
+        )
+
+        self._save_backup_button = QPushButton("Create Backup")
+        self._save_backup_button.setObjectName("SettingsSaveActionButton")
+        self._save_backup_button.clicked.connect(
+            lambda _checked=False: self.save_backup_requested.emit()
+        )
+
+        self._save_reset_button = QPushButton("Reset Save")
+        self._save_reset_button.setObjectName("SettingsSaveDangerButton")
+        self._save_reset_button.clicked.connect(
+            lambda _checked=False: self.save_reset_requested.emit()
+        )
+
     def _build_pages(self) -> None:
         specs_by_key = {spec.key: spec for spec in self._pane_specs}
         radio_spec = specs_by_key["radio"]
@@ -256,6 +297,31 @@ class SettingsPage(QWidget):
         radio_body.addLayout(radio_grid)
         radio_body.addStretch(1)
         self._register_page("radio", radio_page)
+
+        save_spec = specs_by_key["save"]
+        save_page, save_body = self._create_page(save_spec)
+
+        save_grid = QGridLayout()
+        save_grid.setHorizontalSpacing(GRID_HORIZONTAL_SPACING)
+        save_grid.setVerticalSpacing(GRID_VERTICAL_SPACING)
+        save_grid.setColumnStretch(1, 1)
+        save_grid.addWidget(QLabel("Save path"), 0, 0)
+        save_grid.addWidget(self._save_path_value, 0, 1)
+        save_grid.addWidget(QLabel("Status"), 1, 0)
+        save_grid.addWidget(self._save_status_value, 1, 1)
+        save_grid.addWidget(QLabel("Notes"), 2, 0)
+        save_grid.addWidget(self._save_help_value, 2, 1)
+        save_body.addLayout(save_grid)
+
+        action_row = QHBoxLayout()
+        action_row.setSpacing(8)
+        action_row.addWidget(self._save_now_button)
+        action_row.addWidget(self._save_backup_button)
+        action_row.addWidget(self._save_reset_button)
+        action_row.addStretch(1)
+        save_body.addLayout(action_row)
+        save_body.addStretch(1)
+        self._register_page("save", save_page)
 
     def _build_navigation(self, nav_layout: QVBoxLayout) -> None:
         sections: dict[str, list[_SettingsPaneSpec]] = {}
@@ -583,6 +649,17 @@ class SettingsPage(QWidget):
             bool(self._radio_loudness_boost_enabled.isChecked())
         )
         self._radio_channel.setEnabled(self._radio_channel_enabled)
+
+    def set_save_status(
+        self,
+        *,
+        path_text: str,
+        status_text: str,
+        autosave_text: str,
+    ) -> None:
+        self._save_path_value.setText(str(path_text))
+        self._save_status_value.setText(str(status_text))
+        self._save_help_value.setText(str(autosave_text))
 
     def _on_radio_volume_value_changed(self, value: int) -> None:
         _ = value

@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 import random
 
+from collections.abc import Sequence
+
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import Qt
 from PySide6.QtCore import Signal
@@ -15,15 +17,14 @@ from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 from PySide6.QtWidgets import QFrame
 
+from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.characters.plugins import discover_character_plugins
 from endless_idler.combat.party_stats import apply_offsite_stat_share
 from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.combat.stats import Stats
+from endless_idler.run_save_store import RunSaveStore
 from endless_idler.run_rules import apply_idle_party_heal
 from endless_idler.run_rules import start_idle_heal_timer
-from endless_idler.save import RunSave
-from endless_idler.save import SaveManager
-from endless_idler.save import new_run_save
 from endless_idler.ui.idle.blessing_meter import IdleBlessingMeterWidget
 from endless_idler.ui.idle.widgets import IdleArena
 from endless_idler.ui.idle.widgets import IdleOffsiteCard
@@ -37,42 +38,33 @@ from endless_idler.ui.onsite import compute_stat_maxima
 class IdleScreenWidget(QWidget):
     finished = Signal()
 
-    def __init__(self, *, payload: object, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        save_store: RunSaveStore,
+        plugins: Sequence[CharacterPlugin] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("idleScreen")
 
-        data = payload if isinstance(payload, dict) else {}
-        onsite_raw = data.get("onsite")
-        offsite_raw = data.get("offsite")
-        stacks_raw = data.get("stacks")
-        payload_party_level = int(data.get("party_level", 0) or 0)
-
         self._rng = random.Random()
-        self._save_manager = SaveManager()
-        self._save: RunSave = self._save_manager.load() or new_run_save()
+        self._save_store = save_store
+        self._save = self._save_store.current
+        self._shared_exp_label = QLabel(self)
+        self._shared_exp_slider = QSlider(Qt.Orientation.Horizontal, self)
+        self._rr_label = QLabel(self)
+        self._rr_slider = QSlider(Qt.Orientation.Horizontal, self)
+        self._blessing_title_label = QLabel(self)
+        self._blessing_meter = IdleBlessingMeterWidget(self)
+        self._blessing_value_label = QLabel(self)
         start_idle_heal_timer(self._save)
-        self._save_manager.save(self._save)
+        self._save_store.persist()
 
-        payload_onsite = [str(item) for item in onsite_raw if item] if isinstance(onsite_raw, list) else []
-        payload_offsite = [str(item) for item in offsite_raw if item] if isinstance(offsite_raw, list) else []
-
-        payload_stacks: dict[str, int] = {}
-        if isinstance(stacks_raw, dict):
-            for key, value in stacks_raw.items():
-                if not isinstance(key, str):
-                    continue
-                try:
-                    payload_stacks[key] = max(1, int(value))
-                except (TypeError, ValueError):
-                    continue
-
-        save_onsite = [str(item) for item in self._save.onsite if item]
-        save_offsite = [str(item) for item in self._save.offsite if item]
-
-        onsite = payload_onsite if payload_onsite else save_onsite
-        offsite = payload_offsite if payload_offsite else save_offsite
-        stacks = payload_stacks if payload_stacks else dict(self._save.stacks)
-        party_level = payload_party_level if payload_party_level > 0 else int(self._save.party_level)
+        onsite = [str(item) for item in self._save.onsite if item]
+        offsite = [str(item) for item in self._save.offsite if item]
+        stacks = dict(self._save.stacks)
+        party_level = int(self._save.party_level)
 
         self._party_level = max(1, party_level)
         self._stacks = stacks
@@ -82,7 +74,7 @@ class IdleScreenWidget(QWidget):
             max(0.0, float(getattr(self._save, "layout_tick_cooldown_seconds", 0.0)))
         )
 
-        self._plugins = discover_character_plugins()
+        self._plugins = list(plugins) if plugins is not None else discover_character_plugins()
         self._plugin_by_id = {plugin.char_id: plugin for plugin in self._plugins}
         plugins_by_id: dict[str, object] = {
             key: value for key, value in self._plugin_by_id.items()
@@ -109,6 +101,7 @@ class IdleScreenWidget(QWidget):
 
         self._onsite_cards: list[IdleOnsiteCharacterCard] = []
         self._offsite_cards: list[IdleOffsiteCard] = []
+        self._allow_shutdown_persist = True
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 16, 16, 16)
@@ -424,7 +417,7 @@ class IdleScreenWidget(QWidget):
         self._rr_slider.setValue(rr_level)
 
     def _refresh_character_cards(self) -> None:
-        snapshots: list[tuple[IdleOnsiteCharacterCard, dict, Stats, float]] = []
+        snapshots: list[tuple[IdleOnsiteCharacterCard, dict[str, object], Stats, float]] = []
         party_stats: list[Stats] = []
         for card in self._onsite_cards:
             snapshot = card.snapshot()
@@ -501,7 +494,7 @@ class IdleScreenWidget(QWidget):
         except Exception:
             healed = 0
         if healed > 0:
-            self._save_manager.save(self._save)
+            self._save_store.persist()
 
     def _rebirth_character(self, char_id: str) -> None:
         if not self._idle_state.rebirth_character(char_id):
@@ -524,7 +517,7 @@ class IdleScreenWidget(QWidget):
             save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
             save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
             save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
-            self._save_manager.save(save)
+            self._save_store.persist()
         except Exception:
             return
 
@@ -610,7 +603,7 @@ class IdleScreenWidget(QWidget):
             save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
             save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
             save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
-            self._save_manager.save(save)
+            self._save_store.persist()
         except Exception:
             return
         
@@ -634,17 +627,23 @@ class IdleScreenWidget(QWidget):
             save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
             save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
             save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
-            self._save_manager.save(save)
+            self._save_store.persist()
         except Exception:
             pass
+
+    def force_persist(self) -> None:
+        self._allow_shutdown_persist = True
+        self._autosave()
 
     def _finish(self) -> None:
         self.shutdown()
         self.finished.emit()
 
-    def shutdown(self) -> None:
+    def shutdown(self, *, persist: bool = True) -> None:
         if self._idle_timer:
             self._idle_timer.stop()
         if self._autosave_timer:
             self._autosave_timer.stop()
-        self._autosave()
+        self._allow_shutdown_persist = self._allow_shutdown_persist and persist
+        if persist and self._allow_shutdown_persist:
+            self._autosave()

@@ -65,27 +65,28 @@ class _FakeIdleState:
         return (0.0, 0.0)
 
 
-class _FakeSaveManager:
+class _FakeSaveStore:
     def __init__(self, save: RunSave) -> None:
-        self._save = save
+        self._current = save
+        self.persist_calls = 0
 
-    def load(self) -> RunSave:
-        return self._save
+    @property
+    def current(self) -> RunSave:
+        return self._current
 
-    def save(self, value: RunSave) -> None:
-        self._save = value
+    def persist(self) -> None:
+        self.persist_calls += 1
 
 
 def test_idle_screen_applies_tick_cooldown_before_processing(monkeypatch) -> None:
     _ = QApplication.instance() or QApplication([])
 
     save = RunSave(layout_tick_cooldown_seconds=0.2)
-    monkeypatch.setattr(screen_module, "SaveManager", lambda: _FakeSaveManager(save))
     monkeypatch.setattr(screen_module, "start_idle_heal_timer", lambda value: None)
     monkeypatch.setattr(screen_module, "discover_character_plugins", lambda: [])
     monkeypatch.setattr(screen_module, "IdleGameState", _FakeIdleState)
 
-    screen = IdleScreenWidget(payload={})
+    screen = IdleScreenWidget(save_store=_FakeSaveStore(save))
     fake_state = screen._idle_state
     assert isinstance(fake_state, _FakeIdleState)
     assert screen._tick_cooldown_seconds > 0.0

@@ -71,3 +71,25 @@ def test_load_ignores_legacy_run_fields_and_save_strips_them(monkeypatch, tmp_pa
 
     assert rewritten["onsite"][0] == "ally"
     assert rewritten["offsite"][0] == "becca"
+
+
+def test_load_ignores_removed_idle_timer_legacy_fields(monkeypatch, tmp_path: Path) -> None:
+    save_path = tmp_path / "save.json"
+    monkeypatch.setenv("ENDLESS_IDLER_SAVE_PATH", str(save_path))
+
+    save_path.write_text(
+        json.dumps(
+            {
+                "version": 9,
+                "party_level": 1,
+                "idle_exp_bonus_until": 9999999999,
+                "idle_exp_penalty_until": 9999999999,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = SaveManager().load()
+    assert loaded is not None
+    assert loaded.idle_exp_bonus_seconds == 0.0
+    assert loaded.idle_exp_penalty_seconds == 0.0

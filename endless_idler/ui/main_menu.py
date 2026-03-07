@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import re
-import random
 
 from collections.abc import Callable
 
+from PySide6.QtCore import QCoreApplication
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QCloseEvent
@@ -19,17 +19,13 @@ from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
 from endless_idler.characters.plugins import discover_character_plugins
-from endless_idler.save import SaveManager
-from endless_idler.save import new_run_save
-from endless_idler.save import sanitize_save_characters
+from endless_idler.run_save_store import RunSaveStore
 from endless_idler.settings import AppSettings
 from endless_idler.settings import AppSettingsManager
 from endless_idler.settings import clamp_volume
 from endless_idler.settings import normalize_channel
 from endless_idler.ui.home import HomePage
 from endless_idler.ui.idle import IdleScreenWidget
-from endless_idler.ui.idle.bootstrap import bootstrap_party
-from endless_idler.ui.idle.bootstrap import should_bootstrap_party
 from endless_idler.ui.layout import LayoutScreenWidget
 from endless_idler.ui.lucide_icons import lucide_icon
 from endless_idler.ui.radio import RadioController
@@ -50,8 +46,10 @@ class MainMenuWindow(QMainWindow):
         self._app_settings = self._settings_manager.load()
         self._radio_controller: RadioController | None = RadioController(self)
         self._radio_channel_options: list[str] = []
+        self._plugins = discover_character_plugins()
+        self._save_store = RunSaveStore(plugins=self._plugins)
+        self._save_store.load_or_create()
 
-        self._idle_payload: dict[str, object] | None = None
         self._idle_screen: IdleScreenWidget | None = None
         self._nav_buttons: dict[str, QToolButton] = {}
 
@@ -141,9 +139,12 @@ class MainMenuWindow(QMainWindow):
         shell_layout.addWidget(self._stack, 1)
 
         self._home_screen = HomePage(self)
-        self._layout_screen = LayoutScreenWidget(self)
+        self._layout_screen = LayoutScreenWidget(save_store=self._save_store, parent=self)
         self._settings_screen = SettingsPage(self)
         self._settings_screen.settings_changed.connect(self._on_settings_changed)
+        self._settings_screen.save_now_requested.connect(self._on_save_now_requested)
+        self._settings_screen.save_backup_requested.connect(self._on_save_backup_requested)
+        self._settings_screen.save_reset_requested.connect(self._on_save_reset_requested)
         self._idle_placeholder = self._build_idle_placeholder(self)
 
         self._stack.addWidget(self._home_screen)
@@ -165,6 +166,7 @@ class MainMenuWindow(QMainWindow):
         self._stack.setCurrentWidget(self._home_screen)
         self._sync_radio_controller_from_settings(user_initiated=False)
         self._on_radio_state_changed(self._radio_state_snapshot())
+        self._update_save_status("Ready.")
         self._startup_idle_timer.start()
 
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -248,37 +250,15 @@ class MainMenuWindow(QMainWindow):
         self._refresh_radio_channel_options(disable_on_failure=True)
         self._settings_screen.set_settings(self._app_settings)
         self._settings_screen.apply_radio_state(self._radio_state_snapshot())
+        self._update_save_status("Ready.")
         self._stack.setCurrentWidget(self._settings_screen)
         self._set_active_nav(self._PAGE_SETTINGS)
-
-    def _prepare_idle_payload(self) -> dict[str, object]:
-        save_manager = SaveManager()
-        plugins = discover_character_plugins()
-        allowed_ids = {plugin.char_id for plugin in plugins}
-
-        loaded_save = save_manager.load()
-        is_new_save = loaded_save is None
-        save = loaded_save or new_run_save()
-        save = sanitize_save_characters(save=save, allowed_char_ids=allowed_ids)
-        if is_new_save and should_bootstrap_party(save):
-            bootstrap_party(save, plugins=plugins, rng=random.Random())
-        save_manager.save(save)
-
-        return {
-            "party_level": int(save.party_level),
-            "onsite": list(save.onsite),
-            "offsite": list(save.offsite),
-            "stacks": dict(save.stacks),
-        }
 
     def _initialize_idle_runtime(self) -> None:
         if self._idle_screen is not None:
             return
 
-        if self._idle_payload is None:
-            self._idle_payload = self._prepare_idle_payload()
-
-        idle = IdleScreenWidget(payload=self._idle_payload, parent=self)
+        idle = IdleScreenWidget(save_store=self._save_store, plugins=self._plugins, parent=self)
         idle.finished.connect(self._show_home)
         self._idle_screen = idle
         self._stack.addWidget(idle)
@@ -342,6 +322,62 @@ class MainMenuWindow(QMainWindow):
             previous_enabled=previous_enabled,
         )
         self._on_radio_state_changed(self._radio_state_snapshot())
+
+    def _on_save_now_requested(self) -> None:
+        self._persist_shared_save(status_text="Save complete.")
+
+    def _on_save_backup_requested(self) -> None:
+        try:
+            backup_path = self._save_store.backup_current()
+        except OSError as exc:
+            self._update_save_status(f"Backup failed: {exc}")
+            return
+
+        self._update_save_status(f"Backup created: {backup_path.name}")
+
+    def _on_save_reset_requested(self) -> None:
+        result = QMessageBox.question(
+            self,
+            "Reset Save",
+            (
+                "Create a backup of the current save, remove the active save, and close the game?\n\n"
+                "Next launch will start a fresh run."
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if result != QMessageBox.StandardButton.Yes:
+            return
+
+        self._layout_screen.cancel_pending_persist()
+        if self._idle_screen is not None:
+            self._idle_screen.shutdown(persist=False)
+        try:
+            self._save_store.backup_current()
+            self._save_store.delete_active_save()
+        except OSError as exc:
+            self._update_save_status(f"Reset failed: {exc}")
+            return
+        QCoreApplication.quit()
+
+    def _persist_shared_save(self, *, status_text: str) -> None:
+        try:
+            self._layout_screen.cancel_pending_persist()
+            if self._idle_screen is not None:
+                self._idle_screen.force_persist()
+            else:
+                self._save_store.persist()
+        except OSError as exc:
+            self._update_save_status(f"Save failed: {exc}")
+            return
+        self._update_save_status(status_text)
+
+    def _update_save_status(self, status_text: str) -> None:
+        self._settings_screen.set_save_status(
+            path_text=str(self._save_store.path),
+            status_text=status_text,
+            autosave_text="Idle autosaves every 5s. Layout saves after changes. Reset backs up the save and closes the game.",
+        )
 
     def _on_radio_control_play_requested(self) -> None:
         controller = self._ensure_radio_controller()

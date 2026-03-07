@@ -4,7 +4,6 @@ import json
 import math
 import os
 import random
-import time
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -101,23 +100,6 @@ class SaveManager:
         if not isinstance(data, dict):
             return None
 
-        bonus_seconds = as_float(data.get("idle_exp_bonus_seconds", 0.0), default=0.0)
-        penalty_seconds = as_float(data.get("idle_exp_penalty_seconds", 0.0), default=0.0)
-        shared_exp_percentage = as_int(data.get("idle_shared_exp_percentage", 1), default=1)
-        risk_reward_level = as_int(data.get("idle_risk_reward_level", 0), default=0)
-        if "idle_exp_bonus_seconds" not in data:
-            legacy_bonus = as_float(data.get("idle_exp_bonus_until", 0.0), default=0.0)
-            if legacy_bonus > 1_000_000_000:
-                bonus_seconds = max(0.0, legacy_bonus - float(time.time()))
-            else:
-                bonus_seconds = max(0.0, legacy_bonus)
-        if "idle_exp_penalty_seconds" not in data:
-            legacy_penalty = as_float(data.get("idle_exp_penalty_until", 0.0), default=0.0)
-            if legacy_penalty > 1_000_000_000:
-                penalty_seconds = max(0.0, legacy_penalty - float(time.time()))
-            else:
-                penalty_seconds = max(0.0, legacy_penalty)
-
         save = RunSave(
             version=as_int(data.get("version", SAVE_VERSION), default=SAVE_VERSION),
             tokens=DEFAULT_RUN_TOKENS,
@@ -143,10 +125,10 @@ class SaveManager:
             character_stats=as_character_stats_dict(data.get("character_stats", {})),
             character_initial_stats=as_character_stats_dict(data.get("character_initial_stats", {})),
             character_deaths=as_int_dict(data.get("character_deaths", {})),
-            idle_exp_bonus_seconds=bonus_seconds,
-            idle_exp_penalty_seconds=penalty_seconds,
-            idle_shared_exp_percentage=shared_exp_percentage,
-            idle_risk_reward_level=risk_reward_level,
+            idle_exp_bonus_seconds=as_float(data.get("idle_exp_bonus_seconds", 0.0), default=0.0),
+            idle_exp_penalty_seconds=as_float(data.get("idle_exp_penalty_seconds", 0.0), default=0.0),
+            idle_shared_exp_percentage=as_int(data.get("idle_shared_exp_percentage", 1), default=1),
+            idle_risk_reward_level=as_int(data.get("idle_risk_reward_level", 0), default=0),
             idle_exp_mult=as_float(data.get("idle_exp_mult", 1.0), default=1.0),
             layout_tick_cooldown_seconds=as_float(
                 data.get("layout_tick_cooldown_seconds", DEFAULT_LAYOUT_TICK_COOLDOWN_SECONDS),
