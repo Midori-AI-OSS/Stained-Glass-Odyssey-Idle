@@ -138,7 +138,7 @@ def extract_character_metadata(
     return (
         char_id,
         display_name,
-        _sanitize_stars(stars),
+        stars,
         _sanitize_placement(placement),
         _sanitize_damage_type(damage_type_id),
         bool(damage_type_random),
@@ -327,14 +327,6 @@ def _extract_passive_list(node: ast.AST | None) -> list[str]:
 
 def _derive_display_name(char_id: str) -> str:
     return " ".join(part.capitalize() for part in char_id.split("_"))
-
-
-def _sanitize_stars(stars: int) -> int:
-    if stars <= 0:
-        return 1
-    if stars > 7:
-        return 7
-    return stars
 
 
 def _sanitize_placement(placement: str) -> str:
