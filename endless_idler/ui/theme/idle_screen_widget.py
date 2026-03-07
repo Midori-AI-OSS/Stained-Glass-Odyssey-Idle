@@ -32,7 +32,8 @@ QLabel#idleRRTitle,
 QLabel#idleSharedExpLabel,
 QLabel#idleRRLabel,
 QLabel#idleBlessingTitle,
-QLabel#idleBlessingValueLabel {
+QLabel#idleBlessingValueLabel,
+QLabel#idleTickCooldownLabel {
     color: rgba(255, 255, 255, 235);
     font-size: 14px;
     font-weight: 700;

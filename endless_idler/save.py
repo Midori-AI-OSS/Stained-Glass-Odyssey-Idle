@@ -31,10 +31,20 @@ DEFAULT_FIGHT_NUMBER = 1
 DEFAULT_PARTY_HP_MAX = 100
 DEFAULT_PARTY_HP_CURRENT = 100
 DEFAULT_PARTY_HP_LAST_IDLE_HEAL_AT = 0.0
+DEFAULT_LAYOUT_TICK_COOLDOWN_SECONDS = 0.0
+DEFAULT_LAYOUT_OWNED_ORDERING = "save_order"
 ONSITE_SLOTS = 4
 OFFSITE_SLOTS = 6
 STANDBY_SLOTS = 10
 BAR_SLOTS = 6
+_LAYOUT_OWNED_ORDERING_VALUES = frozenset(
+    {
+        "save_order",
+        "rarity_desc",
+        "alphabetical",
+        "recent",
+    }
+)
 
 
 @dataclass(slots=True)
@@ -63,6 +73,8 @@ class RunSave:
     winstreak: int = 0
     idle_exp_mult: float = 1.0
     battle_start_time: float = 0.0
+    layout_tick_cooldown_seconds: float = DEFAULT_LAYOUT_TICK_COOLDOWN_SECONDS
+    layout_owned_ordering: str = DEFAULT_LAYOUT_OWNED_ORDERING
 
 
 class SaveManager:
@@ -136,6 +148,13 @@ class SaveManager:
             idle_shared_exp_percentage=shared_exp_percentage,
             idle_risk_reward_level=risk_reward_level,
             idle_exp_mult=as_float(data.get("idle_exp_mult", 1.0), default=1.0),
+            layout_tick_cooldown_seconds=as_float(
+                data.get("layout_tick_cooldown_seconds", DEFAULT_LAYOUT_TICK_COOLDOWN_SECONDS),
+                default=DEFAULT_LAYOUT_TICK_COOLDOWN_SECONDS,
+            ),
+            layout_owned_ordering=_normalize_layout_owned_ordering(
+                data.get("layout_owned_ordering", DEFAULT_LAYOUT_OWNED_ORDERING)
+            ),
         )
         return _normalized_save(save)
 
@@ -160,6 +179,8 @@ class SaveManager:
             "idle_shared_exp_percentage": save.idle_shared_exp_percentage,
             "idle_risk_reward_level": save.idle_risk_reward_level,
             "idle_exp_mult": save.idle_exp_mult,
+            "layout_tick_cooldown_seconds": save.layout_tick_cooldown_seconds,
+            "layout_owned_ordering": save.layout_owned_ordering,
         }
 
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -181,6 +202,13 @@ def _default_save_path() -> Path:
     if not base:
         base = str(Path.cwd())
     return Path(base) / "stainedlgassodysseyidle" / "idlesave.json"
+
+
+def _normalize_layout_owned_ordering(value: object) -> str:
+    normalized = str(value).strip().lower()
+    if normalized not in _LAYOUT_OWNED_ORDERING_VALUES:
+        return DEFAULT_LAYOUT_OWNED_ORDERING
+    return normalized
 
 
 def _normalized_save(save: RunSave) -> RunSave:
@@ -300,6 +328,15 @@ def _normalized_save(save: RunSave) -> RunSave:
         winstreak=max(0, int(getattr(save, "winstreak", 0))),
         idle_exp_mult=max(1.0, float(getattr(save, "idle_exp_mult", 1.0))),
         battle_start_time=float(max(0.0, getattr(save, "battle_start_time", 0.0))),
+        layout_tick_cooldown_seconds=float(
+            max(
+                0.0,
+                float(getattr(save, "layout_tick_cooldown_seconds", DEFAULT_LAYOUT_TICK_COOLDOWN_SECONDS)),
+            )
+        ),
+        layout_owned_ordering=_normalize_layout_owned_ordering(
+            getattr(save, "layout_owned_ordering", DEFAULT_LAYOUT_OWNED_ORDERING)
+        ),
     )
 
 

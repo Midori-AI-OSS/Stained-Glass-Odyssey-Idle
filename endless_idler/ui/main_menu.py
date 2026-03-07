@@ -30,6 +30,7 @@ from endless_idler.ui.home import HomePage
 from endless_idler.ui.idle import IdleScreenWidget
 from endless_idler.ui.idle.bootstrap import bootstrap_party
 from endless_idler.ui.idle.bootstrap import should_bootstrap_party
+from endless_idler.ui.layout import LayoutScreenWidget
 from endless_idler.ui.lucide_icons import lucide_icon
 from endless_idler.ui.radio import RadioController
 from endless_idler.ui.radio_control import RadioControlWidget
@@ -40,6 +41,7 @@ class MainMenuWindow(QMainWindow):
     APP_TITLE = "Stained Glass Odyssey Idle"
     _PAGE_HOME = "home"
     _PAGE_IDLE = "idle"
+    _PAGE_LAYOUT = "layout"
     _PAGE_SETTINGS = "settings"
 
     def __init__(self) -> None:
@@ -80,10 +82,18 @@ class MainMenuWindow(QMainWindow):
         )
         topbar_layout.addWidget(
             self._make_nav_button(
-                label="Party",
+                label="Idle",
                 icon_name="group",
                 page_key=self._PAGE_IDLE,
                 on_click=self._show_idle,
+            )
+        )
+        topbar_layout.addWidget(
+            self._make_nav_button(
+                label="Layout",
+                icon_name="layout-grid",
+                page_key=self._PAGE_LAYOUT,
+                on_click=self._show_layout,
             )
         )
         topbar_layout.addWidget(
@@ -131,11 +141,13 @@ class MainMenuWindow(QMainWindow):
         shell_layout.addWidget(self._stack, 1)
 
         self._home_screen = HomePage(self)
+        self._layout_screen = LayoutScreenWidget(self)
         self._settings_screen = SettingsPage(self)
         self._settings_screen.settings_changed.connect(self._on_settings_changed)
         self._idle_placeholder = self._build_idle_placeholder(self)
 
         self._stack.addWidget(self._home_screen)
+        self._stack.addWidget(self._layout_screen)
         self._stack.addWidget(self._idle_placeholder)
         self._stack.addWidget(self._settings_screen)
 
@@ -226,6 +238,10 @@ class MainMenuWindow(QMainWindow):
             self._stack.setCurrentWidget(self._idle_screen)
         self._set_active_nav(self._PAGE_IDLE)
 
+    def _show_layout(self) -> None:
+        self._stack.setCurrentWidget(self._layout_screen)
+        self._set_active_nav(self._PAGE_LAYOUT)
+
     def _show_settings(self) -> None:
         _ = self._ensure_radio_controller()
         self._sync_radio_controller_from_settings(user_initiated=False)
@@ -240,9 +256,11 @@ class MainMenuWindow(QMainWindow):
         plugins = discover_character_plugins()
         allowed_ids = {plugin.char_id for plugin in plugins}
 
-        save = save_manager.load() or new_run_save()
+        loaded_save = save_manager.load()
+        is_new_save = loaded_save is None
+        save = loaded_save or new_run_save()
         save = sanitize_save_characters(save=save, allowed_char_ids=allowed_ids)
-        if should_bootstrap_party(save):
+        if is_new_save and should_bootstrap_party(save):
             bootstrap_party(save, plugins=plugins, rng=random.Random())
         save_manager.save(save)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 
 from PySide6.QtCore import QTimer
@@ -20,6 +21,7 @@ from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.combat.stats import Stats
 from endless_idler.run_rules import apply_idle_party_heal
 from endless_idler.run_rules import start_idle_heal_timer
+from endless_idler.save import RunSave
 from endless_idler.save import SaveManager
 from endless_idler.save import new_run_save
 from endless_idler.ui.idle.blessing_meter import IdleBlessingMeterWidget
@@ -47,14 +49,9 @@ class IdleScreenWidget(QWidget):
 
         self._rng = random.Random()
         self._save_manager = SaveManager()
-        self._save = self._save_manager.load()
-        if self._save is None:
-            self._save = new_run_save()
-            start_idle_heal_timer(self._save)
-            self._save_manager.save(self._save)
-        else:
-            start_idle_heal_timer(self._save)
-            self._save_manager.save(self._save)
+        self._save: RunSave = self._save_manager.load() or new_run_save()
+        start_idle_heal_timer(self._save)
+        self._save_manager.save(self._save)
 
         payload_onsite = [str(item) for item in onsite_raw if item] if isinstance(onsite_raw, list) else []
         payload_offsite = [str(item) for item in offsite_raw if item] if isinstance(offsite_raw, list) else []
@@ -81,16 +78,22 @@ class IdleScreenWidget(QWidget):
         self._stacks = stacks
         self._onsite_ids = list(onsite)
         self._offsite_ids = list(offsite)
+        self._tick_cooldown_seconds = float(
+            max(0.0, float(getattr(self._save, "layout_tick_cooldown_seconds", 0.0)))
+        )
 
         self._plugins = discover_character_plugins()
         self._plugin_by_id = {plugin.char_id: plugin for plugin in self._plugins}
+        plugins_by_id: dict[str, object] = {
+            key: value for key, value in self._plugin_by_id.items()
+        }
 
         self._idle_state = IdleGameState(
             char_ids=onsite,
             offsite_ids=offsite,
             party_level=self._party_level,
             stacks=self._stacks,
-            plugins_by_id=self._plugin_by_id,
+            plugins_by_id=plugins_by_id,
             rng=self._rng,
             progress_by_id=dict(self._save.character_progress),
             stats_by_id=dict(self._save.character_stats),
@@ -118,6 +121,10 @@ class IdleScreenWidget(QWidget):
         root.addLayout(header)
 
         header.addStretch(1)
+        self._tick_cooldown_label = QLabel("")
+        self._tick_cooldown_label.setObjectName("idleTickCooldownLabel")
+        self._tick_cooldown_label.setVisible(False)
+        header.addWidget(self._tick_cooldown_label, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         arena = IdleArena()
         self._arena = arena
@@ -216,12 +223,33 @@ class IdleScreenWidget(QWidget):
 
         self._idle_state.tick_update.connect(self._on_tick)
         self._idle_timer = QTimer(self)
-        self._idle_timer.timeout.connect(self._idle_state.process_tick)
+        self._idle_timer.timeout.connect(self._process_idle_tick)
         self._idle_timer.start(int(max(1, IDLE_TICK_INTERVAL_SECONDS * 1000)))
 
         self._autosave_timer = QTimer(self)
         self._autosave_timer.timeout.connect(self._autosave)
         self._autosave_timer.start(5000)  # Auto-save every 5 seconds
+        self._update_tick_cooldown_label()
+
+    def _process_idle_tick(self) -> None:
+        if self._tick_cooldown_seconds > 0.0:
+            self._tick_cooldown_seconds = max(
+                0.0,
+                self._tick_cooldown_seconds - IDLE_TICK_INTERVAL_SECONDS,
+            )
+            self._save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
+            self._update_tick_cooldown_label()
+            return
+        self._idle_state.process_tick()
+
+    def _update_tick_cooldown_label(self) -> None:
+        remaining_seconds = int(math.ceil(self._tick_cooldown_seconds))
+        if remaining_seconds <= 0:
+            self._tick_cooldown_label.setVisible(False)
+            self._tick_cooldown_label.setText("")
+            return
+        self._tick_cooldown_label.setVisible(True)
+        self._tick_cooldown_label.setText(f"Layout cooldown: {remaining_seconds}s")
 
     def _make_mods_panel(self) -> QFrame:
         panel = QFrame()
@@ -464,6 +492,7 @@ class IdleScreenWidget(QWidget):
 
     def _on_tick(self, tick_count: int) -> None:
         del tick_count
+        self._update_tick_cooldown_label()
         self._update_blessing_ui()
         self._refresh_character_cards()
         healed = 0
@@ -494,6 +523,7 @@ class IdleScreenWidget(QWidget):
             save.idle_exp_penalty_seconds = penalty_seconds
             save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
             save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
+            save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
             self._save_manager.save(save)
         except Exception:
             return
@@ -579,6 +609,7 @@ class IdleScreenWidget(QWidget):
             save.idle_exp_penalty_seconds = penalty_seconds
             save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
             save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
+            save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
             self._save_manager.save(save)
         except Exception:
             return
@@ -602,6 +633,7 @@ class IdleScreenWidget(QWidget):
             save.idle_exp_penalty_seconds = penalty_seconds
             save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
             save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
+            save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
             self._save_manager.save(save)
         except Exception:
             pass

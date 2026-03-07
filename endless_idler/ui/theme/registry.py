@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QApplication
 
 from endless_idler.ui.theme.app_shell_widget import STYLESHEET as APP_SHELL_WIDGET_STYLESHEET
 from endless_idler.ui.theme.home_widget import STYLESHEET as HOME_WIDGET_STYLESHEET
+from endless_idler.ui.theme.layout_screen_widget import STYLESHEET as LAYOUT_SCREEN_WIDGET_STYLESHEET
 from endless_idler.ui.theme.idle_blessing_meter_widget import STYLESHEET as IDLE_BLESSING_METER_WIDGET_STYLESHEET
 from endless_idler.ui.theme.idle_offsite_card import STYLESHEET as IDLE_OFFSITE_CARD_STYLESHEET
 from endless_idler.ui.theme.idle_screen_widget import STYLESHEET as IDLE_SCREEN_WIDGET_STYLESHEET
@@ -18,6 +19,7 @@ def build_stained_glass_stylesheet() -> str:
     sections = (
         APP_SHELL_WIDGET_STYLESHEET,
         HOME_WIDGET_STYLESHEET,
+        LAYOUT_SCREEN_WIDGET_STYLESHEET,
         PARTY_HP_HEADER_STYLESHEET,
         IDLE_SCREEN_WIDGET_STYLESHEET,
         IDLE_BLESSING_METER_WIDGET_STYLESHEET,
