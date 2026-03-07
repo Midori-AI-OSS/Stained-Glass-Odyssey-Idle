@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QGraphicsDropShadowEffect
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QSizePolicy
+from PySide6.QtWidgets import QWidget
 
 import endless_idler.ui.layout.screen as layout_module
 
@@ -26,6 +28,24 @@ class _FakeSaveManager:
     def save(self, value: RunSave) -> None:
         self.save_calls += 1
         self._save = value
+
+
+class _FakeIdleState:
+    def __init__(self, *, by_id: dict[str, dict[str, object]], party_level: int) -> None:
+        self._by_id = by_id
+        self._party_level = party_level
+
+    def get_char_data(self, char_id: str) -> dict[str, object] | None:
+        data = self._by_id.get(char_id)
+        return dict(data) if isinstance(data, dict) else None
+
+    def get_party_level(self) -> int:
+        return self._party_level
+
+
+class _FakeIdleScreen:
+    def __init__(self, idle_state: _FakeIdleState) -> None:
+        self._idle_state = idle_state
 
 
 def _plugin(char_id: str, placement: str, stars: int, *, damage_type_id: str = "generic") -> CharacterPlugin:
@@ -327,3 +347,175 @@ def test_layout_theme_uses_white_markers_and_no_inner_chip_outline() -> None:
     assert "background-color: rgba(255, 255, 255, 215);" in LAYOUT_SCREEN_STYLESHEET
     assert 'placementSlot="onsite"][filled="true"]' not in LAYOUT_SCREEN_STYLESHEET
     assert 'placementSlot="offsite"][filled="true"]' not in LAYOUT_SCREEN_STYLESHEET
+
+
+def test_layout_chip_uses_stained_tooltip_only(monkeypatch) -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    fake_manager = _FakeSaveManager(_save_with_unassigned("lady_darkness"))
+    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    monkeypatch.setattr(
+        layout_module,
+        "discover_character_plugins",
+        lambda: [
+            _plugin("lady_darkness", "onsite", 5),
+        ],
+    )
+
+    screen = LayoutScreenWidget()
+    chips = [child for child in screen.findChildren(QFrame) if child.objectName() == "LayoutCharacterChip"]
+    assert chips
+    assert chips[0].toolTip() == ""
+    screen.deleteLater()
+
+
+def test_layout_chip_tooltip_refreshes_from_current_save_data(monkeypatch) -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    save = _save_with_unassigned("lady_darkness")
+    save.character_progress["lady_darkness"] = {"level": 1, "exp": 0.0, "next_exp": 30.0}
+    fake_manager = _FakeSaveManager(save)
+    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    monkeypatch.setattr(
+        layout_module,
+        "discover_character_plugins",
+        lambda: [
+            _plugin("lady_darkness", "onsite", 5),
+        ],
+    )
+
+    tooltip_calls: list[tuple[str, str | None]] = []
+
+    def _capture_tooltip(_owner, html: str, *, element_id: str | None = None) -> None:
+        tooltip_calls.append((html, element_id))
+
+    monkeypatch.setattr(layout_module, "show_stained_tooltip", _capture_tooltip)
+    monkeypatch.setattr(layout_module, "hide_stained_tooltip", lambda: None)
+
+    screen = LayoutScreenWidget()
+    chips = [child for child in screen.findChildren(QFrame) if child.objectName() == "LayoutCharacterChip"]
+    assert chips
+    chip = chips[0]
+
+    chip._show_tooltip()
+    first_html = tooltip_calls[-1][0]
+
+    screen._save.character_progress["lady_darkness"] = {
+        "level": 7,
+        "exp": 56.0,
+        "next_exp": 90.0,
+        "exp_multiplier": 2.0,
+    }
+    screen._save.stacks["lady_darkness"] = 3
+    chip._show_tooltip()
+    second_html = tooltip_calls[-1][0]
+
+    assert first_html != second_html
+    assert "x3" in second_html
+    assert chip._tooltip_refresh_timer.interval() == layout_module.LAYOUT_TOOLTIP_REFRESH_INTERVAL_MS
+    screen.deleteLater()
+
+
+def test_layout_chip_tooltip_prefers_live_idle_state_data(monkeypatch) -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    save = _save_with_unassigned("lady_darkness")
+    save.character_progress["lady_darkness"] = {"level": 1, "exp": 0.0, "next_exp": 30.0}
+    save.stacks["lady_darkness"] = 1
+    fake_manager = _FakeSaveManager(save)
+    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    monkeypatch.setattr(
+        layout_module,
+        "discover_character_plugins",
+        lambda: [
+            _plugin("lady_darkness", "onsite", 5),
+        ],
+    )
+
+    live_idle_state = _FakeIdleState(
+        by_id={
+            "lady_darkness": {
+                "level": 9,
+                "exp": 120.0,
+                "exp_multiplier": 3.0,
+                "max_hp_level_bonus_version": 0,
+                "stack": 4,
+                "base_stats": {},
+                "hp": 777,
+            }
+        },
+        party_level=12,
+    )
+    host = QWidget()
+    host._idle_screen = _FakeIdleScreen(live_idle_state)
+
+    screen = LayoutScreenWidget(parent=host)
+    plugin = screen._plugin_by_id["lady_darkness"]
+    html, _ = screen._build_tooltip_data("lady_darkness", plugin)
+    assert "x4" in html
+    assert ">9<" in html
+    screen.deleteLater()
+    host.deleteLater()
+
+
+def test_layout_chip_child_enter_event_triggers_tooltip_refresh(monkeypatch) -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    fake_manager = _FakeSaveManager(_save_with_unassigned("lady_darkness"))
+    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    monkeypatch.setattr(
+        layout_module,
+        "discover_character_plugins",
+        lambda: [
+            _plugin("lady_darkness", "onsite", 5),
+        ],
+    )
+
+    tooltip_calls: list[str] = []
+
+    def _capture_tooltip(_owner, html: str, *, element_id: str | None = None) -> None:
+        del element_id
+        tooltip_calls.append(html)
+
+    monkeypatch.setattr(layout_module, "show_stained_tooltip", _capture_tooltip)
+    monkeypatch.setattr(layout_module, "hide_stained_tooltip", lambda: None)
+
+    screen = LayoutScreenWidget()
+    chips = [child for child in screen.findChildren(QFrame) if child.objectName() == "LayoutCharacterChip"]
+    assert chips
+    chip = chips[0]
+    name_label = next(
+        label for label in chip.findChildren(QLabel) if label.objectName() == "LayoutCharacterName"
+    )
+
+    chip.eventFilter(name_label, QEvent(QEvent.Type.Enter))
+    assert tooltip_calls
+    screen.deleteLater()
+
+
+def test_layout_chip_refresh_loop_stops_when_not_hovered(monkeypatch) -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    fake_manager = _FakeSaveManager(_save_with_unassigned("lady_darkness"))
+    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    monkeypatch.setattr(
+        layout_module,
+        "discover_character_plugins",
+        lambda: [
+            _plugin("lady_darkness", "onsite", 5),
+        ],
+    )
+
+    hide_calls: list[None] = []
+    monkeypatch.setattr(layout_module, "show_stained_tooltip", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(layout_module, "hide_stained_tooltip", lambda: hide_calls.append(None))
+
+    screen = LayoutScreenWidget()
+    chips = [child for child in screen.findChildren(QFrame) if child.objectName() == "LayoutCharacterChip"]
+    assert chips
+    chip = chips[0]
+    chip._tooltip_refresh_timer.start()
+    chip._refresh_tooltip_while_hovered()
+    assert not chip._tooltip_refresh_timer.isActive()
+    assert hide_calls
+    screen.deleteLater()

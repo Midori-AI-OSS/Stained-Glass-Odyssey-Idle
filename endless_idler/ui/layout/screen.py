@@ -83,6 +83,7 @@ LAYOUT_SLOT_HEIGHT = 144
 LAYOUT_STANDBY_SLOT_WIDTH = 110
 LAYOUT_STANDBY_SLOT_HEIGHT = 118
 LAYOUT_STANDBY_PANEL_HEIGHT = LAYOUT_STANDBY_SLOT_HEIGHT + 60
+LAYOUT_TOOLTIP_REFRESH_INTERVAL_MS = 500  # ~5 idle ticks at 0.1s/tick
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,8 +180,7 @@ class _CharacterChip(QFrame):
         stars: int,
         placement: str,
         element_id: str,
-        tooltip_html: str,
-        tooltip_element_id: str | None,
+        tooltip_provider: Callable[[], tuple[str, str | None]],
         source_lane: str,
         source_index: int,
         parent: QWidget | None = None,
@@ -197,9 +197,11 @@ class _CharacterChip(QFrame):
         self._char_id = char_id
         self._source_lane = source_lane
         self._source_index = source_index
-        self._tooltip_html = tooltip_html
-        self._tooltip_element_id = tooltip_element_id
+        self._tooltip_provider = tooltip_provider
         self._drag_start_pos: QPoint | None = None
+        self._tooltip_refresh_timer = QTimer(self)
+        self._tooltip_refresh_timer.setInterval(LAYOUT_TOOLTIP_REFRESH_INTERVAL_MS)
+        self._tooltip_refresh_timer.timeout.connect(self._refresh_tooltip_while_hovered)
 
         stars = sanitize_stars(stars)
         layout = QGridLayout(self)
@@ -304,12 +306,22 @@ class _CharacterChip(QFrame):
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
         )
         self.setGraphicsEffect(_make_damage_glow_effect(self, element_id))
-
-        self.setToolTip(f"{display_name} ({stars}★)")
+        # The layout screen uses custom stained tooltip rendering only.
+        self.setToolTip("")
+        for widget in (
+            portrait,
+            name_label,
+            stars_label,
+            placement_badge,
+            placement_top,
+            placement_bottom,
+        ):
+            widget.installEventFilter(self)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_start_pos = event.position().toPoint()
+            self._tooltip_refresh_timer.stop()
             hide_stained_tooltip()
         super().mousePressEvent(event)
 
@@ -337,22 +349,43 @@ class _CharacterChip(QFrame):
         )
         drag.setMimeData(mime_data)
         self.setCursor(Qt.CursorShape.ClosedHandCursor)
+        self._tooltip_refresh_timer.stop()
         hide_stained_tooltip()
         drag.exec(Qt.DropAction.MoveAction)
         self.setCursor(Qt.CursorShape.OpenHandCursor)
         self._drag_start_pos = None
 
+    def _show_tooltip(self) -> None:
+        tooltip_html, tooltip_element_id = self._tooltip_provider()
+        if not tooltip_html:
+            hide_stained_tooltip()
+            return
+        show_stained_tooltip(
+            self,
+            tooltip_html,
+            element_id=tooltip_element_id,
+        )
+
+    def _refresh_tooltip_while_hovered(self) -> None:
+        if self.underMouse():
+            self._show_tooltip()
+            return
+        self._tooltip_refresh_timer.stop()
+        hide_stained_tooltip()
+
+    def eventFilter(self, watched: object, event: object) -> bool:  # noqa: ANN001
+        if hasattr(event, "type") and event.type() == QEvent.Type.Enter:
+            self._show_tooltip()
+            self._tooltip_refresh_timer.start()
+        return super().eventFilter(watched, event)  # type: ignore[misc]
+
     def enterEvent(self, event: QEnterEvent) -> None:
-        if self._tooltip_html:
-            show_stained_tooltip(
-                self,
-                self._tooltip_html,
-                element_id=self._tooltip_element_id,
-            )
+        self._show_tooltip()
+        self._tooltip_refresh_timer.start()
         super().enterEvent(event)
 
     def leaveEvent(self, event: QEvent) -> None:
-        hide_stained_tooltip()
+        QTimer.singleShot(0, self._refresh_tooltip_while_hovered)
         super().leaveEvent(event)
 
 
@@ -403,7 +436,6 @@ class _PartySlot(QFrame):
 
         _clear_layout(self._body)
         element_id = _normalized_damage_type_key(getattr(plugin, "damage_type_id", "generic"))
-        tooltip_html, tooltip_element_id = self._build_tooltip_data(char_id, plugin)
         chip = _CharacterChip(
             char_id=char_id,
             display_name=str(getattr(plugin, "display_name", char_id)),
@@ -411,8 +443,9 @@ class _PartySlot(QFrame):
             stars=int(getattr(plugin, "stars", 1) or 1),
             placement=str(getattr(plugin, "placement", "both") or "both"),
             element_id=element_id,
-            tooltip_html=tooltip_html,
-            tooltip_element_id=tooltip_element_id,
+            tooltip_provider=lambda char_id=char_id, plugin=plugin: self._build_tooltip_data(
+                char_id, plugin
+            ),
             source_lane=self._lane,
             source_index=self._index,
         )
@@ -521,7 +554,6 @@ class _UnassignedPanel(QFrame):
             display_name = str(getattr(plugin, "display_name", derive_display_name(char_id)))
             stars = int(getattr(plugin, "stars", 1) or 1)
             element_id = _normalized_damage_type_key(getattr(plugin, "damage_type_id", "generic"))
-            tooltip_html, tooltip_element_id = self._build_tooltip_data(char_id, plugin)
             chip = _CharacterChip(
                 char_id=char_id,
                 display_name=display_name,
@@ -529,8 +561,9 @@ class _UnassignedPanel(QFrame):
                 stars=stars,
                 placement=str(getattr(plugin, "placement", "both") or "both"),
                 element_id=element_id,
-                tooltip_html=tooltip_html,
-                tooltip_element_id=tooltip_element_id,
+                tooltip_provider=lambda char_id=char_id, plugin=plugin: self._build_tooltip_data(
+                    char_id, plugin
+                ),
                 source_lane="unassigned",
                 source_index=index,
                 parent=self,
@@ -739,6 +772,48 @@ class LayoutScreenWidget(QWidget):
         self._portrait_by_id[char_id] = image_path
         return image_path
 
+    def _live_idle_tooltip_snapshot(self, char_id: str) -> tuple[dict[str, object], int] | None:
+        host = self.parentWidget()
+        if host is None:
+            return None
+
+        idle_screen = getattr(host, "_idle_screen", None)
+        if idle_screen is None:
+            return None
+
+        idle_state = getattr(idle_screen, "_idle_state", None)
+        if idle_state is None:
+            return None
+
+        get_char_data = getattr(idle_state, "get_char_data", None)
+        if not callable(get_char_data):
+            return None
+        data = get_char_data(char_id)
+        if not isinstance(data, dict):
+            return None
+
+        party_level = max(1, int(self._save.party_level))
+        get_party_level = getattr(idle_state, "get_party_level", None)
+        if callable(get_party_level):
+            try:
+                party_level = max(1, int(get_party_level()))
+            except (TypeError, ValueError):
+                pass
+        return data, party_level
+
+    def _sync_tooltip_save_snapshot(self) -> None:
+        loaded = self._save_manager.load()
+        if loaded is None:
+            return
+        refreshed = sanitize_save_characters(
+            save=loaded,
+            allowed_char_ids=set(self._plugin_by_id),
+        )
+        self._save.party_level = max(1, int(refreshed.party_level))
+        self._save.stacks = dict(refreshed.stacks)
+        self._save.character_progress = dict(refreshed.character_progress)
+        self._save.character_stats = dict(refreshed.character_stats)
+
     def _build_tooltip_data(
         self,
         char_id: str,
@@ -747,18 +822,74 @@ class LayoutScreenWidget(QWidget):
         if plugin is None:
             return "", None
 
+        live_snapshot = self._live_idle_tooltip_snapshot(char_id)
+        if live_snapshot is None:
+            self._sync_tooltip_save_snapshot()
+
         stars = sanitize_stars(int(getattr(plugin, "stars", 1) or 1))
+        party_level = max(1, int(self._save.party_level))
         stacks = max(1, int(self._save.stacks.get(char_id, 1)))
-        progress = self._save.character_progress.get(char_id, {})
-        saved_base_stats = self._save.character_stats.get(char_id, {})
+        progress_raw = self._save.character_progress.get(char_id, {})
+        progress: dict[str, float | int] = (
+            dict(progress_raw) if isinstance(progress_raw, dict) else {}
+        )
+        saved_base_stats_raw = self._save.character_stats.get(char_id, {})
+        saved_base_stats: dict[str, float] = (
+            dict(saved_base_stats_raw) if isinstance(saved_base_stats_raw, dict) else {}
+        )
+
+        current_hp: int | None = None
+        if live_snapshot is not None:
+            live_data, live_party_level = live_snapshot
+            party_level = max(1, int(live_party_level))
+            try:
+                stacks = max(1, int(live_data.get("stack", stacks)))
+            except (TypeError, ValueError):
+                stacks = max(1, int(stacks))
+
+            progress = {
+                "level": max(1, int(live_data.get("level", progress.get("level", 1)))),
+                "exp": float(max(0.0, float(live_data.get("exp", progress.get("exp", 0.0))))),
+                "exp_multiplier": float(
+                    max(
+                        0.0,
+                        float(
+                            live_data.get(
+                                "exp_multiplier",
+                                progress.get("exp_multiplier", 1.0),
+                            )
+                        ),
+                    )
+                ),
+                "max_hp_level_bonus_version": max(
+                    0,
+                    int(
+                        live_data.get(
+                            "max_hp_level_bonus_version",
+                            progress.get("max_hp_level_bonus_version", 0),
+                        )
+                    ),
+                ),
+            }
+            base_stats = live_data.get("base_stats")
+            if isinstance(base_stats, dict):
+                saved_base_stats = dict(base_stats)
+            try:
+                current_hp = max(0, int(float(live_data.get("hp"))))
+            except (TypeError, ValueError):
+                current_hp = None
+
         stats = build_scaled_character_stats(
             plugin=plugin,
-            party_level=max(1, int(self._save.party_level)),
+            party_level=party_level,
             stars=stars,
             stacks=stacks,
-            progress=progress if isinstance(progress, dict) else {},
-            saved_base_stats=saved_base_stats if isinstance(saved_base_stats, dict) else {},
+            progress=progress,
+            saved_base_stats=saved_base_stats,
         )
+        if current_hp is not None:
+            stats.hp = max(0, min(stats.max_hp, current_hp))
+
         tooltip_html = build_character_stats_tooltip(
             name=str(getattr(plugin, "display_name", derive_display_name(char_id))),
             stars=stars,
