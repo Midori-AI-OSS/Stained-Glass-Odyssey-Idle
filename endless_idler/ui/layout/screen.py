@@ -4,9 +4,12 @@ import json
 import math
 import random
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from PySide6.QtCore import QByteArray
+from PySide6.QtCore import QEvent
 from PySide6.QtCore import QMimeData
 from PySide6.QtCore import QPoint
 from PySide6.QtCore import Qt
@@ -15,12 +18,15 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QDrag
 from PySide6.QtGui import QDragEnterEvent
 from PySide6.QtGui import QDropEvent
+from PySide6.QtGui import QEnterEvent
+from PySide6.QtGui import QFontMetrics
 from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import QComboBox
 from PySide6.QtWidgets import QFrame
+from PySide6.QtWidgets import QGraphicsDropShadowEffect
 from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QScrollArea
 from PySide6.QtWidgets import QSizePolicy
 from PySide6.QtWidgets import QVBoxLayout
@@ -28,6 +34,8 @@ from PySide6.QtWidgets import QWidget
 
 from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.characters.plugins import discover_character_plugins
+from endless_idler.combat.damage_types import normalize_damage_type_id
+from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.save import OFFSITE_SLOTS
 from endless_idler.save import ONSITE_SLOTS
 from endless_idler.save import STANDBY_SLOTS
@@ -37,8 +45,14 @@ from endless_idler.save import new_run_save
 from endless_idler.save import sanitize_save_characters
 from endless_idler.ui.idle.bootstrap import bootstrap_party
 from endless_idler.ui.idle.bootstrap import should_bootstrap_party
+from endless_idler.ui.party_builder_common import build_character_stats_tooltip
 from endless_idler.ui.party_builder_common import derive_display_name
 from endless_idler.ui.party_builder_common import sanitize_stars
+from endless_idler.ui.party_builder_common import set_pixmap
+from endless_idler.ui.theme.colors import color_for_damage_type_id
+from endless_idler.ui.theme.colors import normalize_element_id
+from endless_idler.ui.tooltip import hide_stained_tooltip
+from endless_idler.ui.tooltip import show_stained_tooltip
 
 
 LAYOUT_AUTOSAVE_DEBOUNCE_MS = 450
@@ -56,6 +70,20 @@ ORDERING_OPTIONS: tuple[tuple[str, str], ...] = (
     (ORDER_ALPHA, "Alphabetical"),
     (ORDER_RECENT, "Most recently obtained"),
 )
+ORDERING_BUTTON_LABELS: dict[str, str] = {
+    ORDER_SAVE: "Save",
+    ORDER_RARITY: "Rarity",
+    ORDER_ALPHA: "A-Z",
+    ORDER_RECENT: "Recent",
+}
+_ORDERING_VALUES = frozenset(ORDERING_BUTTON_LABELS)
+LAYOUT_CHIP_PORTRAIT_SIZE = 68
+LAYOUT_SLOT_WIDTH = 124
+LAYOUT_SLOT_HEIGHT = 144
+LAYOUT_STANDBY_SLOT_WIDTH = 110
+LAYOUT_STANDBY_SLOT_HEIGHT = 118
+LAYOUT_STANDBY_PANEL_HEIGHT = LAYOUT_STANDBY_SLOT_HEIGHT + 60
+LAYOUT_TOOLTIP_REFRESH_INTERVAL_MS = 500  # ~5 idle ticks at 0.1s/tick
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +110,23 @@ def _clear_layout(layout: QHBoxLayout | QVBoxLayout) -> None:
         widget = item.widget()
         if widget is not None:
             widget.deleteLater()
+
+
+def _normalized_damage_type_key(value: str | None) -> str:
+    normalized = normalize_damage_type_id(str(value or "generic"))
+    if "/" in normalized:
+        normalized = normalized.split("/", 1)[0].strip()
+    return normalize_element_id(normalized)
+
+
+def _make_damage_glow_effect(widget: QWidget, element_id: str) -> QGraphicsDropShadowEffect:
+    glow = QGraphicsDropShadowEffect(widget)
+    glow.setBlurRadius(20)
+    glow.setOffset(0, 0)
+    color = color_for_damage_type_id(element_id)
+    color.setAlpha(165)
+    glow.setColor(color)
+    return glow
 
 
 def _encode_drag_data(payload: _DragData) -> QByteArray:
@@ -131,7 +176,11 @@ class _CharacterChip(QFrame):
         *,
         char_id: str,
         display_name: str,
+        image_path: Path | None,
         stars: int,
+        placement: str,
+        element_id: str,
+        tooltip_provider: Callable[[], tuple[str, str | None]],
         source_lane: str,
         source_index: int,
         parent: QWidget | None = None,
@@ -142,31 +191,138 @@ class _CharacterChip(QFrame):
             "layoutChipRole",
             "unassigned" if source_lane == "unassigned" else "assigned",
         )
+        self.setProperty("elementId", element_id)
         self.setCursor(Qt.CursorShape.OpenHandCursor)
 
         self._char_id = char_id
         self._source_lane = source_lane
         self._source_index = source_index
+        self._tooltip_provider = tooltip_provider
         self._drag_start_pos: QPoint | None = None
+        self._tooltip_refresh_timer = QTimer(self)
+        self._tooltip_refresh_timer.setInterval(LAYOUT_TOOLTIP_REFRESH_INTERVAL_MS)
+        self._tooltip_refresh_timer.timeout.connect(self._refresh_tooltip_while_hovered)
 
         stars = sanitize_stars(stars)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(8)
+        layout = QGridLayout(self)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setHorizontalSpacing(4)
+        layout.setVerticalSpacing(2)
+
+        portrait = QLabel()
+        portrait.setObjectName("LayoutCharacterPortrait")
+        portrait.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        portrait.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        portrait.setFixedSize(LAYOUT_CHIP_PORTRAIT_SIZE, LAYOUT_CHIP_PORTRAIT_SIZE)
+        set_pixmap(
+            portrait,
+            image_path,
+            size=LAYOUT_CHIP_PORTRAIT_SIZE,
+            placeholder=display_name,
+        )
+        layout.addWidget(
+            portrait,
+            0,
+            0,
+            1,
+            1,
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
+        )
+
+        placement_badge = QFrame(self)
+        placement_badge.setObjectName("LayoutPlacementBadge")
+        placement_badge.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        placement_layout = QVBoxLayout(placement_badge)
+        placement_layout.setContentsMargins(2, 2, 2, 2)
+        placement_layout.setSpacing(2)
+
+        placement_top = QFrame(placement_badge)
+        placement_top.setObjectName("LayoutPlacementSquare")
+        placement_top.setProperty("placementSlot", "onsite")
+        placement_top.setFixedSize(10, 10)
+        placement_layout.addWidget(
+            placement_top,
+            0,
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
+        )
+
+        placement_bottom = QFrame(placement_badge)
+        placement_bottom.setObjectName("LayoutPlacementSquare")
+        placement_bottom.setProperty("placementSlot", "offsite")
+        placement_bottom.setFixedSize(10, 10)
+        placement_layout.addWidget(
+            placement_bottom,
+            0,
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
+        )
+
+        placement_key = str(placement or "both").strip().lower()
+        if placement_key not in {"onsite", "offsite", "both"}:
+            placement_key = "both"
+        placement_top.setProperty("filled", placement_key in {"onsite", "both"})
+        placement_bottom.setProperty("filled", placement_key in {"offsite", "both"})
+        _repolish(placement_top)
+        _repolish(placement_bottom)
+        layout.addWidget(
+            placement_badge,
+            0,
+            0,
+            1,
+            1,
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
+        )
 
         name_label = QLabel(display_name)
         name_label.setObjectName("LayoutCharacterName")
-        layout.addWidget(name_label)
+        name_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
+        name_label.setWordWrap(False)
+        name_label.setText(
+            QFontMetrics(name_label.font()).elidedText(
+                display_name,
+                Qt.TextElideMode.ElideRight,
+                max(40, LAYOUT_SLOT_WIDTH - 24),
+            )
+        )
+        layout.addWidget(
+            name_label,
+            1,
+            0,
+            1,
+            1,
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+        )
 
         stars_label = QLabel("★" * stars)
         stars_label.setObjectName("LayoutCharacterStars")
-        layout.addWidget(stars_label, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-
-        self.setToolTip(f"{display_name} ({stars}★)")
+        stars_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
+        stars_label.setProperty("starRank", stars)
+        _repolish(stars_label)
+        layout.addWidget(
+            stars_label,
+            2,
+            0,
+            1,
+            1,
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+        )
+        self.setGraphicsEffect(_make_damage_glow_effect(self, element_id))
+        # The layout screen uses custom stained tooltip rendering only.
+        self.setToolTip("")
+        for widget in (
+            portrait,
+            name_label,
+            stars_label,
+            placement_badge,
+            placement_top,
+            placement_bottom,
+        ):
+            widget.installEventFilter(self)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_start_pos = event.position().toPoint()
+            self._tooltip_refresh_timer.stop()
+            hide_stained_tooltip()
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
@@ -193,33 +349,75 @@ class _CharacterChip(QFrame):
         )
         drag.setMimeData(mime_data)
         self.setCursor(Qt.CursorShape.ClosedHandCursor)
+        self._tooltip_refresh_timer.stop()
+        hide_stained_tooltip()
         drag.exec(Qt.DropAction.MoveAction)
         self.setCursor(Qt.CursorShape.OpenHandCursor)
         self._drag_start_pos = None
+
+    def _show_tooltip(self) -> None:
+        tooltip_html, tooltip_element_id = self._tooltip_provider()
+        if not tooltip_html:
+            hide_stained_tooltip()
+            return
+        show_stained_tooltip(
+            self,
+            tooltip_html,
+            element_id=tooltip_element_id,
+        )
+
+    def _refresh_tooltip_while_hovered(self) -> None:
+        if self.underMouse():
+            self._show_tooltip()
+            return
+        self._tooltip_refresh_timer.stop()
+        hide_stained_tooltip()
+
+    def eventFilter(self, watched: object, event: object) -> bool:  # noqa: ANN001
+        if hasattr(event, "type") and event.type() == QEvent.Type.Enter:
+            self._show_tooltip()
+            self._tooltip_refresh_timer.start()
+        return super().eventFilter(watched, event)  # type: ignore[misc]
+
+    def enterEvent(self, event: QEnterEvent) -> None:
+        self._show_tooltip()
+        self._tooltip_refresh_timer.start()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event: QEvent) -> None:
+        QTimer.singleShot(0, self._refresh_tooltip_while_hovered)
+        super().leaveEvent(event)
 
 
 class _PartySlot(QFrame):
     dropped = Signal(object)
 
-    def __init__(self, *, lane: str, index: int, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        lane: str,
+        index: int,
+        resolve_image_path: Callable[[str, CharacterPlugin | None], Path | None],
+        build_tooltip_data: Callable[[str, CharacterPlugin | None], tuple[str, str | None]],
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._lane = lane
         self._index = index
         self._char_id: str | None = None
+        self._resolve_image_path = resolve_image_path
+        self._build_tooltip_data = build_tooltip_data
 
         self.setObjectName("LayoutSlot")
         self.setProperty("slotFilled", False)
+        self.setProperty("elementId", "generic")
         self.setAcceptDrops(True)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setMinimumHeight(78)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setFixedSize(LAYOUT_SLOT_WIDTH, LAYOUT_SLOT_HEIGHT)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(6)
-
-        title = QLabel(f"{lane.capitalize()} {index + 1}")
-        title.setObjectName("LayoutSlotTitle")
-        layout.addWidget(title)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(0)
 
         self._body = QVBoxLayout()
         self._body.setContentsMargins(0, 0, 0, 0)
@@ -232,19 +430,28 @@ class _PartySlot(QFrame):
         if not char_id or plugin is None:
             self._render_empty()
             self.setProperty("slotFilled", False)
+            self.setProperty("elementId", "generic")
             _repolish(self)
             return
 
         _clear_layout(self._body)
+        element_id = _normalized_damage_type_key(getattr(plugin, "damage_type_id", "generic"))
         chip = _CharacterChip(
             char_id=char_id,
             display_name=str(getattr(plugin, "display_name", char_id)),
+            image_path=self._resolve_image_path(char_id, plugin),
             stars=int(getattr(plugin, "stars", 1) or 1),
+            placement=str(getattr(plugin, "placement", "both") or "both"),
+            element_id=element_id,
+            tooltip_provider=lambda char_id=char_id, plugin=plugin: self._build_tooltip_data(
+                char_id, plugin
+            ),
             source_lane=self._lane,
             source_index=self._index,
         )
         self._body.addWidget(chip)
         self.setProperty("slotFilled", True)
+        self.setProperty("elementId", element_id)
         _repolish(self)
 
     def _render_empty(self) -> None:
@@ -281,31 +488,59 @@ class _PartySlot(QFrame):
 class _UnassignedPanel(QFrame):
     dropped = Signal(object)
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        resolve_image_path: Callable[[str, CharacterPlugin | None], Path | None],
+        build_tooltip_data: Callable[[str, CharacterPlugin | None], tuple[str, str | None]],
+        on_cycle_sort: Callable[[bool], None],
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
+        self._resolve_image_path = resolve_image_path
+        self._build_tooltip_data = build_tooltip_data
         self.setObjectName("LayoutUnassignedPanel")
         self.setAcceptDrops(True)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(LAYOUT_STANDBY_PANEL_HEIGHT)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(10, 10, 10, 10)
-        root.setSpacing(8)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(4)
 
-        title = QLabel("Owned / Unassigned")
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.setSpacing(8)
+        root.addLayout(header)
+
+        title = QLabel("Standby")
         title.setObjectName("LayoutUnassignedTitle")
-        root.addWidget(title)
+        header.addWidget(title, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        header.addStretch(1)
+
+        sort_button = QPushButton("Sort: Save", self)
+        sort_button.setObjectName("LayoutOrderCycleButton")
+        sort_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        sort_button.clicked.connect(on_cycle_sort)
+        self._sort_button = sort_button
+        header.addWidget(sort_button, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         scroll = QScrollArea(self)
         scroll.setObjectName("LayoutUnassignedScroll")
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         root.addWidget(scroll, 1)
 
         host = QWidget(scroll)
         self._chips_layout = QHBoxLayout(host)
-        self._chips_layout.setContentsMargins(4, 4, 4, 4)
-        self._chips_layout.setSpacing(8)
+        self._chips_layout.setContentsMargins(4, 2, 4, 2)
+        self._chips_layout.setSpacing(10)
         scroll.setWidget(host)
+
+    @property
+    def sort_button(self) -> QPushButton:
+        return self._sort_button
 
     def set_characters(
         self,
@@ -314,26 +549,30 @@ class _UnassignedPanel(QFrame):
         plugin_by_id: dict[str, CharacterPlugin],
     ) -> None:
         _clear_layout(self._chips_layout)
-        if not char_ids:
-            empty = QLabel("No unassigned characters.")
-            empty.setObjectName("LayoutUnassignedEmpty")
-            self._chips_layout.addWidget(empty, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-            self._chips_layout.addStretch(1)
-            return
-
         for index, char_id in enumerate(char_ids):
             plugin = plugin_by_id.get(char_id)
             display_name = str(getattr(plugin, "display_name", derive_display_name(char_id)))
             stars = int(getattr(plugin, "stars", 1) or 1)
+            element_id = _normalized_damage_type_key(getattr(plugin, "damage_type_id", "generic"))
             chip = _CharacterChip(
                 char_id=char_id,
                 display_name=display_name,
+                image_path=self._resolve_image_path(char_id, plugin),
                 stars=stars,
+                placement=str(getattr(plugin, "placement", "both") or "both"),
+                element_id=element_id,
+                tooltip_provider=lambda char_id=char_id, plugin=plugin: self._build_tooltip_data(
+                    char_id, plugin
+                ),
                 source_lane="unassigned",
                 source_index=index,
                 parent=self,
             )
-            self._chips_layout.addWidget(chip, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            self._chips_layout.addWidget(
+                chip,
+                0,
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            )
 
         self._chips_layout.addStretch(1)
 
@@ -367,6 +606,10 @@ class LayoutScreenWidget(QWidget):
         self._rng = random.Random()
         self._plugins = discover_character_plugins()
         self._plugin_by_id = {plugin.char_id: plugin for plugin in self._plugins}
+        self._portrait_by_id: dict[str, Path | None] = {}
+        self._ordering_key_value = ORDER_SAVE
+        self._ordering_cycle_button: QPushButton | None = None
+        self._status_label: QLabel | None = None
 
         self._save_manager = SaveManager()
         self._save = self._load_or_create_save()
@@ -383,31 +626,15 @@ class LayoutScreenWidget(QWidget):
         self._status_clear_timer.timeout.connect(self._clear_status)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 16)
+        root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(12)
-
-        header = QFrame(self)
-        header.setObjectName("LayoutHeader")
-        header_layout = QVBoxLayout(header)
-        header_layout.setContentsMargins(12, 12, 12, 12)
-        header_layout.setSpacing(4)
-        root.addWidget(header)
-
-        title = QLabel("Layout")
-        title.setObjectName("LayoutTitle")
-        header_layout.addWidget(title)
-
-        subtitle = QLabel("Drag characters between Onsite, Offsite, and Owned / Unassigned.")
-        subtitle.setObjectName("LayoutSubtitle")
-        subtitle.setWordWrap(True)
-        header_layout.addWidget(subtitle)
 
         lanes = QFrame(self)
         lanes.setObjectName("LayoutLanesPanel")
         lanes_layout = QGridLayout(lanes)
-        lanes_layout.setContentsMargins(12, 12, 12, 12)
-        lanes_layout.setHorizontalSpacing(10)
-        lanes_layout.setVerticalSpacing(10)
+        lanes_layout.setContentsMargins(14, 14, 14, 14)
+        lanes_layout.setHorizontalSpacing(12)
+        lanes_layout.setVerticalSpacing(12)
         root.addWidget(lanes)
 
         onsite_label = QLabel("Onsite")
@@ -420,24 +647,40 @@ class LayoutScreenWidget(QWidget):
 
         onsite_row = QHBoxLayout()
         onsite_row.setContentsMargins(0, 0, 0, 0)
-        onsite_row.setSpacing(8)
+        onsite_row.setSpacing(12)
+        onsite_row.addStretch(1)
         self._onsite_slots: list[_PartySlot] = []
         for index in range(ONSITE_SLOTS):
-            slot = _PartySlot(lane="onsite", index=index, parent=lanes)
+            slot = _PartySlot(
+                lane="onsite",
+                index=index,
+                resolve_image_path=self._resolve_image_path,
+                build_tooltip_data=self._build_tooltip_data,
+                parent=lanes,
+            )
             slot.dropped.connect(self._on_slot_drop)
             self._onsite_slots.append(slot)
             onsite_row.addWidget(slot)
+        onsite_row.addStretch(1)
         lanes_layout.addLayout(onsite_row, 0, 1, 1, 1)
 
         offsite_row = QHBoxLayout()
         offsite_row.setContentsMargins(0, 0, 0, 0)
-        offsite_row.setSpacing(8)
+        offsite_row.setSpacing(12)
+        offsite_row.addStretch(1)
         self._offsite_slots: list[_PartySlot] = []
         for index in range(OFFSITE_SLOTS):
-            slot = _PartySlot(lane="offsite", index=index, parent=lanes)
+            slot = _PartySlot(
+                lane="offsite",
+                index=index,
+                resolve_image_path=self._resolve_image_path,
+                build_tooltip_data=self._build_tooltip_data,
+                parent=lanes,
+            )
             slot.dropped.connect(self._on_slot_drop)
             self._offsite_slots.append(slot)
             offsite_row.addWidget(slot)
+        offsite_row.addStretch(1)
         lanes_layout.addLayout(offsite_row, 1, 1, 1, 1)
 
         bottom = QHBoxLayout()
@@ -445,40 +688,17 @@ class LayoutScreenWidget(QWidget):
         bottom.setSpacing(12)
         root.addLayout(bottom, 1)
 
-        self._unassigned_panel = _UnassignedPanel(self)
+        self._unassigned_panel = _UnassignedPanel(
+            resolve_image_path=self._resolve_image_path,
+            build_tooltip_data=self._build_tooltip_data,
+            on_cycle_sort=self._on_ordering_cycle_clicked,
+            parent=self,
+        )
         self._unassigned_panel.dropped.connect(self._on_unassigned_drop)
         bottom.addWidget(self._unassigned_panel, 1)
+        self._ordering_cycle_button = self._unassigned_panel.sort_button
 
-        controls = QFrame(self)
-        controls.setObjectName("LayoutControlsPanel")
-        controls_layout = QVBoxLayout(controls)
-        controls_layout.setContentsMargins(10, 10, 10, 10)
-        controls_layout.setSpacing(8)
-        controls_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        bottom.addWidget(controls, 0, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight)
-
-        order_label = QLabel("Owned order")
-        order_label.setObjectName("LayoutControlLabel")
-        controls_layout.addWidget(order_label)
-
-        combo = QComboBox(controls)
-        combo.setObjectName("LayoutOrderCombo")
-        for key, label in ORDERING_OPTIONS:
-            combo.addItem(label, userData=key)
-        self._ordering_combo = combo
-        controls_layout.addWidget(combo)
-
-        status = QLabel("Autosave enabled")
-        status.setObjectName("LayoutSaveStatus")
-        status.setWordWrap(True)
-        self._status_label = status
-        controls_layout.addWidget(status)
-        controls_layout.addStretch(1)
-
-        saved_order = str(getattr(self._save, "layout_owned_ordering", ORDER_SAVE))
-        index = self._ordering_combo.findData(saved_order)
-        self._ordering_combo.setCurrentIndex(index if index >= 0 else 0)
-        self._ordering_combo.currentIndexChanged.connect(self._on_ordering_changed)
+        self._set_ordering_key(str(getattr(self._save, "layout_owned_ordering", ORDER_SAVE)))
 
         self._refresh_views()
 
@@ -507,6 +727,35 @@ class LayoutScreenWidget(QWidget):
                 ids.append(char_id)
         return ids
 
+    def _owned_unassigned_ids(self) -> list[str]:
+        ids: list[str] = []
+        seen: set[str] = set()
+
+        def collect(char_id: str | None) -> None:
+            if not char_id:
+                return
+            clean = str(char_id).strip()
+            if not clean or clean in seen:
+                return
+            if clean not in self._plugin_by_id:
+                return
+            if self._is_assigned(clean):
+                return
+            seen.add(clean)
+            ids.append(clean)
+
+        for char_id in self._standby_ids():
+            collect(char_id)
+        for source in (
+            self._save.stacks.keys(),
+            self._save.character_progress.keys(),
+            self._save.character_stats.keys(),
+        ):
+            for char_id in source:
+                collect(char_id)
+
+        return ids
+
     def _set_standby_ids(self, ids: list[str]) -> None:
         interior = max(0, STANDBY_SLOTS - 2)
         trimmed = ids[:interior]
@@ -516,15 +765,157 @@ class LayoutScreenWidget(QWidget):
         standby.append(None)
         self._save.standby = standby
 
+    def _resolve_image_path(self, char_id: str, plugin: CharacterPlugin | None) -> Path | None:
+        if char_id in self._portrait_by_id:
+            return self._portrait_by_id[char_id]
+        image_path = plugin.random_image_path(self._rng) if plugin else None
+        self._portrait_by_id[char_id] = image_path
+        return image_path
+
+    def _live_idle_tooltip_snapshot(self, char_id: str) -> tuple[dict[str, object], int] | None:
+        host = self.parentWidget()
+        if host is None:
+            return None
+
+        idle_screen = getattr(host, "_idle_screen", None)
+        if idle_screen is None:
+            return None
+
+        idle_state = getattr(idle_screen, "_idle_state", None)
+        if idle_state is None:
+            return None
+
+        get_char_data = getattr(idle_state, "get_char_data", None)
+        if not callable(get_char_data):
+            return None
+        data = get_char_data(char_id)
+        if not isinstance(data, dict):
+            return None
+
+        party_level = max(1, int(self._save.party_level))
+        get_party_level = getattr(idle_state, "get_party_level", None)
+        if callable(get_party_level):
+            try:
+                party_level = max(1, int(get_party_level()))
+            except (TypeError, ValueError):
+                pass
+        return data, party_level
+
+    def _sync_tooltip_save_snapshot(self) -> None:
+        loaded = self._save_manager.load()
+        if loaded is None:
+            return
+        refreshed = sanitize_save_characters(
+            save=loaded,
+            allowed_char_ids=set(self._plugin_by_id),
+        )
+        self._save.party_level = max(1, int(refreshed.party_level))
+        self._save.stacks = dict(refreshed.stacks)
+        self._save.character_progress = dict(refreshed.character_progress)
+        self._save.character_stats = dict(refreshed.character_stats)
+
+    def _build_tooltip_data(
+        self,
+        char_id: str,
+        plugin: CharacterPlugin | None,
+    ) -> tuple[str, str | None]:
+        if plugin is None:
+            return "", None
+
+        live_snapshot = self._live_idle_tooltip_snapshot(char_id)
+        if live_snapshot is None:
+            self._sync_tooltip_save_snapshot()
+
+        stars = sanitize_stars(int(getattr(plugin, "stars", 1) or 1))
+        party_level = max(1, int(self._save.party_level))
+        stacks = max(1, int(self._save.stacks.get(char_id, 1)))
+        progress_raw = self._save.character_progress.get(char_id, {})
+        progress: dict[str, float | int] = (
+            dict(progress_raw) if isinstance(progress_raw, dict) else {}
+        )
+        saved_base_stats_raw = self._save.character_stats.get(char_id, {})
+        saved_base_stats: dict[str, float] = (
+            dict(saved_base_stats_raw) if isinstance(saved_base_stats_raw, dict) else {}
+        )
+
+        current_hp: int | None = None
+        if live_snapshot is not None:
+            live_data, live_party_level = live_snapshot
+            party_level = max(1, int(live_party_level))
+            try:
+                stacks = max(1, int(live_data.get("stack", stacks)))
+            except (TypeError, ValueError):
+                stacks = max(1, int(stacks))
+
+            progress = {
+                "level": max(1, int(live_data.get("level", progress.get("level", 1)))),
+                "exp": float(max(0.0, float(live_data.get("exp", progress.get("exp", 0.0))))),
+                "exp_multiplier": float(
+                    max(
+                        0.0,
+                        float(
+                            live_data.get(
+                                "exp_multiplier",
+                                progress.get("exp_multiplier", 1.0),
+                            )
+                        ),
+                    )
+                ),
+                "max_hp_level_bonus_version": max(
+                    0,
+                    int(
+                        live_data.get(
+                            "max_hp_level_bonus_version",
+                            progress.get("max_hp_level_bonus_version", 0),
+                        )
+                    ),
+                ),
+            }
+            base_stats = live_data.get("base_stats")
+            if isinstance(base_stats, dict):
+                saved_base_stats = dict(base_stats)
+            try:
+                current_hp = max(0, int(float(live_data.get("hp"))))
+            except (TypeError, ValueError):
+                current_hp = None
+
+        stats = build_scaled_character_stats(
+            plugin=plugin,
+            party_level=party_level,
+            stars=stars,
+            stacks=stacks,
+            progress=progress,
+            saved_base_stats=saved_base_stats,
+        )
+        if current_hp is not None:
+            stats.hp = max(0, min(stats.max_hp, current_hp))
+
+        tooltip_html = build_character_stats_tooltip(
+            name=str(getattr(plugin, "display_name", derive_display_name(char_id))),
+            stars=stars,
+            stacks=stacks if stacks > 1 else None,
+            stackable=stacks > 1,
+            stats=stats,
+        )
+        element_id = str(getattr(stats, "element_id", "generic") or "generic")
+        return tooltip_html, element_id
+
+    def _set_ordering_key(self, key: str) -> None:
+        normalized = str(key).strip().lower()
+        if normalized not in _ORDERING_VALUES:
+            normalized = ORDER_SAVE
+        self._ordering_key_value = normalized
+        if self._ordering_cycle_button is not None:
+            label = ORDERING_BUTTON_LABELS.get(normalized, "Save")
+            self._ordering_cycle_button.setText(f"Sort: {label}")
+            self._ordering_cycle_button.setProperty("orderMode", normalized)
+            _repolish(self._ordering_cycle_button)
+
     def _ordering_key(self) -> str:
-        value = self._ordering_combo.currentData()
-        key = str(value).strip().lower()
-        if key not in {ORDER_SAVE, ORDER_RARITY, ORDER_ALPHA, ORDER_RECENT}:
-            return ORDER_SAVE
-        return key
+        return self._ordering_key_value
 
     def _ordered_unassigned_ids(self) -> list[str]:
-        ids = self._standby_ids()
+        ids = self._owned_unassigned_ids()
         ordering = self._ordering_key()
         if ordering == ORDER_SAVE:
             return ids
@@ -550,7 +941,15 @@ class LayoutScreenWidget(QWidget):
     def _is_assigned(self, char_id: str) -> bool:
         return char_id in {item for item in [*self._save.onsite, *self._save.offsite] if item}
 
-    def _on_ordering_changed(self, _index: int) -> None:
+    def _on_ordering_cycle_clicked(self, _checked: bool = False) -> None:
+        order_keys = [key for key, _label in ORDERING_OPTIONS]
+        current = self._ordering_key()
+        try:
+            index = order_keys.index(current)
+        except ValueError:
+            index = 0
+        next_key = order_keys[(index + 1) % len(order_keys)]
+        self._set_ordering_key(next_key)
         self._save.layout_owned_ordering = self._ordering_key()
         self._refresh_unassigned()
         self._schedule_persist("Sorting updated...")
@@ -662,9 +1061,9 @@ class LayoutScreenWidget(QWidget):
             return False
 
         standby_ids = self._standby_ids()
-        try:
+        if char_id in standby_ids:
             standby_ids.remove(char_id)
-        except ValueError:
+        elif char_id not in self._owned_unassigned_ids():
             return False
 
         displaced = target_list[target_index]
@@ -704,7 +1103,11 @@ class LayoutScreenWidget(QWidget):
         self._status_clear_timer.start()
 
     def _set_status(self, text: str) -> None:
+        if self._status_label is None:
+            return
         self._status_label.setText(text)
 
     def _clear_status(self) -> None:
-        self._status_label.setText("Autosave enabled")
+        if self._status_label is None:
+            return
+        self._status_label.setText("")
