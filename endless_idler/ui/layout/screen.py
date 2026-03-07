@@ -11,6 +11,7 @@ from pathlib import Path
 from PySide6.QtCore import QByteArray
 from PySide6.QtCore import QEvent
 from PySide6.QtCore import QMimeData
+from PySide6.QtCore import QObject
 from PySide6.QtCore import QPoint
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QTimer
@@ -39,12 +40,7 @@ from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.save import OFFSITE_SLOTS
 from endless_idler.save import ONSITE_SLOTS
 from endless_idler.save import STANDBY_SLOTS
-from endless_idler.save import RunSave
-from endless_idler.save import SaveManager
-from endless_idler.save import new_run_save
-from endless_idler.save import sanitize_save_characters
-from endless_idler.ui.idle.bootstrap import bootstrap_party
-from endless_idler.ui.idle.bootstrap import should_bootstrap_party
+from endless_idler.run_save_store import RunSaveStore
 from endless_idler.ui.party_builder_common import build_character_stats_tooltip
 from endless_idler.ui.party_builder_common import derive_display_name
 from endless_idler.ui.party_builder_common import sanitize_stars
@@ -127,6 +123,40 @@ def _make_damage_glow_effect(widget: QWidget, element_id: str) -> QGraphicsDropS
     color.setAlpha(165)
     glow.setColor(color)
     return glow
+
+
+def _coerce_int(value: object, default: int) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    try:
+        return int(default)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_float(value: object, default: float) -> float:
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return default
+    try:
+        return float(default)
+    except (TypeError, ValueError):
+        return default
 
 
 def _encode_drag_data(payload: _DragData) -> QByteArray:
@@ -373,11 +403,11 @@ class _CharacterChip(QFrame):
         self._tooltip_refresh_timer.stop()
         hide_stained_tooltip()
 
-    def eventFilter(self, watched: object, event: object) -> bool:  # noqa: ANN001
-        if hasattr(event, "type") and event.type() == QEvent.Type.Enter:
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.Enter:
             self._show_tooltip()
             self._tooltip_refresh_timer.start()
-        return super().eventFilter(watched, event)  # type: ignore[misc]
+        return super().eventFilter(watched, event)
 
     def enterEvent(self, event: QEnterEvent) -> None:
         self._show_tooltip()
@@ -599,11 +629,12 @@ class _UnassignedPanel(QFrame):
 
 
 class LayoutScreenWidget(QWidget):
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, *, save_store: RunSaveStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("LayoutScreen")
 
         self._rng = random.Random()
+        self._save_store = save_store
         self._plugins = discover_character_plugins()
         self._plugin_by_id = {plugin.char_id: plugin for plugin in self._plugins}
         self._portrait_by_id: dict[str, Path | None] = {}
@@ -611,8 +642,7 @@ class LayoutScreenWidget(QWidget):
         self._ordering_cycle_button: QPushButton | None = None
         self._status_label: QLabel | None = None
 
-        self._save_manager = SaveManager()
-        self._save = self._load_or_create_save()
+        self._save = self._save_store.current
         self._dirty = False
 
         self._autosave_timer = QTimer(self)
@@ -702,16 +732,6 @@ class LayoutScreenWidget(QWidget):
 
         self._refresh_views()
 
-    def _load_or_create_save(self) -> RunSave:
-        loaded = self._save_manager.load()
-        is_new_save = loaded is None
-        save = loaded or new_run_save()
-        save = sanitize_save_characters(save=save, allowed_char_ids=set(self._plugin_by_id))
-        if is_new_save and should_bootstrap_party(save):
-            bootstrap_party(save=save, plugins=self._plugins, rng=self._rng)
-        self._save_manager.save(save)
-        return save
-
     def _lane_list(self, lane: str) -> list[str | None]:
         if lane == "onsite":
             return self._save.onsite
@@ -791,28 +811,16 @@ class LayoutScreenWidget(QWidget):
         data = get_char_data(char_id)
         if not isinstance(data, dict):
             return None
+        typed_data: dict[str, object] = data
 
         party_level = max(1, int(self._save.party_level))
         get_party_level = getattr(idle_state, "get_party_level", None)
         if callable(get_party_level):
-            try:
-                party_level = max(1, int(get_party_level()))
-            except (TypeError, ValueError):
-                pass
-        return data, party_level
+            party_level = max(1, _coerce_int(get_party_level(), party_level))
+        return typed_data, party_level
 
     def _sync_tooltip_save_snapshot(self) -> None:
-        loaded = self._save_manager.load()
-        if loaded is None:
-            return
-        refreshed = sanitize_save_characters(
-            save=loaded,
-            allowed_char_ids=set(self._plugin_by_id),
-        )
-        self._save.party_level = max(1, int(refreshed.party_level))
-        self._save.stacks = dict(refreshed.stacks)
-        self._save.character_progress = dict(refreshed.character_progress)
-        self._save.character_stats = dict(refreshed.character_stats)
+        self._save = self._save_store.current
 
     def _build_tooltip_data(
         self,
@@ -842,42 +850,37 @@ class LayoutScreenWidget(QWidget):
         if live_snapshot is not None:
             live_data, live_party_level = live_snapshot
             party_level = max(1, int(live_party_level))
-            try:
-                stacks = max(1, int(live_data.get("stack", stacks)))
-            except (TypeError, ValueError):
-                stacks = max(1, int(stacks))
+            stacks = max(1, _coerce_int(live_data.get("stack", stacks), stacks))
 
             progress = {
-                "level": max(1, int(live_data.get("level", progress.get("level", 1)))),
-                "exp": float(max(0.0, float(live_data.get("exp", progress.get("exp", 0.0))))),
+                "level": max(1, _coerce_int(live_data.get("level", progress.get("level", 1)), 1)),
+                "exp": max(0.0, _coerce_float(live_data.get("exp", progress.get("exp", 0.0)), 0.0)),
                 "exp_multiplier": float(
                     max(
                         0.0,
-                        float(
-                            live_data.get(
-                                "exp_multiplier",
-                                progress.get("exp_multiplier", 1.0),
-                            )
+                        _coerce_float(
+                            live_data.get("exp_multiplier", progress.get("exp_multiplier", 1.0)),
+                            1.0,
                         ),
                     )
                 ),
                 "max_hp_level_bonus_version": max(
                     0,
-                    int(
+                    _coerce_int(
                         live_data.get(
                             "max_hp_level_bonus_version",
                             progress.get("max_hp_level_bonus_version", 0),
-                        )
+                        ),
+                        0,
                     ),
                 ),
             }
             base_stats = live_data.get("base_stats")
             if isinstance(base_stats, dict):
                 saved_base_stats = dict(base_stats)
-            try:
-                current_hp = max(0, int(float(live_data.get("hp"))))
-            except (TypeError, ValueError):
-                current_hp = None
+            hp_value = _coerce_float(live_data.get("hp"), -1.0)
+            if hp_value >= 0.0:
+                current_hp = max(0, int(hp_value))
 
         stats = build_scaled_character_stats(
             plugin=plugin,
@@ -1098,9 +1101,15 @@ class LayoutScreenWidget(QWidget):
         self._dirty = False
         self._save.layout_owned_ordering = self._ordering_key()
         self._save.layout_tick_cooldown_seconds = LAYOUT_TICK_COOLDOWN_SECONDS
-        self._save_manager.save(self._save)
+        self._save_store.persist()
         self._set_status(f"Saved (idle cooldown {int(math.ceil(LAYOUT_TICK_COOLDOWN_SECONDS))}s)")
         self._status_clear_timer.start()
+
+    def cancel_pending_persist(self) -> None:
+        self._dirty = False
+        self._autosave_timer.stop()
+        self._status_clear_timer.stop()
+        self._clear_status()
 
     def _set_status(self, text: str) -> None:
         if self._status_label is None:

@@ -9,9 +9,9 @@ from endless_idler.save import OFFSITE_SLOTS
 from endless_idler.save import ONSITE_SLOTS
 from endless_idler.save import STANDBY_SLOTS
 from endless_idler.save import RunSave
-from endless_idler.ui.idle.bootstrap import bootstrap_party
-from endless_idler.ui.idle.bootstrap import has_active_party
-from endless_idler.ui.idle.bootstrap import should_bootstrap_party
+from endless_idler.save_bootstrap import bootstrap_party
+from endless_idler.save_bootstrap import has_active_party
+from endless_idler.save_bootstrap import should_bootstrap_party
 
 
 def _plugin(char_id: str, placement: str) -> CharacterPlugin:

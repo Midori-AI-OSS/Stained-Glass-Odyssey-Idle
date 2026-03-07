@@ -70,6 +70,13 @@ QLabel#SettingsPaneSubtitle {
     color: rgba(237, 239, 245, 160);
 }
 
+QLabel#SettingsSaveValue {
+    color: rgba(237, 239, 245, 220);
+    background-color: rgba(18, 20, 28, 150);
+    border: 1px solid rgba(255, 255, 255, 16);
+    padding: 8px 10px;
+}
+
 QWidget#SettingsPageRoot QCheckBox {
     spacing: 10px;
 }
@@ -221,5 +228,43 @@ QWidget#SettingsPageRoot QAbstractSpinBox::down-button:hover {
 QWidget#SettingsPageRoot QAbstractSpinBox::up-button:pressed,
 QWidget#SettingsPageRoot QAbstractSpinBox::down-button:pressed {
     background-color: rgba(56, 189, 248, 60);
+}
+
+QPushButton#SettingsSaveActionButton,
+QPushButton#SettingsSaveDangerButton {
+    min-height: 36px;
+    padding: 0px 12px;
+    border-radius: 0px;
+    color: rgba(237, 239, 245, 230);
+}
+
+QPushButton#SettingsSaveActionButton {
+    background-color: rgba(18, 20, 28, 170);
+    border: 1px solid rgba(255, 255, 255, 18);
+}
+
+QPushButton#SettingsSaveActionButton:hover {
+    border: 1px solid rgba(56, 189, 248, 80);
+    background-color: rgba(56, 189, 248, 26);
+}
+
+QPushButton#SettingsSaveActionButton:pressed {
+    border: 1px solid rgba(56, 189, 248, 120);
+    background-color: rgba(56, 189, 248, 52);
+}
+
+QPushButton#SettingsSaveDangerButton {
+    background-color: rgba(60, 18, 24, 170);
+    border: 1px solid rgba(255, 120, 120, 42);
+}
+
+QPushButton#SettingsSaveDangerButton:hover {
+    border: 1px solid rgba(255, 120, 120, 90);
+    background-color: rgba(140, 40, 52, 80);
+}
+
+QPushButton#SettingsSaveDangerButton:pressed {
+    border: 1px solid rgba(255, 120, 120, 130);
+    background-color: rgba(160, 40, 52, 120);
 }
 """.strip()

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import random
 
+from collections.abc import Sequence
+
 from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.save import OFFSITE_SLOTS
 from endless_idler.save import ONSITE_SLOTS
@@ -25,7 +27,7 @@ def should_bootstrap_party(save: RunSave) -> bool:
 def bootstrap_party(
     save: RunSave,
     *,
-    plugins: list[CharacterPlugin],
+    plugins: Sequence[CharacterPlugin],
     rng: random.Random,
 ) -> None:
     onsite: list[str | None] = [None] * ONSITE_SLOTS
@@ -49,5 +51,4 @@ def bootstrap_party(
     save.onsite = onsite
     save.offsite = offsite
     save.standby = standby
-
     save.stacks = {starter_id: max(1, int(save.stacks.get(starter_id, 1)))}

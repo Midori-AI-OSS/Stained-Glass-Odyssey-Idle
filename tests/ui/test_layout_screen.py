@@ -17,17 +17,17 @@ from endless_idler.ui.layout.screen import LayoutScreenWidget
 from endless_idler.ui.theme.layout_screen_widget import STYLESHEET as LAYOUT_SCREEN_STYLESHEET
 
 
-class _FakeSaveManager:
+class _FakeSaveStore:
     def __init__(self, save: RunSave) -> None:
-        self._save = save
-        self.save_calls = 0
+        self._current = save
+        self.persist_calls = 0
 
-    def load(self) -> RunSave:
-        return self._save
+    @property
+    def current(self) -> RunSave:
+        return self._current
 
-    def save(self, value: RunSave) -> None:
-        self.save_calls += 1
-        self._save = value
+    def persist(self) -> None:
+        self.persist_calls += 1
 
 
 class _FakeIdleState:
@@ -72,8 +72,7 @@ def _save_with_unassigned(*char_ids: str) -> RunSave:
 def test_layout_screen_uses_saved_order_setting(monkeypatch) -> None:
     _ = QApplication.instance() or QApplication([])
 
-    fake_manager = _FakeSaveManager(_save_with_unassigned("lady_darkness", "persona_light_and_dark"))
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(_save_with_unassigned("lady_darkness", "persona_light_and_dark"))
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -83,7 +82,7 @@ def test_layout_screen_uses_saved_order_setting(monkeypatch) -> None:
         ],
     )
 
-    screen = LayoutScreenWidget()
+    screen = LayoutScreenWidget(save_store=fake_store)
     assert screen._ordering_key() == "rarity_desc"
     assert screen._ordering_cycle_button is not None
     assert screen._ordering_cycle_button.property("orderMode") == "rarity_desc"
@@ -95,8 +94,7 @@ def test_layout_screen_uses_saved_order_setting(monkeypatch) -> None:
 def test_layout_screen_move_and_autosave_sets_tick_cooldown(monkeypatch) -> None:
     _ = QApplication.instance() or QApplication([])
 
-    fake_manager = _FakeSaveManager(_save_with_unassigned("lady_darkness"))
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(_save_with_unassigned("lady_darkness"))
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -106,7 +104,7 @@ def test_layout_screen_move_and_autosave_sets_tick_cooldown(monkeypatch) -> None
         ],
     )
 
-    screen = LayoutScreenWidget()
+    screen = LayoutScreenWidget(save_store=fake_store)
     assert screen._move_from_unassigned_to_slot(
         char_id="lady_darkness",
         target_lane="onsite",
@@ -119,15 +117,14 @@ def test_layout_screen_move_and_autosave_sets_tick_cooldown(monkeypatch) -> None
     screen._persist_layout()
 
     assert screen._save.layout_tick_cooldown_seconds == layout_module.LAYOUT_TICK_COOLDOWN_SECONDS
-    assert fake_manager.save_calls >= 2
+    assert fake_store.persist_calls >= 1
     screen.deleteLater()
 
 
 def test_layout_order_cycle_button_updates_saved_order(monkeypatch) -> None:
     _ = QApplication.instance() or QApplication([])
 
-    fake_manager = _FakeSaveManager(_save_with_unassigned("lady_darkness", "persona_light_and_dark"))
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(_save_with_unassigned("lady_darkness", "persona_light_and_dark"))
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -137,7 +134,7 @@ def test_layout_order_cycle_button_updates_saved_order(monkeypatch) -> None:
         ],
     )
 
-    screen = LayoutScreenWidget()
+    screen = LayoutScreenWidget(save_store=fake_store)
     assert screen._ordering_cycle_button is not None
     screen._ordering_cycle_button.click()
 
@@ -151,8 +148,7 @@ def test_layout_order_cycle_button_updates_saved_order(monkeypatch) -> None:
 def test_layout_standby_renders_only_populated_cards(monkeypatch) -> None:
     _ = QApplication.instance() or QApplication([])
 
-    fake_manager = _FakeSaveManager(_save_with_unassigned("lady_darkness", "persona_light_and_dark"))
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(_save_with_unassigned("lady_darkness", "persona_light_and_dark"))
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -162,7 +158,7 @@ def test_layout_standby_renders_only_populated_cards(monkeypatch) -> None:
         ],
     )
 
-    screen = LayoutScreenWidget()
+    screen = LayoutScreenWidget(save_store=fake_store)
     standby_slots = [
         frame
         for frame in screen.findChildren(QFrame)
@@ -188,8 +184,7 @@ def test_layout_standby_renders_only_populated_cards(monkeypatch) -> None:
 def test_layout_lane_rows_use_fixed_onsite_offsite_box_counts(monkeypatch) -> None:
     _ = QApplication.instance() or QApplication([])
 
-    fake_manager = _FakeSaveManager(_save_with_unassigned())
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(_save_with_unassigned())
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -199,7 +194,7 @@ def test_layout_lane_rows_use_fixed_onsite_offsite_box_counts(monkeypatch) -> No
         ],
     )
 
-    screen = LayoutScreenWidget()
+    screen = LayoutScreenWidget(save_store=fake_store)
     assert len(screen._onsite_slots) == 4
     assert len(screen._offsite_slots) == 6
     assert all(slot.width() == layout_module.LAYOUT_SLOT_WIDTH for slot in screen._onsite_slots)
@@ -210,8 +205,7 @@ def test_layout_lane_rows_use_fixed_onsite_offsite_box_counts(monkeypatch) -> No
 def test_layout_applies_damage_type_outline_properties_to_slot_and_chip(monkeypatch) -> None:
     _ = QApplication.instance() or QApplication([])
 
-    fake_manager = _FakeSaveManager(_save_with_unassigned("arcane_char"))
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(_save_with_unassigned("arcane_char"))
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -220,7 +214,7 @@ def test_layout_applies_damage_type_outline_properties_to_slot_and_chip(monkeypa
         ],
     )
 
-    screen = LayoutScreenWidget()
+    screen = LayoutScreenWidget(save_store=fake_store)
     assert screen._move_from_unassigned_to_slot(
         char_id="arcane_char",
         target_lane="onsite",
@@ -246,8 +240,7 @@ def test_layout_unassigned_includes_owned_characters_not_in_standby_slots(monkey
 
     save = _save_with_unassigned("lady_darkness")
     save.character_progress["water_char"] = {"level": 1, "exp": 0.0, "next_exp": 30.0}
-    fake_manager = _FakeSaveManager(save)
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(save)
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -257,7 +250,7 @@ def test_layout_unassigned_includes_owned_characters_not_in_standby_slots(monkey
         ],
     )
 
-    screen = LayoutScreenWidget()
+    screen = LayoutScreenWidget(save_store=fake_store)
     ordered = screen._ordered_unassigned_ids()
     assert "lady_darkness" in ordered
     assert "water_char" in ordered
@@ -267,8 +260,7 @@ def test_layout_unassigned_includes_owned_characters_not_in_standby_slots(monkey
 def test_layout_standby_panel_uses_compact_fixed_height(monkeypatch) -> None:
     _ = QApplication.instance() or QApplication([])
 
-    fake_manager = _FakeSaveManager(_save_with_unassigned("lady_darkness"))
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(_save_with_unassigned("lady_darkness"))
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -277,7 +269,7 @@ def test_layout_standby_panel_uses_compact_fixed_height(monkeypatch) -> None:
         ],
     )
 
-    screen = LayoutScreenWidget()
+    screen = LayoutScreenWidget(save_store=fake_store)
     panel = screen._unassigned_panel
     assert panel.sizePolicy().verticalPolicy() == QSizePolicy.Policy.Fixed
     assert panel.minimumHeight() == panel.maximumHeight()
@@ -289,8 +281,7 @@ def test_layout_standby_panel_uses_compact_fixed_height(monkeypatch) -> None:
 def test_layout_standby_hides_autosave_status_text(monkeypatch) -> None:
     _ = QApplication.instance() or QApplication([])
 
-    fake_manager = _FakeSaveManager(_save_with_unassigned("lady_darkness"))
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(_save_with_unassigned("lady_darkness"))
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -299,7 +290,7 @@ def test_layout_standby_hides_autosave_status_text(monkeypatch) -> None:
         ],
     )
 
-    screen = LayoutScreenWidget()
+    screen = LayoutScreenWidget(save_store=fake_store)
     labels = [label for label in screen.findChildren(QLabel) if label.text() == "Autosave enabled"]
     save_status_widgets = [
         label for label in screen.findChildren(QLabel) if label.objectName() == "LayoutSaveStatus"
@@ -312,8 +303,7 @@ def test_layout_standby_hides_autosave_status_text(monkeypatch) -> None:
 def test_layout_chip_shows_old_shop_placement_marker(monkeypatch) -> None:
     _ = QApplication.instance() or QApplication([])
 
-    fake_manager = _FakeSaveManager(_save_with_unassigned("offsite_char"))
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(_save_with_unassigned("offsite_char"))
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -322,7 +312,7 @@ def test_layout_chip_shows_old_shop_placement_marker(monkeypatch) -> None:
         ],
     )
 
-    screen = LayoutScreenWidget()
+    screen = LayoutScreenWidget(save_store=fake_store)
     chips = [child for child in screen.findChildren(QFrame) if child.objectName() == "LayoutCharacterChip"]
     assert chips
     squares = [child for child in chips[0].findChildren(QFrame) if child.objectName() == "LayoutPlacementSquare"]
@@ -352,8 +342,7 @@ def test_layout_theme_uses_white_markers_and_no_inner_chip_outline() -> None:
 def test_layout_chip_uses_stained_tooltip_only(monkeypatch) -> None:
     _ = QApplication.instance() or QApplication([])
 
-    fake_manager = _FakeSaveManager(_save_with_unassigned("lady_darkness"))
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(_save_with_unassigned("lady_darkness"))
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -362,7 +351,7 @@ def test_layout_chip_uses_stained_tooltip_only(monkeypatch) -> None:
         ],
     )
 
-    screen = LayoutScreenWidget()
+    screen = LayoutScreenWidget(save_store=fake_store)
     chips = [child for child in screen.findChildren(QFrame) if child.objectName() == "LayoutCharacterChip"]
     assert chips
     assert chips[0].toolTip() == ""
@@ -374,8 +363,7 @@ def test_layout_chip_tooltip_refreshes_from_current_save_data(monkeypatch) -> No
 
     save = _save_with_unassigned("lady_darkness")
     save.character_progress["lady_darkness"] = {"level": 1, "exp": 0.0, "next_exp": 30.0}
-    fake_manager = _FakeSaveManager(save)
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(save)
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -392,7 +380,7 @@ def test_layout_chip_tooltip_refreshes_from_current_save_data(monkeypatch) -> No
     monkeypatch.setattr(layout_module, "show_stained_tooltip", _capture_tooltip)
     monkeypatch.setattr(layout_module, "hide_stained_tooltip", lambda: None)
 
-    screen = LayoutScreenWidget()
+    screen = LayoutScreenWidget(save_store=fake_store)
     chips = [child for child in screen.findChildren(QFrame) if child.objectName() == "LayoutCharacterChip"]
     assert chips
     chip = chips[0]
@@ -422,8 +410,7 @@ def test_layout_chip_tooltip_prefers_live_idle_state_data(monkeypatch) -> None:
     save = _save_with_unassigned("lady_darkness")
     save.character_progress["lady_darkness"] = {"level": 1, "exp": 0.0, "next_exp": 30.0}
     save.stacks["lady_darkness"] = 1
-    fake_manager = _FakeSaveManager(save)
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(save)
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -449,7 +436,7 @@ def test_layout_chip_tooltip_prefers_live_idle_state_data(monkeypatch) -> None:
     host = QWidget()
     host._idle_screen = _FakeIdleScreen(live_idle_state)
 
-    screen = LayoutScreenWidget(parent=host)
+    screen = LayoutScreenWidget(save_store=fake_store, parent=host)
     plugin = screen._plugin_by_id["lady_darkness"]
     html, _ = screen._build_tooltip_data("lady_darkness", plugin)
     assert "x4" in html
@@ -461,8 +448,7 @@ def test_layout_chip_tooltip_prefers_live_idle_state_data(monkeypatch) -> None:
 def test_layout_chip_child_enter_event_triggers_tooltip_refresh(monkeypatch) -> None:
     _ = QApplication.instance() or QApplication([])
 
-    fake_manager = _FakeSaveManager(_save_with_unassigned("lady_darkness"))
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(_save_with_unassigned("lady_darkness"))
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -480,7 +466,7 @@ def test_layout_chip_child_enter_event_triggers_tooltip_refresh(monkeypatch) -> 
     monkeypatch.setattr(layout_module, "show_stained_tooltip", _capture_tooltip)
     monkeypatch.setattr(layout_module, "hide_stained_tooltip", lambda: None)
 
-    screen = LayoutScreenWidget()
+    screen = LayoutScreenWidget(save_store=fake_store)
     chips = [child for child in screen.findChildren(QFrame) if child.objectName() == "LayoutCharacterChip"]
     assert chips
     chip = chips[0]
@@ -496,8 +482,7 @@ def test_layout_chip_child_enter_event_triggers_tooltip_refresh(monkeypatch) -> 
 def test_layout_chip_refresh_loop_stops_when_not_hovered(monkeypatch) -> None:
     _ = QApplication.instance() or QApplication([])
 
-    fake_manager = _FakeSaveManager(_save_with_unassigned("lady_darkness"))
-    monkeypatch.setattr(layout_module, "SaveManager", lambda: fake_manager)
+    fake_store = _FakeSaveStore(_save_with_unassigned("lady_darkness"))
     monkeypatch.setattr(
         layout_module,
         "discover_character_plugins",
@@ -510,7 +495,7 @@ def test_layout_chip_refresh_loop_stops_when_not_hovered(monkeypatch) -> None:
     monkeypatch.setattr(layout_module, "show_stained_tooltip", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(layout_module, "hide_stained_tooltip", lambda: hide_calls.append(None))
 
-    screen = LayoutScreenWidget()
+    screen = LayoutScreenWidget(save_store=fake_store)
     chips = [child for child in screen.findChildren(QFrame) if child.objectName() == "LayoutCharacterChip"]
     assert chips
     chip = chips[0]
