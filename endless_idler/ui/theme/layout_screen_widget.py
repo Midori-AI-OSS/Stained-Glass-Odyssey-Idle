@@ -102,6 +102,16 @@ QFrame#LayoutPlacementSquare[filled="false"] {
     border-color: rgba(255, 255, 255, 96);
 }
 
+QFrame#LayoutPlacementSquare[mismatch="true"][filled="true"] {
+    background-color: rgba(255, 70, 70, 230);
+    border-color: rgba(255, 130, 130, 245);
+}
+
+QFrame#LayoutPlacementSquare[mismatch="true"][filled="false"] {
+    background-color: rgba(120, 24, 24, 205);
+    border-color: rgba(255, 120, 120, 200);
+}
+
 QLabel#LayoutCharacterName {
     color: rgba(255, 255, 255, 235);
     font-size: 11px;

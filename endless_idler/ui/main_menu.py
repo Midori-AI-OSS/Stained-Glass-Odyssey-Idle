@@ -6,7 +6,6 @@ from collections.abc import Callable
 
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtCore import Qt
-from PySide6.QtCore import QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QHBoxLayout
@@ -24,8 +23,10 @@ from endless_idler.settings import AppSettings
 from endless_idler.settings import AppSettingsManager
 from endless_idler.settings import clamp_volume
 from endless_idler.settings import normalize_channel
+from endless_idler.tick_runtime import SharedTickRuntime
 from endless_idler.ui.home import HomePage
 from endless_idler.ui.idle import IdleScreenWidget
+from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
 from endless_idler.ui.layout import LayoutScreenWidget
 from endless_idler.ui.lucide_icons import lucide_icon
 from endless_idler.ui.radio import RadioController
@@ -51,6 +52,10 @@ class MainMenuWindow(QMainWindow):
         self._save_store.load_or_create()
 
         self._idle_screen: IdleScreenWidget | None = None
+        self._tick_runtime = SharedTickRuntime(
+            interval_seconds=IDLE_TICK_INTERVAL_SECONDS,
+            parent=self,
+        )
         self._nav_buttons: dict[str, QToolButton] = {}
 
         self.setWindowTitle(self.APP_TITLE)
@@ -152,11 +157,6 @@ class MainMenuWindow(QMainWindow):
         self._stack.addWidget(self._idle_placeholder)
         self._stack.addWidget(self._settings_screen)
 
-        self._startup_idle_timer = QTimer(self)
-        self._startup_idle_timer.setSingleShot(True)
-        self._startup_idle_timer.setInterval(2000)
-        self._startup_idle_timer.timeout.connect(self._initialize_idle_runtime)
-
         self._radio_control.play_requested.connect(self._on_radio_control_play_requested)
         self._radio_control.volume_changed.connect(self._on_radio_control_volume_changed)
         if self._radio_controller is not None:
@@ -167,10 +167,8 @@ class MainMenuWindow(QMainWindow):
         self._sync_radio_controller_from_settings(user_initiated=False)
         self._on_radio_state_changed(self._radio_state_snapshot())
         self._settings_screen.set_save_path(str(self._save_store.path))
-        self._startup_idle_timer.start()
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        self._startup_idle_timer.stop()
         if self._idle_screen is not None:
             self._idle_screen.shutdown()
         if self._radio_controller is not None:
@@ -234,6 +232,8 @@ class MainMenuWindow(QMainWindow):
         self._set_active_nav(self._PAGE_HOME)
 
     def _show_idle(self) -> None:
+        self._layout_screen.persist_now()
+        self._ensure_idle_runtime()
         if self._idle_screen is None:
             self._stack.setCurrentWidget(self._idle_placeholder)
         else:
@@ -254,11 +254,31 @@ class MainMenuWindow(QMainWindow):
         self._stack.setCurrentWidget(self._settings_screen)
         self._set_active_nav(self._PAGE_SETTINGS)
 
-    def _initialize_idle_runtime(self) -> None:
-        if self._idle_screen is not None:
-            return
+    def _idle_lineup_signature(self) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, int], ...], int]:
+        return IdleScreenWidget.build_lineup_signature(self._save_store.current)
 
-        idle = IdleScreenWidget(save_store=self._save_store, plugins=self._plugins, parent=self)
+    def _dispose_idle_runtime(self, *, persist: bool) -> None:
+        if self._idle_screen is None:
+            return
+        idle = self._idle_screen
+        self._idle_screen = None
+        idle.shutdown(persist=persist)
+        self._stack.removeWidget(idle)
+        idle.deleteLater()
+
+    def _ensure_idle_runtime(self) -> None:
+        current_signature = self._idle_lineup_signature()
+        if self._idle_screen is not None and self._idle_screen.lineup_signature == current_signature:
+            return
+        if self._idle_screen is not None:
+            self._dispose_idle_runtime(persist=True)
+
+        idle = IdleScreenWidget(
+            save_store=self._save_store,
+            tick_runtime=self._tick_runtime,
+            plugins=self._plugins,
+            parent=self,
+        )
         idle.finished.connect(self._show_home)
         self._idle_screen = idle
         self._stack.addWidget(idle)

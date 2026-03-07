@@ -9,6 +9,10 @@ from typing import Any
 from PySide6.QtCore import QObject
 from PySide6.QtCore import Signal
 
+from endless_idler.characters.placement_rules import MISPLACED_EXP_MULTIPLIER
+from endless_idler.characters.placement_rules import MISPLACED_STAT_MULTIPLIER
+from endless_idler.characters.placement_rules import plugin_lane_mismatch
+from endless_idler.combat.party_stats import apply_base_stat_multiplier
 from endless_idler.combat.party_stats import apply_offsite_stat_share as apply_offsite_stat_share_to_stats
 from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.combat.party_stats import party_scaling
@@ -29,6 +33,7 @@ SHARED_EXP_OFFSITE_MULTIPLIER = 1.5
 IDLE_TICK_INTERVAL_SECONDS = 0.1
 IDLE_BLESSING_STEP_SECONDS = 300.0
 IDLE_BLESSING_STEP_MULTIPLIER = 1.025 ** (1.0 / 6.0)
+MIN_EXP_GAIN_PER_TICK = 0.0001
 
 
 class IdleGameState(QObject):
@@ -60,6 +65,16 @@ class IdleGameState(QObject):
         self._party_level = party_level
         self._stacks = stacks
         self._plugins_by_id = plugins_by_id
+        self._misplaced_onsite_ids: set[str] = {
+            char_id
+            for char_id in self._char_ids
+            if plugin_lane_mismatch(lane="onsite", plugin=self._plugins_by_id.get(char_id))
+        }
+        self._misplaced_offsite_ids: set[str] = {
+            char_id
+            for char_id in self._offsite_ids
+            if plugin_lane_mismatch(lane="offsite", plugin=self._plugins_by_id.get(char_id))
+        }
         self._rng = rng
         self._progress_by_id = progress_by_id or {}
         self._stats_by_id = stats_by_id or {}
@@ -227,13 +242,25 @@ class IdleGameState(QObject):
             raise ValueError(f"Missing character plugin metadata for {char_id!r}.")
         return int(getattr(plugin, "stars", 0) or 0)
 
+    def _is_misplaced_character(self, char_id: str) -> bool:
+        return char_id in self._misplaced_onsite_ids or char_id in self._misplaced_offsite_ids
+
+    def _exp_multiplier_for_char(self, char_id: str) -> float:
+        if self._is_misplaced_character(char_id):
+            return MISPLACED_EXP_MULTIPLIER
+        return 1.0
+
+    def _stat_multiplier_for_char(self, char_id: str) -> float:
+        if self._is_misplaced_character(char_id):
+            return MISPLACED_STAT_MULTIPLIER
+        return 1.0
+
     def _apply_offsite_stat_share_to_onsite_hp(self) -> None:
-        if not self._char_ids:
-            return
-        if not self._offsite_ids:
+        if not self._char_ids and not self._offsite_ids:
             return
 
         reserves: list[Stats] = []
+        reserve_snapshots: list[tuple[dict[str, Any], Stats]] = []
         for char_id in self._offsite_ids:
             data = self._char_data.get(char_id)
             plugin = self._plugins_by_id.get(char_id)
@@ -255,22 +282,23 @@ class IdleGameState(QObject):
                 "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
                 "rebirths": max(0, int(data.get("rebirths", 0))),
             }
-            reserves.append(
-                build_scaled_character_stats(
-                    plugin=plugin,
-                    party_level=self._party_level,
-                    stars=stars,
-                    stacks=stack,
-                    progress=progress,
-                    saved_base_stats=base_stats,
-                )
+            reserve_stats = build_scaled_character_stats(
+                plugin=plugin,
+                party_level=self._party_level,
+                stars=stars,
+                stacks=stack,
+                progress=progress,
+                saved_base_stats=base_stats,
             )
-
-        if not reserves:
-            return
+            apply_base_stat_multiplier(
+                stats=reserve_stats,
+                multiplier=self._stat_multiplier_for_char(char_id),
+            )
+            reserves.append(reserve_stats)
+            reserve_snapshots.append((data, reserve_stats))
 
         party_stats: list[Stats] = []
-        party_ids: list[str] = []
+        party_snapshots: list[tuple[dict[str, Any], Stats]] = []
         for char_id in self._char_ids:
             data = self._char_data.get(char_id)
             plugin = self._plugins_by_id.get(char_id)
@@ -292,27 +320,25 @@ class IdleGameState(QObject):
                 "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
                 "rebirths": max(0, int(data.get("rebirths", 0))),
             }
-            party_stats.append(
-                build_scaled_character_stats(
-                    plugin=plugin,
-                    party_level=self._party_level,
-                    stars=stars,
-                    stacks=stack,
-                    progress=progress,
-                    saved_base_stats=base_stats,
-                )
+            party_stats_item = build_scaled_character_stats(
+                plugin=plugin,
+                party_level=self._party_level,
+                stars=stars,
+                stacks=stack,
+                progress=progress,
+                saved_base_stats=base_stats,
             )
-            party_ids.append(char_id)
+            apply_base_stat_multiplier(
+                stats=party_stats_item,
+                multiplier=self._stat_multiplier_for_char(char_id),
+            )
+            party_stats.append(party_stats_item)
+            party_snapshots.append((data, party_stats_item))
 
-        if not party_stats:
-            return
+        if party_stats and reserves:
+            apply_offsite_stat_share_to_stats(party=party_stats, reserves=reserves, share=0.10)
 
-        apply_offsite_stat_share_to_stats(party=party_stats, reserves=reserves, share=0.10)
-
-        for char_id, stats in zip(party_ids, party_stats, strict=False):
-            data = self._char_data.get(char_id)
-            if not data:
-                continue
+        for data, stats in [*party_snapshots, *reserve_snapshots]:
             try:
                 old_max_hp = float(max(1.0, float(data.get("max_hp", 1.0))))
             except (TypeError, ValueError):
@@ -440,38 +466,26 @@ class IdleGameState(QObject):
         self._tick_count += 1
         self.tick_update.emit(self._tick_count)
 
-        shared_exp_pct = self._shared_exp_percentage / 100.0
-        onsite_reduction = shared_exp_pct if shared_exp_pct > 0 else 0.0
-        onsite_mult = 1.0 - onsite_reduction
-
         exp_multiplier = self._current_exp_multiplier()
         idle_exp_mult = self._calculate_idle_exp_mult()
-        total_onsite_base_gain = 0.0
-        total_onsite_shared_gain = 0.0
-        
-        for char_id in self._char_ids:
-            data = self._char_data.get(char_id)
-            if not data:
-                continue
+        (
+            onsite_recipients,
+            offsite_recipients,
+            onsite_allocated_share,
+            offsite_drip_share,
+            offsite_baseline_bonus,
+        ) = self._compute_exp_pool_distribution(
+            exp_multiplier=exp_multiplier,
+            idle_exp_mult=idle_exp_mult,
+        )
 
-            exp_mult = data["exp_multiplier"]
-            base_gain = exp_mult
-
-            if self._risk_reward_level > 0:
-                base_gain *= (self._risk_reward_level + 1)
-
-            base_gain *= exp_multiplier
-            base_gain *= self._death_exp_debuff_multiplier(data)
-            base_gain *= self._exp_gain_scale
-            # Apply passive modifier from character stacks
-            base_gain *= data.get("passive_modifier", 1.0)
-            # Apply idle survival multiplier
-            base_gain *= idle_exp_mult
-            
-            total_onsite_base_gain += base_gain
-            onsite_gain = base_gain * onsite_mult
-            data["exp"] += onsite_gain
-            total_onsite_shared_gain += (base_gain - onsite_gain)
+        for char_id, data in onsite_recipients:
+            recipient_modifier = self._recipient_exp_modifier_for_char(
+                char_id=char_id,
+                data=data,
+            )
+            awarded = onsite_allocated_share * recipient_modifier
+            data["exp"] += self._apply_min_exp_gain_floor(awarded)
 
             # Since minimum shared_exp is now 1%, all players get 0.5 HP regain
             # Previously, 0% sharing gave 0.1 regain as a penalty
@@ -491,22 +505,15 @@ class IdleGameState(QObject):
             if data["exp"] >= data["next_exp"]:
                 self._level_up(char_id)
 
-        if self._offsite_ids and total_onsite_shared_gain > 0:
-            num_offsite = len(self._offsite_ids)
-            offsite_gain_per_char = total_onsite_shared_gain / num_offsite
-            
-            for char_id in self._offsite_ids:
-                data = self._char_data.get(char_id)
-                if not data:
-                    continue
-                
-                normal_offsite_gain = total_onsite_base_gain * self._offsite_exp_share
-                total_gain = offsite_gain_per_char + normal_offsite_gain
-                
-                # Apply offsite character modifiers exactly once per award.
-                exp_mult = float(data.get("exp_multiplier", 1.0))
-                passive_mod = data.get("passive_modifier", 1.0)
-                data["exp"] += total_gain * exp_mult * self._death_exp_debuff_multiplier(data) * passive_mod
+        if offsite_recipients:
+            offsite_allocated_share = offsite_drip_share + offsite_baseline_bonus
+            for char_id, data in offsite_recipients:
+                recipient_modifier = self._recipient_exp_modifier_for_char(
+                    char_id=char_id,
+                    data=data,
+                )
+                awarded_gain = offsite_allocated_share * recipient_modifier
+                data["exp"] += self._apply_min_exp_gain_floor(awarded_gain)
                 data["hp"] = min(data["max_hp"], data["hp"] + 0.5)
                 if data["exp"] >= data["next_exp"]:
                     self._level_up(char_id)
@@ -528,59 +535,39 @@ class IdleGameState(QObject):
         if not data:
             return 0.0
 
-        shared_exp_pct = self._shared_exp_percentage / 100.0
-        onsite_reduction = shared_exp_pct if shared_exp_pct > 0 else 0.0
-        onsite_mult = 1.0 - onsite_reduction
-        
         exp_multiplier = self._current_exp_multiplier()
         idle_exp_mult = self._calculate_idle_exp_mult()
+        (
+            onsite_recipients,
+            offsite_recipients,
+            onsite_allocated_share,
+            offsite_drip_share,
+            offsite_baseline_bonus,
+        ) = self._compute_exp_pool_distribution(
+            exp_multiplier=exp_multiplier,
+            idle_exp_mult=idle_exp_mult,
+        )
 
         if char_id in self._char_ids:
-            exp_mult = float(data.get("exp_multiplier", 1.0))
-            gain = exp_mult
-            if self._risk_reward_level > 0:
-                gain *= (self._risk_reward_level + 1)
-            gain *= exp_multiplier
-            gain *= self._death_exp_debuff_multiplier(data)
-            gain *= self._exp_gain_scale
-            # Apply passive modifier for display consistency
-            gain *= data.get("passive_modifier", 1.0)
-            # Apply idle survival multiplier
-            gain *= idle_exp_mult
-            return gain * onsite_mult
+            if not any(recipient_id == char_id for recipient_id, _ in onsite_recipients):
+                return 0.0
+            recipient_modifier = self._recipient_exp_modifier_for_char(
+                char_id=char_id,
+                data=data,
+            )
+            gain = onsite_allocated_share * recipient_modifier
+            return self._apply_min_exp_gain_floor(gain)
 
         if char_id in self._offsite_ids:
-            total_onsite_base_gain = 0.0
-            total_onsite_shared_gain = 0.0
-            
-            for onsite_id in self._char_ids:
-                onsite_data = self._char_data.get(onsite_id)
-                if not onsite_data:
-                    continue
-                onsite_mult_val = float(onsite_data.get("exp_multiplier", 1.0))
-                onsite_gain = onsite_mult_val
-                if self._risk_reward_level > 0:
-                    onsite_gain *= (self._risk_reward_level + 1)
-                onsite_gain *= exp_multiplier
-                onsite_gain *= self._death_exp_debuff_multiplier(onsite_data)
-                onsite_gain *= self._exp_gain_scale
-                # Apply passive modifier from onsite character
-                onsite_gain *= onsite_data.get("passive_modifier", 1.0)
-                # Apply idle survival multiplier
-                onsite_gain *= idle_exp_mult
-                total_onsite_base_gain += onsite_gain
-                shared_reduction = onsite_gain * onsite_reduction
-                total_onsite_shared_gain += shared_reduction
-
-            num_offsite = len(self._offsite_ids)
-            if num_offsite > 0:
-                offsite_gain_per_char = total_onsite_shared_gain / num_offsite
-                normal_offsite_gain = total_onsite_base_gain * self._offsite_exp_share
-                total_gain = offsite_gain_per_char + normal_offsite_gain
-                # Apply offsite character modifiers exactly once per award.
-                exp_mult = float(data.get("exp_multiplier", 1.0))
-                passive_mod = data.get("passive_modifier", 1.0)
-                return total_gain * exp_mult * self._death_exp_debuff_multiplier(data) * passive_mod
+            if not any(recipient_id == char_id for recipient_id, _ in offsite_recipients):
+                return 0.0
+            offsite_allocated_share = offsite_drip_share + offsite_baseline_bonus
+            recipient_modifier = self._recipient_exp_modifier_for_char(
+                char_id=char_id,
+                data=data,
+            )
+            awarded_gain = offsite_allocated_share * recipient_modifier
+            return self._apply_min_exp_gain_floor(awarded_gain)
 
         return 0.0
 
@@ -616,6 +603,98 @@ class IdleGameState(QObject):
     
     def _calculate_idle_exp_mult(self) -> float:
         return self.get_idle_blessing_multiplier()
+
+    def _shared_exp_fraction(self, *, offsite_recipient_count: int) -> float:
+        if offsite_recipient_count <= 0:
+            return 0.0
+        shared_exp_pct = self._shared_exp_percentage / 100.0
+        if shared_exp_pct <= 0.0:
+            return 0.0
+        return shared_exp_pct
+
+    def _onsite_raw_pool_unit_gain(
+        self,
+        *,
+        exp_multiplier: float,
+        idle_exp_mult: float,
+    ) -> float:
+        gain = 1.0
+        if self._risk_reward_level > 0:
+            gain *= (self._risk_reward_level + 1)
+        gain *= exp_multiplier
+        gain *= self._exp_gain_scale
+        gain *= idle_exp_mult
+        return max(0.0, gain)
+
+    def _recipient_exp_modifier_for_char(
+        self,
+        *,
+        char_id: str,
+        data: dict[str, Any],
+    ) -> float:
+        modifier = float(data.get("exp_multiplier", 1.0))
+        modifier *= self._death_exp_debuff_multiplier(data)
+        modifier *= float(data.get("passive_modifier", 1.0))
+        modifier *= self._exp_multiplier_for_char(char_id)
+        return max(0.0, modifier)
+
+    def _exp_recipients(self) -> tuple[list[tuple[str, dict[str, Any]]], list[tuple[str, dict[str, Any]]]]:
+        onsite_recipients: list[tuple[str, dict[str, Any]]] = []
+        for char_id in self._char_ids:
+            data = self._char_data.get(char_id)
+            if data:
+                onsite_recipients.append((char_id, data))
+
+        offsite_recipients: list[tuple[str, dict[str, Any]]] = []
+        for char_id in self._offsite_ids:
+            data = self._char_data.get(char_id)
+            if data:
+                offsite_recipients.append((char_id, data))
+
+        return onsite_recipients, offsite_recipients
+
+    def _compute_exp_pool_distribution(
+        self,
+        *,
+        exp_multiplier: float,
+        idle_exp_mult: float,
+    ) -> tuple[list[tuple[str, dict[str, Any]]], list[tuple[str, dict[str, Any]]], float, float, float]:
+        onsite_recipients, offsite_recipients = self._exp_recipients()
+        onsite_count = len(onsite_recipients)
+        if onsite_count <= 0:
+            return onsite_recipients, offsite_recipients, 0.0, 0.0, 0.0
+
+        raw_unit_gain = self._onsite_raw_pool_unit_gain(
+            exp_multiplier=exp_multiplier,
+            idle_exp_mult=idle_exp_mult,
+        )
+        total_onsite_raw_pool = raw_unit_gain
+        shared_exp_fraction = self._shared_exp_fraction(
+            offsite_recipient_count=len(offsite_recipients),
+        )
+
+        drip_pool = total_onsite_raw_pool * shared_exp_fraction
+        onsite_retained_pool = max(0.0, total_onsite_raw_pool - drip_pool)
+        onsite_allocated_share = onsite_retained_pool / onsite_count
+
+        if not offsite_recipients:
+            return onsite_recipients, offsite_recipients, onsite_allocated_share, 0.0, 0.0
+
+        offsite_count = len(offsite_recipients)
+        offsite_drip_share = drip_pool / offsite_count
+        offsite_baseline_bonus = total_onsite_raw_pool * self._offsite_exp_share
+        return (
+            onsite_recipients,
+            offsite_recipients,
+            onsite_allocated_share,
+            offsite_drip_share,
+            offsite_baseline_bonus,
+        )
+
+    def _apply_min_exp_gain_floor(self, gain: float) -> float:
+        if gain <= 0.0:
+            return 0.0
+        return max(MIN_EXP_GAIN_PER_TICK, float(gain))
 
     def _idle_blessing_elapsed_seconds(self) -> float:
         now = float(self._time())
@@ -863,6 +942,18 @@ class IdleGameState(QObject):
                     continue
             payload[char_id] = sanitized
         return payload
+
+    def get_misplacement_stat_multiplier(self, char_id: str) -> float:
+        clean_id = str(char_id or "").strip()
+        if not clean_id:
+            return 1.0
+        return self._stat_multiplier_for_char(clean_id)
+
+    def get_misplacement_exp_multiplier(self, char_id: str) -> float:
+        clean_id = str(char_id or "").strip()
+        if not clean_id:
+            return 1.0
+        return self._exp_multiplier_for_char(clean_id)
 
     def set_shared_exp_percentage(self, percentage: int) -> None:
         self._shared_exp_percentage = max(1, min(95, int(percentage)))

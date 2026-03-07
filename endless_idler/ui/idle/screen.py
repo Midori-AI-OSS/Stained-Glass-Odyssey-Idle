@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QFrame
 
 from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.characters.plugins import discover_character_plugins
+from endless_idler.combat.party_stats import apply_base_stat_multiplier
 from endless_idler.combat.party_stats import apply_offsite_stat_share
 from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.combat.stats import Stats
@@ -26,6 +27,7 @@ from endless_idler.progression import calculate_prestige_stat_gain_rate
 from endless_idler.run_save_store import RunSaveStore
 from endless_idler.run_rules import apply_idle_party_heal
 from endless_idler.run_rules import start_idle_heal_timer
+from endless_idler.tick_runtime import SharedTickRuntime
 from endless_idler.ui.idle.blessing_meter import IdleBlessingMeterWidget
 from endless_idler.ui.idle.widgets import IdleArena
 from endless_idler.ui.idle.widgets import IdleOffsiteCard
@@ -73,10 +75,36 @@ def build_prestige_confirmation_html(
 class IdleScreenWidget(QWidget):
     finished = Signal()
 
+    @staticmethod
+    def build_lineup_signature(
+        save: object,
+    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, int], ...], int]:
+        onsite_raw = getattr(save, "onsite", [])
+        offsite_raw = getattr(save, "offsite", [])
+        stacks_raw = getattr(save, "stacks", {})
+        party_level_raw = getattr(save, "party_level", 1)
+
+        onsite = tuple(str(item) for item in onsite_raw if item)
+        offsite = tuple(str(item) for item in offsite_raw if item)
+
+        stack_pairs: list[tuple[str, int]] = []
+        for char_id in [*onsite, *offsite]:
+            raw = stacks_raw.get(char_id, 1) if isinstance(stacks_raw, dict) else 1
+            stack_pairs.append((char_id, max(1, int(raw))))
+        stack_pairs.sort()
+
+        return (
+            onsite,
+            offsite,
+            tuple(stack_pairs),
+            max(1, int(party_level_raw)),
+        )
+
     def __init__(
         self,
         *,
         save_store: RunSaveStore,
+        tick_runtime: SharedTickRuntime | None = None,
         plugins: Sequence[CharacterPlugin] | None = None,
         parent: QWidget | None = None,
     ) -> None:
@@ -86,13 +114,21 @@ class IdleScreenWidget(QWidget):
         self._rng = random.Random()
         self._save_store = save_store
         self._save = self._save_store.current
-        self._shared_exp_label = QLabel(self)
-        self._shared_exp_slider = QSlider(Qt.Orientation.Horizontal, self)
-        self._rr_label = QLabel(self)
-        self._rr_slider = QSlider(Qt.Orientation.Horizontal, self)
-        self._blessing_title_label = QLabel(self)
-        self._blessing_meter = IdleBlessingMeterWidget(self)
-        self._blessing_value_label = QLabel(self)
+        self._lineup_signature = self.build_lineup_signature(self._save)
+        # Placeholder references are initialized without parenting so they do not
+        # render as stray widgets before panel builders assign the real controls.
+        self._shared_exp_label = QLabel()
+        self._shared_exp_slider = QSlider(Qt.Orientation.Horizontal)
+        self._rr_label = QLabel()
+        self._rr_slider = QSlider(Qt.Orientation.Horizontal)
+        self._blessing_title_label = QLabel()
+        self._blessing_meter = IdleBlessingMeterWidget()
+        self._blessing_value_label = QLabel()
+        self._tick_runtime = tick_runtime or SharedTickRuntime(
+            interval_seconds=IDLE_TICK_INTERVAL_SECONDS,
+            parent=self,
+        )
+        self._tick_runtime_key = f"idle-screen-{id(self)}"
         start_idle_heal_timer(self._save)
         self._save_store.persist()
 
@@ -250,14 +286,19 @@ class IdleScreenWidget(QWidget):
         self._update_blessing_ui()
 
         self._idle_state.tick_update.connect(self._on_tick)
-        self._idle_timer = QTimer(self)
-        self._idle_timer.timeout.connect(self._process_idle_tick)
-        self._idle_timer.start(int(max(1, IDLE_TICK_INTERVAL_SECONDS * 1000)))
+        self._tick_runtime.subscribe(
+            key=self._tick_runtime_key,
+            callback=self._process_idle_tick,
+        )
 
         self._autosave_timer = QTimer(self)
         self._autosave_timer.timeout.connect(self._autosave)
         self._autosave_timer.start(5000)  # Auto-save every 5 seconds
         self._update_tick_cooldown_label()
+
+    @property
+    def lineup_signature(self) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, int], ...], int]:
+        return self._lineup_signature
 
     def _process_idle_tick(self) -> None:
         if self._tick_cooldown_seconds > 0.0:
@@ -296,6 +337,8 @@ class IdleScreenWidget(QWidget):
 
         shared_exp_label = QLabel("Shared EXP: 1%")
         shared_exp_label.setObjectName("idleSharedExpLabel")
+        shared_help_text = "Onsite chars lose X%, offsite gain that + 1% per onsite"
+        shared_exp_label.setToolTip(shared_help_text)
         layout.addWidget(shared_exp_label)
         self._shared_exp_label = shared_exp_label
 
@@ -307,17 +350,15 @@ class IdleScreenWidget(QWidget):
         self._shared_exp_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self._shared_exp_slider.setTickInterval(10)
         self._shared_exp_slider.valueChanged.connect(self._on_shared_exp_changed)
+        self._shared_exp_slider.setToolTip(shared_help_text)
         layout.addWidget(self._shared_exp_slider)
-
-        shared_help = QLabel("Onsite chars lose X%, offsite gain that + 1% per onsite")
-        shared_help.setObjectName("idleModsHelp")
-        shared_help.setWordWrap(True)
-        layout.addWidget(shared_help)
 
         layout.addSpacing(8)
 
         rr_label = QLabel("Risk & Reward: 0")
         rr_label.setObjectName("idleRRLabel")
+        rr_help_text = "Boost: (Lvl+1)x EXP\nDrain: (5.5x Lvl) HP\nSpeed scales with level"
+        rr_label.setToolTip(rr_help_text)
         layout.addWidget(rr_label)
         self._rr_label = rr_label
 
@@ -329,12 +370,8 @@ class IdleScreenWidget(QWidget):
         self._rr_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self._rr_slider.setTickInterval(25)
         self._rr_slider.valueChanged.connect(self._on_risk_reward_changed)
+        self._rr_slider.setToolTip(rr_help_text)
         layout.addWidget(self._rr_slider)
-
-        rr_help = QLabel("Boost: (Lvl+1)x EXP\nDrain: (5.5x Lvl) HP\nSpeed scales with level")
-        rr_help.setObjectName("idleModsHelp")
-        rr_help.setWordWrap(True)
-        layout.addWidget(rr_help)
 
         layout.addStretch(1)
 
@@ -495,16 +532,21 @@ class IdleScreenWidget(QWidget):
                 "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
                 "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
             }
-            reserves.append(
-                build_scaled_character_stats(
-                    plugin=plugin,
-                    party_level=self._party_level,
-                    stars=stars,
-                    stacks=stacks,
-                    progress=progress,
-                    saved_base_stats=base_stats,
-                )
+            stats = build_scaled_character_stats(
+                plugin=plugin,
+                party_level=self._party_level,
+                stars=stars,
+                stacks=stacks,
+                progress=progress,
+                saved_base_stats=base_stats,
             )
+            misplacement_getter = getattr(self._idle_state, "get_misplacement_stat_multiplier", None)
+            if callable(misplacement_getter):
+                misplacement_multiplier = float(misplacement_getter(char_id))
+            else:
+                misplacement_multiplier = 1.0
+            apply_base_stat_multiplier(stats=stats, multiplier=misplacement_multiplier)
+            reserves.append(stats)
 
         apply_offsite_stat_share(party=party_stats, reserves=reserves, share=0.10)
 
@@ -661,8 +703,7 @@ class IdleScreenWidget(QWidget):
         self.finished.emit()
 
     def shutdown(self, *, persist: bool = True) -> None:
-        if self._idle_timer:
-            self._idle_timer.stop()
+        self._tick_runtime.unsubscribe(self._tick_runtime_key)
         if self._autosave_timer:
             self._autosave_timer.stop()
         self._allow_shutdown_persist = self._allow_shutdown_persist and persist

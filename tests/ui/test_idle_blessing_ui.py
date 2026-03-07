@@ -6,15 +6,20 @@ import random
 from types import SimpleNamespace
 
 import endless_idler.ui.idle.screen as screen_module
+import endless_idler.ui.idle.widgets as idle_widgets_module
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QProgressBar
+from PySide6.QtWidgets import QSlider
 
+from endless_idler.characters.plugins import CharacterPlugin
+from endless_idler.ui.party_builder_common import MISMATCH_TOOLTIP_VALUE_COLOR
 from endless_idler.ui.idle.screen import IdleScreenWidget
 from endless_idler.ui.idle.widgets import IdleOffsiteCard
+from endless_idler.ui.onsite.card import IdleOnsiteCharacterCard
 from endless_idler.ui.onsite.card import OnsiteCharacterCardBase
 from endless_idler.ui.idle.blessing_meter import IdleBlessingMeterWidget
 from endless_idler.ui.idle.blessing_meter import _blend_factor_for_progress
@@ -74,7 +79,13 @@ class _FakeSaveStore:
 
 
 class _FakeIdleStateForOffsite:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        misplacement_stat_multiplier: float = 1.0,
+        misplacement_exp_multiplier: float = 1.0,
+        exp_gain_per_second: float = 0.0,
+    ) -> None:
         self._data: dict[str, float] = {
             "level": 7.0,
             "exp": 12.0,
@@ -83,6 +94,9 @@ class _FakeIdleStateForOffsite:
             "max_hp": 100.0,
             "exp_multiplier": 1.0,
         }
+        self._misplacement_stat_multiplier = float(misplacement_stat_multiplier)
+        self._misplacement_exp_multiplier = float(misplacement_exp_multiplier)
+        self._exp_gain_per_second = float(exp_gain_per_second)
 
     def get_char_data(self, char_id: str) -> dict[str, float]:
         del char_id
@@ -90,7 +104,18 @@ class _FakeIdleStateForOffsite:
 
     def get_exp_gain_per_second(self, char_id: str) -> float:
         del char_id
-        return 0.0
+        return self._exp_gain_per_second
+
+    def get_party_level(self) -> int:
+        return 1
+
+    def get_misplacement_stat_multiplier(self, char_id: str) -> float:
+        del char_id
+        return self._misplacement_stat_multiplier
+
+    def get_misplacement_exp_multiplier(self, char_id: str) -> float:
+        del char_id
+        return self._misplacement_exp_multiplier
 
 
 def test_blessing_blend_factor_boundaries() -> None:
@@ -158,6 +183,22 @@ def test_idle_screen_panel_order_and_tooltip_text(monkeypatch) -> None:
     column_layout = parent.layout()
     assert column_layout is not None
     assert column_layout.indexOf(blessing_panel) < column_layout.indexOf(mods_panel)
+    assert not screen.findChildren(QLabel, "idleModsHelp")
+
+    shared_help = "Onsite chars lose X%, offsite gain that + 1% per onsite"
+    rr_help = "Boost: (Lvl+1)x EXP\nDrain: (5.5x Lvl) HP\nSpeed scales with level"
+    shared_label = screen.findChild(QLabel, "idleSharedExpLabel")
+    shared_slider = screen.findChild(QSlider, "idleSharedExpSlider")
+    rr_label = screen.findChild(QLabel, "idleRRLabel")
+    rr_slider = screen.findChild(QSlider, "idleRRSlider")
+    assert shared_label is not None
+    assert shared_slider is not None
+    assert rr_label is not None
+    assert rr_slider is not None
+    assert shared_label.toolTip() == shared_help
+    assert shared_slider.toolTip() == shared_help
+    assert rr_label.toolTip() == rr_help
+    assert rr_slider.toolTip() == rr_help
 
     tooltip = screen._build_blessing_tooltip(multiplier=1.0, steps=0, seconds_to_next=300)
     assert "Applies to onsite source EXP gain only" not in tooltip
@@ -206,6 +247,69 @@ def test_idle_offsite_name_includes_level_and_stack_ui_removed() -> None:
     name_label = card.findChild(QLabel, "idleOffsiteName")
     assert name_label is not None
     assert name_label.text() == "offsite_hero (7)"
+
+
+def test_idle_offsite_tooltip_shows_penalized_values_without_text(monkeypatch) -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    card = IdleOffsiteCard(
+        char_id="offsite_hero",
+        plugin=CharacterPlugin(
+            char_id="offsite_hero",
+            display_name="Offsite Hero",
+            stars=5,
+            damage_type_id="fire",
+        ),
+        idle_state=_FakeIdleStateForOffsite(
+            misplacement_stat_multiplier=0.05,
+            misplacement_exp_multiplier=0.25,
+        ),
+        rng=random.Random(3),
+        stack_count=1,
+    )
+    tooltip_calls: list[tuple[str, str | None]] = []
+
+    def _capture_tooltip(_owner, html: str, *, element_id: str | None = None) -> None:
+        tooltip_calls.append((html, element_id))
+
+    monkeypatch.setattr(idle_widgets_module, "show_stained_tooltip", _capture_tooltip)
+    card._show_tooltip()
+
+    assert tooltip_calls
+    tooltip_html, tooltip_element = tooltip_calls[-1]
+    assert "Misplaced lane:" not in tooltip_html
+    assert MISMATCH_TOOLTIP_VALUE_COLOR in tooltip_html
+    assert "<b>0.25x</b>" in tooltip_html
+    assert tooltip_element == "fire"
+
+
+def test_idle_onsite_tooltip_shows_penalized_values_without_text() -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    card = IdleOnsiteCharacterCard(
+        char_id="onsite_hero",
+        plugin=CharacterPlugin(
+            char_id="onsite_hero",
+            display_name="Onsite Hero",
+            stars=5,
+            damage_type_id="fire",
+        ),
+        idle_state=_FakeIdleStateForOffsite(
+            misplacement_stat_multiplier=0.05,
+            misplacement_exp_multiplier=0.25,
+        ),
+        rng=random.Random(5),
+        stack_count=1,
+    )
+    snapshot = card.snapshot()
+    assert snapshot is not None
+    data, stats = snapshot
+    card.apply_snapshot(data, stats, maxima={})
+
+    assert "Misplaced lane:" not in card._tooltip_html
+    assert MISMATCH_TOOLTIP_VALUE_COLOR in card._tooltip_html
+    assert "<b>0.25x</b>" in card._tooltip_html
+    assert card.property("elementId") == "fire"
 
 
 def test_idle_offsite_portrait_is_bottom_aligned_and_auto_sizes_to_target() -> None:
@@ -276,3 +380,45 @@ def test_idle_bars_are_bottom_anchored_for_onsite_and_offsite() -> None:
     assert isinstance(onsite_last, QProgressBar)
     assert onsite_second_last.objectName() == "onsiteHpBar"
     assert onsite_last.objectName() == "onsiteExpBar"
+
+
+def test_idle_offsite_exp_bar_uses_tilde_for_tiny_nonzero_gain() -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    card = IdleOffsiteCard(
+        char_id="offsite_hero",
+        plugin=None,
+        idle_state=_FakeIdleStateForOffsite(exp_gain_per_second=0.001),
+        rng=random.Random(3),
+        stack_count=1,
+    )
+    card.update_display()
+
+    exp_bar = card.findChild(QProgressBar, "idleExpBar")
+    assert exp_bar is not None
+    assert exp_bar.format() == "EXP 12 / 30 ~0.00/s"
+
+
+def test_idle_onsite_exp_bar_uses_tilde_for_tiny_nonzero_gain() -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    card = IdleOnsiteCharacterCard(
+        char_id="onsite_hero",
+        plugin=CharacterPlugin(
+            char_id="onsite_hero",
+            display_name="Onsite Hero",
+            stars=5,
+            damage_type_id="fire",
+        ),
+        idle_state=_FakeIdleStateForOffsite(exp_gain_per_second=0.001),
+        rng=random.Random(5),
+        stack_count=1,
+    )
+    snapshot = card.snapshot()
+    assert snapshot is not None
+    data, stats = snapshot
+    card.apply_snapshot(data, stats, maxima={})
+
+    exp_bar = card.findChild(QProgressBar, "onsiteExpBar")
+    assert exp_bar is not None
+    assert exp_bar.format() == "EXP 12 / 30 ~0.00/s"

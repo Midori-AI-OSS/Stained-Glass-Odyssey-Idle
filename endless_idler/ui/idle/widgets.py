@@ -15,8 +15,10 @@ from PySide6.QtWidgets import QProgressBar
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
+from endless_idler.combat.party_stats import apply_base_stat_multiplier
 from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.ui.party_builder_common import build_character_stats_tooltip
+from endless_idler.ui.party_builder_common import format_idle_exp_rate_suffix
 from endless_idler.ui.tooltip import hide_stained_tooltip
 from endless_idler.ui.tooltip import show_stained_tooltip
 
@@ -208,10 +210,8 @@ class IdleOffsiteCard(QFrame):
         self._name_label.setText(f"{self._display_name} ({max(1, level)})")
         self._exp_bar.setRange(0, max(1, int(next_exp)))
         self._exp_bar.setValue(int(exp))
-        if gain_per_second > 0:
-            self._exp_bar.setFormat(f"EXP {max(0, int(exp))} / {max(1, int(next_exp))} +{gain_per_second:.2f}/s")
-        else:
-            self._exp_bar.setFormat(f"EXP {max(0, int(exp))} / {max(1, int(next_exp))}")
+        rate_suffix = format_idle_exp_rate_suffix(gain_per_second)
+        self._exp_bar.setFormat(f"EXP {max(0, int(exp))} / {max(1, int(next_exp))}{rate_suffix}")
 
         self._hp_bar.setRange(0, max(1, int(max_hp)))
         self._hp_bar.setValue(int(hp))
@@ -235,6 +235,18 @@ class IdleOffsiteCard(QFrame):
         if hasattr(event, "type") and event.type() == QEvent.Type.Enter:
             self._show_tooltip()
         return super().eventFilter(watched, event)  # type: ignore[misc]
+
+    def _misplacement_stat_multiplier(self) -> float:
+        getter = getattr(self._idle_state, "get_misplacement_stat_multiplier", None)
+        if not callable(getter):
+            return 1.0
+        return float(getter(self._char_id))
+
+    def _misplacement_exp_multiplier(self) -> float:
+        getter = getattr(self._idle_state, "get_misplacement_exp_multiplier", None)
+        if not callable(getter):
+            return 1.0
+        return float(getter(self._char_id))
 
     def _show_tooltip(self) -> None:
         data = self._idle_state.get_char_data(self._char_id)
@@ -273,6 +285,12 @@ class IdleOffsiteCard(QFrame):
             progress=progress,
             saved_base_stats=saved_base_stats,
         )
+        stat_multiplier = self._misplacement_stat_multiplier()
+        exp_multiplier = self._misplacement_exp_multiplier()
+        apply_base_stat_multiplier(
+            stats=stats,
+            multiplier=stat_multiplier,
+        )
         try:
             stats.hp = max(0, int(float(data.get("hp", stats.hp))))
         except (TypeError, ValueError):
@@ -285,6 +303,8 @@ class IdleOffsiteCard(QFrame):
             stacks=stack_count if stack_count > 1 else None,
             stackable=stack_count > 1,
             stats=stats,
+            mismatch=(stat_multiplier < 1.0 or exp_multiplier < 1.0),
+            exp_multiplier_override=(stats.exp_multiplier * exp_multiplier),
         )
         if tooltip_html:
             show_stained_tooltip(self, tooltip_html, element_id=stats.element_id)
@@ -343,6 +363,10 @@ class IdleOffsiteCard(QFrame):
             stacks=stack_count,
             progress=progress,
             saved_base_stats=saved_base_stats,
+        )
+        apply_base_stat_multiplier(
+            stats=stats,
+            multiplier=self._misplacement_stat_multiplier(),
         )
         
         element_id = str(getattr(stats, "element_id", "generic") or "generic")

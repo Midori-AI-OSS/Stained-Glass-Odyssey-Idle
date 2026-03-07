@@ -16,10 +16,12 @@ from PySide6.QtWidgets import QProgressBar
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
+from endless_idler.combat.party_stats import apply_base_stat_multiplier
 from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.combat.stats import Stats
 from endless_idler.ui.onsite.stat_bars import StatBarsPanel
 from endless_idler.ui.party_builder_common import build_character_stats_tooltip
+from endless_idler.ui.party_builder_common import format_idle_exp_rate_suffix
 from endless_idler.ui.tooltip import hide_stained_tooltip
 from endless_idler.ui.tooltip import show_stained_tooltip
 
@@ -262,6 +264,8 @@ class OnsiteCharacterCardBase(QFrame):
         stackable: bool,
         stats: Stats,
         maxima: dict[str, float],
+        mismatch: bool = False,
+        exp_multiplier_override: float | None = None,
     ) -> None:
         self._stats = stats
         self._tooltip_html = build_character_stats_tooltip(
@@ -270,6 +274,8 @@ class OnsiteCharacterCardBase(QFrame):
             stacks=stacks,
             stackable=stackable,
             stats=stats,
+            mismatch=mismatch,
+            exp_multiplier_override=exp_multiplier_override,
         )
 
         if self._stats_panel is None:
@@ -451,6 +457,18 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
     def char_id(self) -> str:
         return self._char_id
 
+    def _misplacement_stat_multiplier(self) -> float:
+        getter = getattr(self._idle_state, "get_misplacement_stat_multiplier", None)
+        if not callable(getter):
+            return 1.0
+        return float(getter(self._char_id))
+
+    def _misplacement_exp_multiplier(self) -> float:
+        getter = getattr(self._idle_state, "get_misplacement_exp_multiplier", None)
+        if not callable(getter):
+            return 1.0
+        return float(getter(self._char_id))
+
     def snapshot(self) -> tuple[dict, Stats] | None:
         getter = getattr(self._idle_state, "get_char_data", None)
         if not callable(getter):
@@ -492,6 +510,11 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
             progress=progress,
             saved_base_stats=saved_base_stats,
         )
+        stat_multiplier = self._misplacement_stat_multiplier()
+        apply_base_stat_multiplier(
+            stats=stats,
+            multiplier=stat_multiplier,
+        )
         return data, stats
 
     def apply_snapshot(self, data: dict, stats: Stats, *, maxima: dict[str, float]) -> None:
@@ -512,9 +535,8 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
             except Exception:
                 gain_per_second = 0.0
 
-        exp_format = f"EXP {max(0, int(exp))} / {max(1, int(next_exp))}"
-        if gain_per_second > 0:
-            exp_format = f"{exp_format} +{gain_per_second:.2f}/s"
+        rate_suffix = format_idle_exp_rate_suffix(gain_per_second)
+        exp_format = f"EXP {max(0, int(exp))} / {max(1, int(next_exp))}{rate_suffix}"
 
         self.set_level(level)
         self.set_hp(current=hp, max_hp=max_hp)
@@ -552,6 +574,8 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
 
         stars = getattr(self._plugin, "stars", None) if self._plugin else None
         display_name = getattr(self._plugin, "display_name", self._char_id) if self._plugin else self._char_id
+        stat_multiplier = self._misplacement_stat_multiplier()
+        exp_multiplier = self._misplacement_exp_multiplier()
         self.set_stats(
             name=str(display_name),
             stars=stars,
@@ -559,4 +583,6 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
             stackable=stack_count > 1,
             stats=stats,
             maxima=maxima,
+            mismatch=(stat_multiplier < 1.0 or exp_multiplier < 1.0),
+            exp_multiplier_override=(stats.exp_multiplier * exp_multiplier),
         )

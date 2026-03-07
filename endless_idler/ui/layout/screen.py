@@ -33,9 +33,14 @@ from PySide6.QtWidgets import QSizePolicy
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
+from endless_idler.characters.placement_rules import MISPLACED_EXP_MULTIPLIER
+from endless_idler.characters.placement_rules import MISPLACED_STAT_MULTIPLIER
+from endless_idler.characters.placement_rules import lane_allows_placement
+from endless_idler.characters.placement_rules import plugin_lane_mismatch
 from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.characters.plugins import discover_character_plugins
 from endless_idler.combat.damage_types import normalize_damage_type_id
+from endless_idler.combat.party_stats import apply_base_stat_multiplier
 from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.save import OFFSITE_SLOTS
 from endless_idler.save import ONSITE_SLOTS
@@ -289,6 +294,13 @@ class _CharacterChip(QFrame):
         placement_key = str(placement or "both").strip().lower()
         if placement_key not in {"onsite", "offsite", "both"}:
             placement_key = "both"
+        mismatch = source_lane in {"onsite", "offsite"} and not lane_allows_placement(
+            lane=source_lane,
+            placement=placement_key,
+        )
+        self.setProperty("placementMismatch", mismatch)
+        placement_top.setProperty("mismatch", mismatch)
+        placement_bottom.setProperty("mismatch", mismatch)
         placement_top.setProperty("filled", placement_key in {"onsite", "both"})
         placement_bottom.setProperty("filled", placement_key in {"offsite", "both"})
         _repolish(placement_top)
@@ -792,6 +804,13 @@ class LayoutScreenWidget(QWidget):
         self._portrait_by_id[char_id] = image_path
         return image_path
 
+    def _assigned_lane_for_char(self, char_id: str) -> str:
+        if char_id in self._save.onsite:
+            return "onsite"
+        if char_id in self._save.offsite:
+            return "offsite"
+        return "unassigned"
+
     def _live_idle_tooltip_snapshot(self, char_id: str) -> tuple[dict[str, object], int] | None:
         host = self.parentWidget()
         if host is None:
@@ -890,6 +909,13 @@ class LayoutScreenWidget(QWidget):
             progress=progress,
             saved_base_stats=saved_base_stats,
         )
+        lane = self._assigned_lane_for_char(char_id)
+        mismatch = plugin_lane_mismatch(lane=lane, plugin=plugin)
+        if mismatch:
+            apply_base_stat_multiplier(
+                stats=stats,
+                multiplier=MISPLACED_STAT_MULTIPLIER,
+            )
         if current_hp is not None:
             stats.hp = max(0, min(stats.max_hp, current_hp))
 
@@ -899,6 +925,12 @@ class LayoutScreenWidget(QWidget):
             stacks=stacks if stacks > 1 else None,
             stackable=stacks > 1,
             stats=stats,
+            mismatch=mismatch,
+            exp_multiplier_override=(
+                stats.exp_multiplier * MISPLACED_EXP_MULTIPLIER
+                if mismatch
+                else None
+            ),
         )
         element_id = str(getattr(stats, "element_id", "generic") or "generic")
         return tooltip_html, element_id
@@ -1110,6 +1142,11 @@ class LayoutScreenWidget(QWidget):
         self._autosave_timer.stop()
         self._status_clear_timer.stop()
         self._clear_status()
+
+    def persist_now(self) -> None:
+        self._autosave_timer.stop()
+        self._status_clear_timer.stop()
+        self._persist_layout()
 
     def _set_status(self, text: str) -> None:
         if self._status_label is None:
