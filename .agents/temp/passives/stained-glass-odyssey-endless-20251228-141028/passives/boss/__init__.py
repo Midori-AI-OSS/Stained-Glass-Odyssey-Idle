@@ -1,1 +1,0 @@
-"""Boss rank passive stubs."""
