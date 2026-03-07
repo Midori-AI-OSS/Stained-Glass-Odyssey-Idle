@@ -14,6 +14,7 @@ from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.save import STANDBY_SLOTS
 from endless_idler.save import RunSave
 from endless_idler.ui.layout.screen import LayoutScreenWidget
+from endless_idler.ui.party_builder_common import MISMATCH_TOOLTIP_VALUE_COLOR
 from endless_idler.ui.theme.layout_screen_widget import STYLESHEET as LAYOUT_SCREEN_STYLESHEET
 
 
@@ -317,11 +318,41 @@ def test_layout_chip_shows_old_shop_placement_marker(monkeypatch) -> None:
     assert chips
     squares = [child for child in chips[0].findChildren(QFrame) if child.objectName() == "LayoutPlacementSquare"]
     assert len(squares) == 2
+    assert all(square.property("mismatch") is False for square in squares)
 
     onsite_marker = next(square for square in squares if square.property("placementSlot") == "onsite")
     offsite_marker = next(square for square in squares if square.property("placementSlot") == "offsite")
     assert onsite_marker.property("filled") is False
     assert offsite_marker.property("filled") is True
+    screen.deleteLater()
+
+
+def test_layout_chip_marks_wrong_lane_mismatch(monkeypatch) -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    save = RunSave()
+    save.onsite[0] = "offsite_char"
+    fake_store = _FakeSaveStore(save)
+    monkeypatch.setattr(
+        layout_module,
+        "discover_character_plugins",
+        lambda: [
+            _plugin("offsite_char", "offsite", 4, damage_type_id="fire"),
+        ],
+    )
+
+    screen = LayoutScreenWidget(save_store=fake_store)
+    chips = [child for child in screen._onsite_slots[0].findChildren(QFrame) if child.objectName() == "LayoutCharacterChip"]
+    assert chips
+    assert chips[0].property("placementMismatch") is True
+    squares = [child for child in chips[0].findChildren(QFrame) if child.objectName() == "LayoutPlacementSquare"]
+    assert len(squares) == 2
+    assert all(square.property("mismatch") is True for square in squares)
+    tooltip_html, tooltip_element = chips[0]._tooltip_provider()
+    assert "Misplaced lane:" not in tooltip_html
+    assert MISMATCH_TOOLTIP_VALUE_COLOR in tooltip_html
+    assert "<b>0.25x</b>" in tooltip_html
+    assert tooltip_element == "fire"
     screen.deleteLater()
 
 
@@ -335,6 +366,8 @@ def test_layout_theme_uses_white_markers_and_no_inner_chip_outline() -> None:
     assert "border: 0px;" in LAYOUT_SCREEN_STYLESHEET
     assert 'QFrame#LayoutPlacementSquare[filled="true"]' in LAYOUT_SCREEN_STYLESHEET
     assert "background-color: rgba(255, 255, 255, 215);" in LAYOUT_SCREEN_STYLESHEET
+    assert 'QFrame#LayoutPlacementSquare[mismatch="true"][filled="true"]' in LAYOUT_SCREEN_STYLESHEET
+    assert "background-color: rgba(255, 70, 70, 230);" in LAYOUT_SCREEN_STYLESHEET
     assert 'placementSlot="onsite"][filled="true"]' not in LAYOUT_SCREEN_STYLESHEET
     assert 'placementSlot="offsite"][filled="true"]' not in LAYOUT_SCREEN_STYLESHEET
 
