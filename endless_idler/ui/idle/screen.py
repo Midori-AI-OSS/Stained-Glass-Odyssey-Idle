@@ -22,6 +22,7 @@ from endless_idler.characters.plugins import discover_character_plugins
 from endless_idler.combat.party_stats import apply_offsite_stat_share
 from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.combat.stats import Stats
+from endless_idler.progression import calculate_prestige_stat_gain_rate
 from endless_idler.run_save_store import RunSaveStore
 from endless_idler.run_rules import apply_idle_party_heal
 from endless_idler.run_rules import start_idle_heal_timer
@@ -33,6 +34,40 @@ from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
 from endless_idler.ui.idle.idle_state import IdleGameState
 from endless_idler.ui.onsite import IdleOnsiteCharacterCard
 from endless_idler.ui.onsite import compute_stat_maxima
+
+
+def build_prestige_confirmation_html(
+    *,
+    display_name: str,
+    exp_multiplier: float,
+    prestige_count: int,
+    stars: int,
+) -> str:
+    current_count = max(0, int(prestige_count))
+    new_prestige_count = current_count + 1
+    new_exp_mult = max(0.01, 0.5 * (0.5 ** current_count))
+    current_stat_rate = calculate_prestige_stat_gain_rate(current_count, stars) * 100.0
+    new_stat_rate = calculate_prestige_stat_gain_rate(new_prestige_count, stars) * 100.0
+
+    message = f"<b>Prestige {display_name}?</b><br><br>"
+    message += f"Current Prestige Level: {current_count}<br>"
+    message += f"New Prestige Level: {new_prestige_count}<br><br>"
+    message += "<b>Effects:</b><br>"
+    message += f"• EXP Multiplier: {exp_multiplier:.2f} → {new_exp_mult:.2f}<br>"
+    message += (
+        "• Weighted Stat Gain Rate: "
+        f"+{current_stat_rate:.2f}% → +{new_stat_rate:.2f}% per weighted stat upgrade<br>"
+    )
+
+    if new_exp_mult <= 0.01 and new_prestige_count >= 5:
+        prestiges_past_floor = new_prestige_count - 4
+        penalty_multiplier = 2.0 ** prestiges_past_floor
+        message += f"<br><b>Warning:</b> EXP requirement penalty applied (x{penalty_multiplier:.1f})<br>"
+
+    message += (
+        "<br>Your weighted stat gains per level will increase, while EXP gain rate will be reduced."
+    )
+    return message
 
 
 class IdleScreenWidget(QWidget):
@@ -541,42 +576,28 @@ class IdleScreenWidget(QWidget):
         
         # Get current prestige count
         prestige_count = max(0, int(data.get("prestige_count", 0)))
-        new_prestige_count = prestige_count + 1
-        
-        # Calculate new values after prestige
-        new_exp_mult = 0.5 * (0.5 ** prestige_count)
-        new_exp_mult = max(0.01, new_exp_mult)
-        
-        # Calculate stat multiplier
-        new_stat_mult = 2.0 ** new_prestige_count
-        
+
         # Show confirmation dialog
         plugin = self._plugin_by_id.get(char_id)
-        display_name = getattr(plugin, "display_name", char_id) if plugin else char_id
-        
+        if plugin is None:
+            raise ValueError(f"Missing plugin metadata for prestige character {char_id!r}.")
+        display_name = getattr(plugin, "display_name", char_id)
+
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("Prestige Confirmation")
         msg_box.setIcon(QMessageBox.Icon.Question)
-        
-        message = f"<b>Prestige {display_name}?</b><br><br>"
-        message += f"Current Prestige Level: {prestige_count}<br>"
-        message += f"New Prestige Level: {new_prestige_count}<br><br>"
-        message += "<b>Effects:</b><br>"
-        message += f"• EXP Multiplier: {exp_multiplier:.2f} → {new_exp_mult:.2f}<br>"
-        message += f"• Stat Gain Multiplier: x{2.0 ** prestige_count:.1f} → x{new_stat_mult:.1f}<br>"
-        
-        # Check if we're at or past the floor
-        if new_exp_mult <= 0.01 and new_prestige_count >= 5:
-            prestiges_past_floor = new_prestige_count - 4
-            penalty_multiplier = 2.0 ** prestiges_past_floor
-            message += f"<br><b>⚠️ Warning:</b> EXP requirement penalty applied (x{penalty_multiplier:.1f})<br>"
-        
-        message += "<br>Your stat gains per level will <b>double</b>, but EXP gain rate will be <b>reduced</b>."
-        
-        msg_box.setText(message)
+
+        msg_box.setText(
+            build_prestige_confirmation_html(
+                display_name=display_name,
+                exp_multiplier=exp_multiplier,
+                prestige_count=prestige_count,
+                stars=int(getattr(plugin, "stars", 0) or 0),
+            )
+        )
         msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         msg_box.setDefaultButton(QMessageBox.StandardButton.No)
-        
+
         result = msg_box.exec()
         if result != QMessageBox.StandardButton.Yes:
             return

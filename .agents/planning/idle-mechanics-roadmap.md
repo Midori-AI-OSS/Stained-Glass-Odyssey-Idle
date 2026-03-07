@@ -6,63 +6,58 @@ This planning doc captures the current mechanics baseline and the intended futur
 It is decision-oriented and separates implemented behavior from planned behavior to avoid confusion.
 
 Date captured: 2026-03-05
-Last updated: 2026-03-05
+Last updated: 2026-03-07
 
 ## Current Baseline (Fact-Checked)
 
-- Active runtime path is Home + Idle.
+- Active runtime path is Home + Idle + Layout.
 - Battle/foe systems are legacy and not part of the active runtime flow.
-- Stars currently scale combat stats, not rebirth/prestige gain formulas.
-- Character plugin rarities are mostly 5-7 today, with metadata fallback behavior still allowing lower values when unspecified.
+- Layout is a shipped menu entry.
 - Warp is currently a stub entry in the menu.
+- Brand-new saves bootstrap exactly 1 starter character.
+- Starter pool is:
+  - `lady_darkness`
+  - `persona_light_and_dark`
+- `lady_light` is excluded from the starter pool because current placement is offsite-only.
+- Older empty saves are not auto-repaired; bootstrap is only for truly missing saves.
+- Layout reuses dedicated drag/drop party management without the old shop/reroll/sell/merge/fight/reward flow.
+- Layout ordering is shipped with:
+  - `save_order`
+  - `rarity_desc`
+  - `alphabetical`
+  - heuristic `recent`
+- `recent` ordering is a reversed display heuristic, not persisted acquisition history.
+- Layout edits use debounced autosave and apply an idle cooldown before the next idle tick processing window.
 - No current energy subsystem exists for blessing channeling.
 - No current Upgrade Stone currency exists in save/runtime models.
 - Offsite EXP is currently sourced from onsite-driven pools in idle processing.
 - Character stacks currently affect two live lanes:
   - stat scaling via `party_scaling` stack multiplier: `1.0 + 0.12 * (stacks - 1)`
   - idle EXP via passive modifier: `(stacks * 0.05) + 1.0` (onsite and offsite gain paths)
+- Runtime character plugin rarity is now strict for discovered runtime characters:
+  - discovered runtime plugins must use stars `5-7`
+  - invalid discovered runtime stars fail plugin discovery with aggregated `ValueError`
+- Stars now affect both combat scaling and selected progression lanes.
+- Mech 1 live star-to-progression mapping is:
+  - 7 star = `2.5x`
+  - 6 star = `1.0x`
+  - 5 star = `0.5x`
+- Mech 1 live progression effects are:
+  - rebirth EXP reward gain is multiplied by star rank power
+  - post-50 rebirth EXP tax is softened by star rank power
+  - prestige weighted stat-growth magnitude is multiplied by star rank power
+- Mech 1 does not change:
+  - rebirth unlock gate
+  - rebirth reset behavior
+  - `rebirth_power`
+  - `rebirths`
+  - prestige unlock gate
+  - prestige EXP reset math
+  - prestige post-floor `req_multiplier` penalty
+  - weighted stat choice weights
+  - save schema
 
 ## Planned Mechanics (Target Design)
-
-### Mech 0: New-Save Onboarding and Layout Menu
-
-Planned intent:
-- Lower starter complexity by giving exactly one starter character on brand-new saves.
-- Add a dedicated menu for party layout management without coupling to shop/combat systems.
-
-Locked decisions:
-- New save starts with exactly 1 character.
-- Starter pool is a random pick between:
-  - `lady_darkness`
-  - `persona_light_and_dark`
-- `lady_light` is excluded from this starter pool because current placement is offsite-only.
-- Forced new-save resets are allowed for beta updates only.
-- Stable/non-beta updates should preserve saves (migrate as needed).
-- Layout/Plan menu reuses legacy drag/drop slot behavior from the old party-builder/shop layout flow.
-- Layout/Plan menu excludes shop/reroll/sell/merge/fight/reward behavior.
-- Bottom row lists owned, unassigned characters and supports scrolling when overflow occurs.
-
-Pending:
-- Final menu label decision ("Layout" vs "Plan").
-- Final ordering rule for bottom-row owned characters (for example: manual, rarity, alphabetical, or recent).
-- Final save-write cadence for drag/drop edits (immediate save vs explicit confirm action).
-
-### Mech 1: Star Bands and Character Progression Weighting
-
-Locked anchors:
-- 1-4 stars are weapon parts only, not character rarity tiers.
-- 5-7 stars are character rarity tiers.
-- Character-star progression anchors remain:
-  - 7 star = 2.5x
-  - 6 star = 1.0x
-  - 5 star = 0.5x
-
-Planned intent:
-- Character star rank (5-7 only) should affect rebirth/prestige gain-side progression values.
-
-Pending:
-- Exact rebirth/prestige gain terms affected by 5-7 star multipliers.
-- Exact migration behavior for any character metadata that lands outside 5-7.
 
 ### Mech 2: Blessing Upgrade Layer and Shard Progression
 
@@ -76,10 +71,10 @@ Locked decisions:
 - Completion grants consumable shard output.
 - Pacing target is very slow (years-scale direction).
 - High-EXP dampener concept for shard odds:
-  - p_eff = p_base / (1 + 15000 * floor((exp_s - 1000) / 100))
+  - `p_eff = p_base / (1 + 15000 * floor((exp_s - 1000) / 100))`
 
 Pending:
-- Exact unit definition for p_base (percent vs probability conversion details).
+- Exact unit definition for `p_base` (percent vs probability conversion details).
 - Exact years-scale balancing targets.
 
 ### Mech 3: Rebirth Shard Drops and Blessing Channeling
@@ -200,7 +195,6 @@ Pending:
 
 ## Open High-Impact Decisions
 
-- Final Layout/Plan menu naming, bottom-row ordering policy, and save-write cadence.
 - Final star-to-weapon-power mapping for 1-4 weapon parts.
 - Exact shard odds unit conversions and tick-to-time expectations.
 - Exact rebirth drop formula and caps/floors policy.

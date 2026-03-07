@@ -4,6 +4,8 @@ import math
 import time
 import random
 
+from typing import Any
+
 from PySide6.QtCore import QObject
 from PySide6.QtCore import Signal
 
@@ -11,6 +13,10 @@ from endless_idler.combat.party_stats import apply_offsite_stat_share as apply_o
 from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.combat.party_stats import party_scaling
 from endless_idler.combat.stats import Stats
+from endless_idler.progression import calculate_prestige_stat_gain_rate
+from endless_idler.progression import calculate_rebirth_exp_mult_gain
+from endless_idler.progression import calculate_rebirth_exp_tax
+from endless_idler.progression import calculate_rebirth_power
 
 
 LOSS_EXP_MULTIPLIER = 0.5
@@ -23,27 +29,6 @@ SHARED_EXP_OFFSITE_MULTIPLIER = 1.5
 IDLE_TICK_INTERVAL_SECONDS = 0.1
 IDLE_BLESSING_STEP_SECONDS = 300.0
 IDLE_BLESSING_STEP_MULTIPLIER = 1.025 ** (1.0 / 6.0)
-
-
-def calculate_rebirth_power(level: int) -> float:
-    """
-    Calculate the power value for rebirth mechanics.
-    
-    Formula: power = 1 + 0.15 * (L - 50)
-    Where L is the current level at rebirth time (must be >= 50).
-    
-    This power value is used for:
-    - EXP multiplier bonus calculation
-    - Post-level-50 EXP scaling
-    
-    Args:
-        level: Current character level at rebirth time (must be >= 50)
-        
-    Returns:
-        The calculated power value as a float
-    """
-    level = max(50, int(level))
-    return 1.0 + 0.15 * float(level - 50)
 
 
 class IdleGameState(QObject):
@@ -92,7 +77,7 @@ class IdleGameState(QObject):
         self._shared_exp_percentage = max(1, min(95, int(shared_exp_percentage)))
         self._risk_reward_level = max(0, min(150, int(risk_reward_level)))
 
-        self._char_data: dict[str, dict] = {}
+        self._char_data: dict[str, dict[str, Any]] = {}
         for char_id in list(dict.fromkeys([*char_ids, *self._offsite_ids])):
             plugin = plugins_by_id.get(char_id)
             if not plugin:
@@ -236,6 +221,12 @@ class IdleGameState(QObject):
 
         self._apply_offsite_stat_share_to_onsite_hp()
 
+    def _progression_stars_for_char(self, char_id: str) -> int:
+        plugin = self._plugins_by_id.get(char_id)
+        if plugin is None:
+            raise ValueError(f"Missing character plugin metadata for {char_id!r}.")
+        return int(getattr(plugin, "stars", 0) or 0)
+
     def _apply_offsite_stat_share_to_onsite_hp(self) -> None:
         if not self._char_ids:
             return
@@ -368,12 +359,13 @@ class IdleGameState(QObject):
         # Formula: power = 1 + 0.15 * (L - 50)
         power = calculate_rebirth_power(old_level)
         data["rebirth_power"] = power
-        
-        # New EXP multiplier formula based on power
-        # Formula: rebirth_exp_mult_gain = 0.01 + (power * 0.000005)
-        exp_mult_gain = 0.01 + (power * 0.000005)
+
+        exp_mult_gain = calculate_rebirth_exp_mult_gain(
+            power=power,
+            stars=self._progression_stars_for_char(char_id),
+        )
         data["exp_multiplier"] = float(max(0.0, float(data.get("exp_multiplier", 1.0)))) + exp_mult_gain
-        
+
         data["rebirths"] = max(0, int(data.get("rebirths", 0))) + 1
 
         req_mult = float(data.get("req_multiplier", 1.0))
@@ -592,7 +584,7 @@ class IdleGameState(QObject):
 
         return 0.0
 
-    def _death_exp_debuff_multiplier(self, data: dict) -> float:
+    def _death_exp_debuff_multiplier(self, data: dict[str, Any]) -> float:
         now = float(self._time())
         try:
             until = float(max(0.0, float(data.get("death_exp_debuff_until", 0.0))))
@@ -676,31 +668,21 @@ class IdleGameState(QObject):
 
         level = data["level"]
         req_mult = data["req_multiplier"]
-        
-        # Post-level-50 EXP scaling using power-based formula
-        # Every 5 levels after 50, multiply by: (1.25 + (0.05 * power))
-        # The multiplier compounds at levels 55, 60, 65, 70, etc.
-        if level >= 50:
-            power = float(data.get("rebirth_power", 1.0))
-            step_multiplier = 1.25 + (0.05 * power)
-            steps = (level - 50) // 5
-            tax = step_multiplier ** steps
-        else:
-            tax = 1.0
-            
+
+        tax = calculate_rebirth_exp_tax(
+            level=level,
+            rebirth_power=float(data.get("rebirth_power", 1.0)),
+            stars=self._progression_stars_for_char(char_id),
+        )
         data["next_exp"] = (level * 30 * req_mult * tax) * self._rng.uniform(0.95, 1.05)
         self._apply_offsite_stat_share_to_onsite_hp()
 
     def _apply_weighted_stat_upgrades(self, *, char_id: str, base_stats: dict[str, float], level: int) -> None:
-        # Get prestige_count to apply stat gain multiplier
         data = self._char_data.get(char_id)
         prestige_count = 0
         if data:
             prestige_count = max(0, int(data.get("prestige_count", 0)))
-        
-        # Calculate prestige stat multiplier: 2^prestige_count
-        prestige_multiplier = 2.0 ** prestige_count
-        
+
         points = 1 + (max(1, int(level)) // 10)
         stat_keys = (
             "atk",
@@ -725,12 +707,12 @@ class IdleGameState(QObject):
 
             weights.append(max(0.1, float(weight)))
 
-        # Base stat gain rate is 0.1% (1.001 multiplier)
-        # Apply prestige multiplier to make each gain more impactful
-        base_gain_rate = 0.001
-        prestige_gain_rate = base_gain_rate * prestige_multiplier
+        prestige_gain_rate = calculate_prestige_stat_gain_rate(
+            prestige_count=prestige_count,
+            stars=self._progression_stars_for_char(char_id),
+        )
         stat_multiplier = 1.0 + prestige_gain_rate
-        
+
         for stat_name in self._rng.choices(list(stat_keys), weights=weights, k=points):
             current = float(base_stats.get(stat_name, 1.0))
             base_stats[stat_name] = current * stat_multiplier
@@ -775,7 +757,7 @@ class IdleGameState(QObject):
 
             data[schedule_key] = int(next_gain_level)
 
-    def get_char_data(self, char_id: str) -> dict | None:
+    def get_char_data(self, char_id: str) -> dict[str, Any] | None:
         return self._char_data.get(char_id)
 
     def get_party_level(self) -> int:

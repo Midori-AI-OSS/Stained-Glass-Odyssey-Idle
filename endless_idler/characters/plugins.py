@@ -18,6 +18,7 @@ from pathlib import Path
 
 from endless_idler.characters.metadata import DEFAULT_BASE_STATS
 from endless_idler.characters.metadata import extract_character_metadata
+from endless_idler.progression import validate_progression_stars
 
 
 _IMAGE_EXTENSIONS = (
@@ -74,6 +75,7 @@ def discover_character_plugins() -> list[CharacterPlugin]:
     """Discover character plugins from `endless_idler/characters/*.py` files."""
 
     plugins: list[CharacterPlugin] = []
+    invalid_progression_stars: list[tuple[str, int, str]] = []
     for path in sorted(_CHARACTERS_DIR.glob("*.py")):
         if path.name in {"__init__.py", "plugins.py", "foe_base.py", "player.py", "slime.py"}:
             continue
@@ -92,6 +94,11 @@ def discover_character_plugins() -> list[CharacterPlugin]:
         ) = extract_character_metadata(path)
         if not char_id:
             continue
+        try:
+            _ = validate_progression_stars(stars)
+        except ValueError:
+            invalid_progression_stars.append((char_id, int(stars), path.name))
+            continue
         plugins.append(
             CharacterPlugin(
                 char_id=char_id,
@@ -105,6 +112,16 @@ def discover_character_plugins() -> list[CharacterPlugin]:
                 damage_reduction_passes=damage_reduction_passes,
                 passives=passives,
             )
+        )
+
+    if invalid_progression_stars:
+        details = ", ".join(
+            f"{char_id}={stars} ({filename})"
+            for char_id, stars, filename in invalid_progression_stars
+        )
+        raise ValueError(
+            "Invalid progression stars for runtime character plugins. "
+            + f"Expected stars 5-7 for discovered runtime characters; found: {details}"
         )
 
     return plugins
