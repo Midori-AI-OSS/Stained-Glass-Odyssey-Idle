@@ -5,11 +5,13 @@ import random
 from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.save import OFFSITE_SLOTS
 from endless_idler.save import ONSITE_SLOTS
+from endless_idler.save import STANDBY_SLOTS
 from endless_idler.save import RunSave
 
 
 _ONSITE_PLACEMENTS = frozenset({"onsite", "both"})
 _OFFSITE_PLACEMENTS = frozenset({"offsite", "both"})
+_STARTER_CHAR_IDS = ("lady_darkness", "persona_light_and_dark")
 
 
 def has_active_party(save: RunSave) -> bool:
@@ -26,41 +28,26 @@ def bootstrap_party(
     plugins: list[CharacterPlugin],
     rng: random.Random,
 ) -> None:
-    onsite_pool = [plugin.char_id for plugin in plugins if plugin.placement in _ONSITE_PLACEMENTS]
-    offsite_pool = [plugin.char_id for plugin in plugins if plugin.placement in _OFFSITE_PLACEMENTS]
-
-    rng.shuffle(onsite_pool)
-    rng.shuffle(offsite_pool)
-
-    used: set[str] = set()
     onsite: list[str | None] = [None] * ONSITE_SLOTS
     offsite: list[str | None] = [None] * OFFSITE_SLOTS
+    standby: list[str | None] = [None] * STANDBY_SLOTS
 
-    onsite_index = 0
-    for char_id in onsite_pool:
-        if onsite_index >= ONSITE_SLOTS:
-            break
-        if char_id in used:
-            continue
-        onsite[onsite_index] = char_id
-        onsite_index += 1
-        used.add(char_id)
+    starter_pool = [plugin for plugin in plugins if plugin.char_id in _STARTER_CHAR_IDS]
+    if not starter_pool:
+        raise ValueError("Starter pool is empty; expected at least one starter plugin.")
 
-    offsite_index = 0
-    for char_id in offsite_pool:
-        if offsite_index >= OFFSITE_SLOTS:
-            break
-        if char_id in used:
-            continue
-        offsite[offsite_index] = char_id
-        offsite_index += 1
-        used.add(char_id)
+    starter = rng.choice(starter_pool)
+    starter_id = starter.char_id
+
+    if starter.placement in _ONSITE_PLACEMENTS:
+        onsite[0] = starter_id
+    elif starter.placement in _OFFSITE_PLACEMENTS:
+        offsite[0] = starter_id
+    else:
+        raise ValueError(f"Unsupported starter placement for {starter_id}: {starter.placement!r}")
 
     save.onsite = onsite
     save.offsite = offsite
+    save.standby = standby
 
-    active_ids = {char_id for char_id in onsite + offsite if char_id}
-    stacks: dict[str, int] = {}
-    for char_id in active_ids:
-        stacks[char_id] = max(1, int(save.stacks.get(char_id, 1)))
-    save.stacks = stacks
+    save.stacks = {starter_id: max(1, int(save.stacks.get(starter_id, 1)))}
