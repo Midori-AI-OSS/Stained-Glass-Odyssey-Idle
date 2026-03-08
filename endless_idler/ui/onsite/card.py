@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QPushButton
-from PySide6.QtWidgets import QProgressBar
+from endless_idler.ui.components.progress_bar import AnimatedProgressBar
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
@@ -53,7 +53,9 @@ class PortraitLabel(QLabel):
 
 
 class OnsiteStatsPopup(QFrame):
-    def __init__(self, *, on_close: Callable[[], None], parent: QWidget | None = None) -> None:
+    def __init__(
+        self, *, on_close: Callable[[], None], parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self._on_close = on_close
         self.setObjectName("onsiteStatPopup")
@@ -183,12 +185,10 @@ class OnsiteCharacterCardBase(QFrame):
             body.addWidget(stack_label)
             self._stack_label = stack_label
 
-        self._hp_bar = QProgressBar()
-        self._hp_bar.setObjectName("onsiteHpBar")
+        self._hp_bar = AnimatedProgressBar()
+        self._hp_bar.setProperty("stat", "hp")
         self._hp_bar.setTextVisible(True)
-        self._hp_bar.setRange(0, 1000)
-        self._hp_bar.setValue(1000)
-        self._hp_bar.setFormat("1000 / 1000")
+        self._hp_bar.set_value(1.0)
 
         if self._is_idle_mode:
             body.addStretch(1)
@@ -225,9 +225,7 @@ class OnsiteCharacterCardBase(QFrame):
     def set_hp(self, *, current: float, max_hp: float) -> None:
         current_hp = max(0, int(current))
         max_hp_value = max(1, int(max_hp))
-        self._hp_bar.setRange(0, max_hp_value)
-        self._hp_bar.setValue(min(current_hp, max_hp_value))
-        self._hp_bar.setFormat(f"{current_hp} / {max_hp_value}")
+        self._hp_bar.set_value(normalize_progress(current_hp, max_hp_value))
 
     def set_exp(self, *, current: float, max_exp: float, format_text: str) -> None:
         exp_value = max(0, int(current))
@@ -286,13 +284,13 @@ class OnsiteCharacterCardBase(QFrame):
 
         if self._stats_popup is not None:
             self._stats_popup.set_panel(self._stats_panel)
-        
+
         self._apply_element_tint(stats)
-        
+
         if self.underMouse() and self._tooltip_html:
             element_id = getattr(getattr(self, "_stats", None), "element_id", None)
             show_stained_tooltip(self, self._tooltip_html, element_id=element_id)
-    
+
     def _apply_element_tint(self, stats: Stats) -> None:
         element_id = str(getattr(stats, "element_id", "generic") or "generic")
         element_id = element_id.strip().lower().replace(" ", "_").replace("-", "_")
@@ -344,7 +342,9 @@ class OnsiteCharacterCardBase(QFrame):
             return
 
         if self._stats_popup is None:
-            self._stats_popup = OnsiteStatsPopup(on_close=self._on_popup_closed, parent=None)
+            self._stats_popup = OnsiteStatsPopup(
+                on_close=self._on_popup_closed, parent=None
+            )
 
         self._stats_popup.set_panel(self._stats_panel)
         pos = self._stats_button.mapToGlobal(QPoint(0, self._stats_button.height()))
@@ -414,7 +414,11 @@ class BattleOnsiteCharacterCard(OnsiteCharacterCardBase):
         exp_value = int(getattr(stats, "exp", 0) if stats is not None else 0)
         level = int(getattr(stats, "level", 1) if stats is not None else 1)
         exp_max = max(1, 100 * max(1, level))
-        self.set_exp(current=exp_value, max_exp=exp_max, format_text=f"EXP {max(0, exp_value)} / {exp_max}")
+        self.set_exp(
+            current=exp_value,
+            max_exp=exp_max,
+            format_text=f"EXP {max(0, exp_value)} / {exp_max}",
+        )
         self.set_level(level)
 
 
@@ -493,13 +497,17 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         except (TypeError, ValueError):
             stack_count = 1
 
-        stars = max(1, int(getattr(self._plugin, "stars", 1) or 1)) if self._plugin else 1
+        stars = (
+            max(1, int(getattr(self._plugin, "stars", 1) or 1)) if self._plugin else 1
+        )
 
         progress: dict[str, float | int] = {
             "level": max(1, int(data.get("level", 1))),
             "exp": float(max(0.0, float(data.get("exp", 0.0)))),
             "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
-            "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
+            "max_hp_level_bonus_version": max(
+                0, int(data.get("max_hp_level_bonus_version", 0))
+            ),
         }
 
         stats = build_scaled_character_stats(
@@ -517,7 +525,9 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         )
         return data, stats
 
-    def apply_snapshot(self, data: dict, stats: Stats, *, maxima: dict[str, float]) -> None:
+    def apply_snapshot(
+        self, data: dict, stats: Stats, *, maxima: dict[str, float]
+    ) -> None:
         stack_count = max(1, int(data.get("stack", 1)))
         self.set_stack_count(stack_count)
 
@@ -545,35 +555,37 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         # Check prestige availability first (exp_multiplier >= 10)
         exp_multiplier = float(data.get("exp_multiplier", 1.0))
         show_prestige = exp_multiplier >= 10.0
-        
+
         # Show rebirth button if level >= 50 and prestige is not available
         show_rebirth = max(1, int(level)) >= 50 and not show_prestige
 
         if show_prestige:
+
             def on_prestige_click() -> None:
                 if self._on_prestige is not None:
                     self._on_prestige(self._char_id)
-            
+
             self.set_action_button(
-                label="Prestige",
-                visible=True,
-                on_click=on_prestige_click
+                label="Prestige", visible=True, on_click=on_prestige_click
             )
         elif show_rebirth:
+
             def on_rebirth_click() -> None:
                 if self._on_rebirth is not None:
                     self._on_rebirth(self._char_id)
-            
+
             self.set_action_button(
-                label="Rebirth",
-                visible=True,
-                on_click=on_rebirth_click
+                label="Rebirth", visible=True, on_click=on_rebirth_click
             )
         else:
             self.set_action_button(label="", visible=False, on_click=None)
 
         stars = getattr(self._plugin, "stars", None) if self._plugin else None
-        display_name = getattr(self._plugin, "display_name", self._char_id) if self._plugin else self._char_id
+        display_name = (
+            getattr(self._plugin, "display_name", self._char_id)
+            if self._plugin
+            else self._char_id
+        )
         stat_multiplier = self._misplacement_stat_multiplier()
         exp_multiplier = self._misplacement_exp_multiplier()
         self.set_stats(
