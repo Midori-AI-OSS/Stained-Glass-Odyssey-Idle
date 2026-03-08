@@ -73,6 +73,15 @@ Required run-log fields:
 - Every new themable `objectName` or style-driving property must ship with a selector in the owning theme module.
 - When changing a style-driving property at runtime, repolish (`unpolish/polish/update`).
 
+## UI Development Requirements (Mandatory)
+
+When working on UI components, you MUST:
+1. Read `/home/lunamidori/nfs/Midori-AI-Github/Midori-AI-Mono-Repo/Endless-Idler/.agents/instructions/reusable_ui_components.md`
+2. Use existing reusable components whenever possible
+3. Contribute improvements to reusable components rather than creating duplicates
+
+This is a hard requirement for all UI work.
+
 ### Prohibited UI Patterns
 
 - Do not add persistent inline `setStyleSheet(...)` styling.
