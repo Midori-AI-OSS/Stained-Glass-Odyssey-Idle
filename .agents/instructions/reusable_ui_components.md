@@ -55,3 +55,33 @@ cooldown_bar.set_shimmer(0.4)
 # Enable reset mode for temporary effects
 progress_bar.set_reset_mode(True)
 ```
+
+## Tooltip
+Use `show_stained_tooltip()` for contextual information displays with glass-morphism styling.
+
+**When to use:**
+- Contextual information displays (item descriptions, stat explanations)
+- Element-specific visual feedback (damage type indicators)
+- Hover interactions requiring frosted glass effects
+
+**Configuration options:**
+- `show_stained_tooltip(owner, html, element_id)`: Display tooltip (element_id: `fire`/`ice`/`lightning`/`wind`/`dark`/`light`/`generic`)
+- `hide_stained_tooltip()`: Clear active tooltip
+
+**Best practices:**
+- Prefer dynamic `element_id` from context (e.g., `stats.element_id`)
+- Keep HTML content concise (1-3 lines)
+- Always call `hide_stained_tooltip()` before new content
+- Maintain screen-bound positioning (auto-handled by implementation)
+
+**Examples:**
+
+1. **Dynamic Element ID** (typical usage):
+```python
+show_stained_tooltip(self, self._tooltip_html, element_id=stats.element_id)
+```
+
+2. **Static Context** (simplified example):
+```python
+show_stained_tooltip(self, "<b>Fire Damage</b>", element_id="fire")
+```
