@@ -1,3 +1,3 @@
-"""Placeholder shard material item plugins."""
+"""Shard material item plugin package."""
 
 from __future__ import annotations

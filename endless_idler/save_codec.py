@@ -121,6 +121,9 @@ def as_character_progress_dict(value: object) -> dict[str, dict[str, float | int
         max_hp_level_bonus_version = as_int(
             raw_progress.get("max_hp_level_bonus_version", 0), default=0
         )
+        shard_bar_ticks = as_int(
+            raw_progress.get("shard_bar_ticks", 0), default=0
+        )
 
         progress: dict[str, float | int] = {
             "level": max(1, level),
@@ -136,6 +139,7 @@ def as_character_progress_dict(value: object) -> dict[str, dict[str, float | int
             "next_vitality_gain_level": max(0, next_vitality_gain_level),
             "next_mitigation_gain_level": max(0, next_mitigation_gain_level),
             "max_hp_level_bonus_version": max(0, max_hp_level_bonus_version),
+            "shard_bar_ticks": max(0, shard_bar_ticks),
         }
         result[char_id] = progress
     return result
@@ -200,6 +204,9 @@ def normalized_character_progress(
         max_hp_level_bonus_version = as_int(
             raw.get("max_hp_level_bonus_version", 0), default=0
         )
+        shard_bar_ticks = as_int(
+            raw.get("shard_bar_ticks", 0), default=0
+        )
         normalized[char_id] = {
             "level": max(1, level),
             "exp": float(max(0.0, exp)),
@@ -214,6 +221,7 @@ def normalized_character_progress(
             "next_vitality_gain_level": max(0, next_vitality_gain_level),
             "next_mitigation_gain_level": max(0, next_mitigation_gain_level),
             "max_hp_level_bonus_version": max(0, max_hp_level_bonus_version),
+            "shard_bar_ticks": max(0, shard_bar_ticks),
         }
     return normalized
 

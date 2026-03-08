@@ -12,6 +12,7 @@ from PySide6.QtCore import Signal
 from endless_idler.characters.placement_rules import MISPLACED_EXP_MULTIPLIER
 from endless_idler.characters.placement_rules import MISPLACED_STAT_MULTIPLIER
 from endless_idler.characters.placement_rules import plugin_lane_mismatch
+from endless_idler.combat.damage_types import normalize_damage_type_id
 from endless_idler.combat.party_stats import apply_base_stat_multiplier
 from endless_idler.combat.party_stats import apply_offsite_stat_share as apply_offsite_stat_share_to_stats
 from endless_idler.combat.party_stats import build_scaled_character_stats
@@ -34,6 +35,30 @@ IDLE_TICK_INTERVAL_SECONDS = 0.1
 IDLE_BLESSING_STEP_SECONDS = 300.0
 IDLE_BLESSING_STEP_MULTIPLIER = 1.025 ** (1.0 / 6.0)
 MIN_EXP_GAIN_PER_TICK = 0.0001
+SHARD_ROLL_INTERVAL_TICKS = 10
+SHARD_BAR_CYCLE_TICKS = 100
+SHARD_BASE_CHANCE_PERCENT = 0.0001
+SHARD_EXP_SMOOTHING_SECONDS = 60.0
+SHARD_DAMPENER_START_EXP_PER_SECOND = 1000.0
+SHARD_DAMPENER_BUCKET_SIZE = 100.0
+SHARD_DAMPENER_SCALE = 15000.0
+SHARD_ALLOWED_TYPES = frozenset(
+    {
+        "fire",
+        "ice",
+        "wind",
+        "lightning",
+        "light",
+        "dark",
+    }
+)
+SHARD_ITEM_ID_BY_TYPE = {
+    key: f"{key}_shard"
+    for key in SHARD_ALLOWED_TYPES
+}
+SHARD_EMA_ALPHA = 1.0 - math.exp(
+    -IDLE_TICK_INTERVAL_SECONDS / SHARD_EXP_SMOOTHING_SECONDS
+)
 
 
 class IdleGameState(QObject):
@@ -51,6 +76,7 @@ class IdleGameState(QObject):
         progress_by_id: dict[str, dict[str, float | int]] | None = None,
         stats_by_id: dict[str, dict[str, float]] | None = None,
         initial_stats_by_id: dict[str, dict[str, float]] | None = None,
+        inventory: dict[str, int] | None = None,
         exp_bonus_seconds: float = 0.0,
         exp_penalty_seconds: float = 0.0,
         exp_gain_scale: float = 1.0,
@@ -79,6 +105,7 @@ class IdleGameState(QObject):
         self._progress_by_id = progress_by_id or {}
         self._stats_by_id = stats_by_id or {}
         self._initial_stats_by_id = initial_stats_by_id or {}
+        self._inventory = inventory if isinstance(inventory, dict) else {}
         self._exp_bonus_seconds = float(max(0.0, exp_bonus_seconds))
         self._exp_penalty_seconds = float(max(0.0, exp_penalty_seconds))
         self._exp_gain_scale = float(max(0.0, exp_gain_scale))
@@ -130,6 +157,7 @@ class IdleGameState(QObject):
             death_exp_debuff_stacks = 0
             death_exp_debuff_until = 0.0
             max_hp_level_bonus_version = 0
+            shard_bar_ticks = 0
             if isinstance(saved, dict):
                 try:
                     level = max(1, int(saved.get("level", 1)))
@@ -175,6 +203,10 @@ class IdleGameState(QObject):
                     max_hp_level_bonus_version = max(0, int(saved.get("max_hp_level_bonus_version", 0)))
                 except (TypeError, ValueError):
                     max_hp_level_bonus_version = 0
+                try:
+                    shard_bar_ticks = max(0, int(saved.get("shard_bar_ticks", 0)))
+                except (TypeError, ValueError):
+                    shard_bar_ticks = 0
 
             now = float(self._time())
             if death_exp_debuff_until and now >= death_exp_debuff_until:
@@ -191,6 +223,7 @@ class IdleGameState(QObject):
             # Passive modifier formula: (stacks * 0.05) + 1.0
             # Provides 5% bonus per stack, starting at 1.05 with 1 stack
             passive_modifier = (stack * 0.05) + 1.0
+            reward_types = self._reward_types_for_char(char_id)
             self._char_data[char_id] = {
                 "level": level,
                 "exp": exp,
@@ -214,6 +247,9 @@ class IdleGameState(QObject):
                 "rebirth_power": rebirth_power,
                 "max_hp_level_bonus_version": max_hp_level_bonus_version,
                 "passive_modifier": passive_modifier,
+                "shard_bar_ticks": shard_bar_ticks % SHARD_BAR_CYCLE_TICKS,
+                "shard_exp_s_ema": 0.0,
+                "shard_reward_types": reward_types,
             }
 
             if isinstance(saved, dict):
@@ -241,6 +277,109 @@ class IdleGameState(QObject):
         if plugin is None:
             raise ValueError(f"Missing character plugin metadata for {char_id!r}.")
         return int(getattr(plugin, "stars", 0) or 0)
+
+    def _reward_types_for_char(self, char_id: str) -> tuple[str, ...]:
+        plugin = self._plugins_by_id.get(char_id)
+        if plugin is None:
+            return tuple()
+
+        raw = normalize_damage_type_id(
+            str(getattr(plugin, "damage_type_id", "generic") or "generic")
+        )
+        if not raw:
+            return tuple()
+
+        options: list[str] = []
+        if "/" in raw:
+            for part in raw.split("/"):
+                normalized = normalize_damage_type_id(part)
+                if normalized in SHARD_ALLOWED_TYPES and normalized not in options:
+                    options.append(normalized)
+        elif raw in SHARD_ALLOWED_TYPES:
+            options.append(raw)
+
+        return tuple(options)
+
+    def _shard_roll_percent(self, *, exp_s: float) -> float:
+        base = float(SHARD_BASE_CHANCE_PERCENT)
+        bucket = max(
+            0,
+            int(
+                math.floor(
+                    (float(exp_s) - SHARD_DAMPENER_START_EXP_PER_SECOND)
+                    / SHARD_DAMPENER_BUCKET_SIZE
+                )
+            ),
+        )
+        denominator = 1.0 + (SHARD_DAMPENER_SCALE * bucket)
+        if denominator <= 0.0:
+            return base
+        effective = base / denominator
+        return max(0.0, min(base, effective))
+
+    def _select_reward_shard_type(self, *, data: dict[str, Any]) -> str | None:
+        raw_types = data.get("shard_reward_types")
+        if not isinstance(raw_types, tuple):
+            return None
+        if len(raw_types) <= 0:
+            return None
+        if len(raw_types) == 1:
+            return str(raw_types[0])
+        selected = self._rng.choice(list(raw_types))
+        return str(selected)
+
+    def _award_shard(self, *, data: dict[str, Any]) -> None:
+        reward_type = self._select_reward_shard_type(data=data)
+        if not reward_type:
+            return
+        item_id = SHARD_ITEM_ID_BY_TYPE.get(reward_type)
+        if not item_id:
+            return
+        current = max(0, int(self._inventory.get(item_id, 0)))
+        self._inventory[item_id] = current + 1
+
+    def _update_shard_progress(
+        self,
+        *,
+        data: dict[str, Any],
+        awarded_exp: float,
+        roll_ready: bool,
+    ) -> None:
+        reward_types = data.get("shard_reward_types")
+        if not isinstance(reward_types, tuple) or len(reward_types) <= 0:
+            return
+
+        awarded = max(0.0, float(awarded_exp))
+        if IDLE_TICK_INTERVAL_SECONDS > 0.0:
+            awarded_eps = awarded / IDLE_TICK_INTERVAL_SECONDS
+        else:
+            awarded_eps = 0.0
+
+        try:
+            previous_ema = max(0.0, float(data.get("shard_exp_s_ema", 0.0)))
+        except (TypeError, ValueError):
+            previous_ema = 0.0
+        ema = previous_ema + (SHARD_EMA_ALPHA * (awarded_eps - previous_ema))
+        data["shard_exp_s_ema"] = max(0.0, float(ema))
+
+        if not roll_ready or awarded <= 0.0:
+            return
+
+        chance_percent = self._shard_roll_percent(exp_s=float(data["shard_exp_s_ema"]))
+        if chance_percent <= 0.0:
+            return
+        if self._rng.random() >= (chance_percent / 100.0):
+            return
+
+        try:
+            ticks = max(0, int(data.get("shard_bar_ticks", 0)))
+        except (TypeError, ValueError):
+            ticks = 0
+        ticks += 1
+        while ticks >= SHARD_BAR_CYCLE_TICKS:
+            ticks -= SHARD_BAR_CYCLE_TICKS
+            self._award_shard(data=data)
+        data["shard_bar_ticks"] = ticks
 
     def _is_misplaced_character(self, char_id: str) -> bool:
         return char_id in self._misplaced_onsite_ids or char_id in self._misplaced_offsite_ids
@@ -465,6 +604,7 @@ class IdleGameState(QObject):
     def process_tick(self) -> None:
         self._tick_count += 1
         self.tick_update.emit(self._tick_count)
+        roll_ready = self._tick_count % SHARD_ROLL_INTERVAL_TICKS == 0
 
         exp_multiplier = self._current_exp_multiplier()
         idle_exp_mult = self._calculate_idle_exp_mult()
@@ -485,7 +625,13 @@ class IdleGameState(QObject):
                 data=data,
             )
             awarded = onsite_allocated_share * recipient_modifier
-            data["exp"] += self._apply_min_exp_gain_floor(awarded)
+            awarded_gain = self._apply_min_exp_gain_floor(awarded)
+            data["exp"] += awarded_gain
+            self._update_shard_progress(
+                data=data,
+                awarded_exp=awarded_gain,
+                roll_ready=roll_ready,
+            )
 
             # Since minimum shared_exp is now 1%, all players get 0.5 HP regain
             # Previously, 0% sharing gave 0.1 regain as a penalty
@@ -513,7 +659,13 @@ class IdleGameState(QObject):
                     data=data,
                 )
                 awarded_gain = offsite_allocated_share * recipient_modifier
-                data["exp"] += self._apply_min_exp_gain_floor(awarded_gain)
+                awarded_gain = self._apply_min_exp_gain_floor(awarded_gain)
+                data["exp"] += awarded_gain
+                self._update_shard_progress(
+                    data=data,
+                    awarded_exp=awarded_gain,
+                    roll_ready=roll_ready,
+                )
                 data["hp"] = min(data["max_hp"], data["hp"] + 0.5)
                 if data["exp"] >= data["next_exp"]:
                     self._level_up(char_id)
@@ -885,6 +1037,10 @@ class IdleGameState(QObject):
                 death_exp_debuff_until = float(max(0.0, float(data.get("death_exp_debuff_until", 0.0))))
             except (TypeError, ValueError):
                 death_exp_debuff_until = 0.0
+            try:
+                shard_bar_ticks = max(0, int(data.get("shard_bar_ticks", 0)))
+            except (TypeError, ValueError):
+                shard_bar_ticks = 0
 
             payload[char_id] = {
                 "level": level,
@@ -900,6 +1056,7 @@ class IdleGameState(QObject):
                 "next_vitality_gain_level": max(0, int(data.get("next_vitality_gain_level", 0))),
                 "next_mitigation_gain_level": max(0, int(data.get("next_mitigation_gain_level", 0))),
                 "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
+                "shard_bar_ticks": shard_bar_ticks % SHARD_BAR_CYCLE_TICKS,
             }
         return payload
 

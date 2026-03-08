@@ -20,6 +20,7 @@ def test_registry_returns_registered_placeholder_items() -> None:
 
     assert "health_potion" in items
     assert "power_stone" in items
+    assert "dark_shard" in items
     assert "light_shard" in items
     assert "radiant_shield" in items
 

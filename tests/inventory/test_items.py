@@ -16,11 +16,14 @@ def test_placeholder_item_catalog_uses_expected_folders() -> None:
         "glass_fragment",
         "power_stone",
         "wisdom_stone",
+        "dark_shard",
         "fire_shard",
         "ice_shard",
         "light_shard",
+        "lightning_shard",
         "radiant_shield",
         "stained_sword",
+        "wind_shard",
     }
 
     assert set(get_all_items()) == expected_item_ids

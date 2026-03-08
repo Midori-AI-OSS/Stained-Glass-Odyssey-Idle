@@ -1,4 +1,4 @@
-"""Fire shard inventory item definition."""
+"""Lightning shard inventory item definition."""
 
 from __future__ import annotations
 
@@ -12,12 +12,12 @@ from endless_idler.inventory.types import ItemCategory
 
 @register_item
 @dataclass(frozen=True, slots=True)
-class FireShard(Item):
-    """Elemental shard infused with fire energy."""
+class LightningShard(Item):
+    """Elemental shard infused with lightning energy."""
 
-    id: str = "fire_shard"
-    name: str = "Fire Shard"
-    description: str = "A refined shard that channels volatile fire-aligned energy."
+    id: str = "lightning_shard"
+    name: str = "Lightning Shard"
+    description: str = "A charged shard crackling with lightning-aligned energy."
     category: ItemCategory = ItemCategory.MATERIAL
     rarity: Rarity = Rarity.UNCOMMON
-    image_pool: str = "fire"
+    image_pool: str = "lightning"

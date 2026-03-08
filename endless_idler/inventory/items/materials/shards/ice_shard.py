@@ -1,8 +1,4 @@
-"""PLACEHOLDER ITEM - DO NOT USE IN GAME YET.
-
-This placeholder exists only to validate the inventory plugin system.
-It is planned to be removed or replaced before live gameplay uses items.
-"""
+"""Ice shard inventory item definition."""
 
 from __future__ import annotations
 
@@ -17,11 +13,11 @@ from endless_idler.inventory.types import ItemCategory
 @register_item
 @dataclass(frozen=True, slots=True)
 class IceShard(Item):
-    """Placeholder elemental shard aligned with ice."""
+    """Elemental shard infused with ice energy."""
 
     id: str = "ice_shard"
     name: str = "Ice Shard"
-    description: str = "Placeholder elemental shard aligned with cold energy."
+    description: str = "A crystalline shard that condenses concentrated ice-aligned energy."
     category: ItemCategory = ItemCategory.MATERIAL
     rarity: Rarity = Rarity.UNCOMMON
     image_pool: str = "ice"

@@ -1,8 +1,4 @@
-"""PLACEHOLDER ITEM - DO NOT USE IN GAME YET.
-
-This placeholder exists only to validate the inventory plugin system.
-It is planned to be removed or replaced before live gameplay uses items.
-"""
+"""Light shard inventory item definition."""
 
 from __future__ import annotations
 
@@ -17,11 +13,11 @@ from endless_idler.inventory.types import ItemCategory
 @register_item
 @dataclass(frozen=True, slots=True)
 class LightShard(Item):
-    """Placeholder elemental shard aligned with radiant light."""
+    """Elemental shard infused with radiant light energy."""
 
     id: str = "light_shard"
     name: str = "Light Shard"
-    description: str = "Placeholder elemental shard aligned with radiant energy."
+    description: str = "A radiant shard that stores focused light-aligned energy."
     category: ItemCategory = ItemCategory.MATERIAL
     rarity: Rarity = Rarity.UNCOMMON
     image_pool: str = "light"

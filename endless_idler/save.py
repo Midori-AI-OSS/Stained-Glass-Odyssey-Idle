@@ -494,6 +494,7 @@ def reset_character_progress_for_new_run(
             "next_vitality_gain_level": 0,
             "next_mitigation_gain_level": 0,
             "max_hp_level_bonus_version": 0,
+            "shard_bar_ticks": 0,
         }
 
     return reset
