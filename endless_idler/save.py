@@ -7,9 +7,12 @@ import random
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
 from PySide6.QtCore import QStandardPaths
 
+from endless_idler.inventory import get_all_items
+from endless_idler.inventory import get_item_ids
 from endless_idler.save_codec import as_character_progress_dict
 from endless_idler.save_codec import as_character_stats_dict
 from endless_idler.save_codec import as_float
@@ -20,7 +23,7 @@ from endless_idler.save_codec import normalized_character_progress
 from endless_idler.save_codec import normalized_character_stats
 
 
-SAVE_VERSION = 9
+SAVE_VERSION = 10
 DEFAULT_RUN_TOKENS = 20
 DEFAULT_CHARACTER_COST = 1
 DEFAULT_SHOP_REROLL_COST = 2
@@ -61,6 +64,7 @@ class RunSave:
     offsite: list[str | None] = field(default_factory=lambda: [None] * OFFSITE_SLOTS)
     standby: list[str | None] = field(default_factory=lambda: [None] * STANDBY_SLOTS)
     stacks: dict[str, int] = field(default_factory=dict)
+    inventory: dict[str, int] = field(default_factory=dict)
     character_progress: dict[str, dict[str, float | int]] = field(default_factory=dict)
     character_stats: dict[str, dict[str, float]] = field(default_factory=dict)
     character_initial_stats: dict[str, dict[str, float]] = field(default_factory=dict)
@@ -78,6 +82,7 @@ class RunSave:
 
 class SaveManager:
     def __init__(self, path: Path | None = None) -> None:
+        self._path: Path
         self._path = path or _default_save_path()
 
     @property
@@ -93,45 +98,69 @@ class SaveManager:
             return None
 
         try:
-            data = json.loads(raw)
+            loaded_data = cast(object, json.loads(raw))
         except json.JSONDecodeError:
             return None
 
-        if not isinstance(data, dict):
+        if not isinstance(loaded_data, dict):
             return None
+        data = cast(dict[str, object], loaded_data)
 
         save = RunSave(
             version=as_int(data.get("version", SAVE_VERSION), default=SAVE_VERSION),
             tokens=DEFAULT_RUN_TOKENS,
-            party_level=as_int(data.get("party_level", DEFAULT_PARTY_LEVEL), default=DEFAULT_PARTY_LEVEL),
+            party_level=as_int(
+                data.get("party_level", DEFAULT_PARTY_LEVEL),
+                default=DEFAULT_PARTY_LEVEL,
+            ),
             party_level_up_cost=as_int(
                 data.get("party_level_up_cost", DEFAULT_PARTY_LEVEL_UP_COST),
                 default=DEFAULT_PARTY_LEVEL_UP_COST,
             ),
             fight_number=DEFAULT_FIGHT_NUMBER,
-            party_hp_max=as_int(data.get("party_hp_max", DEFAULT_PARTY_HP_MAX), default=DEFAULT_PARTY_HP_MAX),
+            party_hp_max=as_int(
+                data.get("party_hp_max", DEFAULT_PARTY_HP_MAX),
+                default=DEFAULT_PARTY_HP_MAX,
+            ),
             party_hp_current=as_int(
                 data.get("party_hp_current", DEFAULT_PARTY_HP_CURRENT),
                 default=DEFAULT_PARTY_HP_CURRENT,
             ),
             party_hp_last_idle_heal_at=as_float(
-                data.get("party_hp_last_idle_heal_at", DEFAULT_PARTY_HP_LAST_IDLE_HEAL_AT),
+                data.get(
+                    "party_hp_last_idle_heal_at", DEFAULT_PARTY_HP_LAST_IDLE_HEAL_AT
+                ),
                 default=DEFAULT_PARTY_HP_LAST_IDLE_HEAL_AT,
             ),
             onsite=as_optional_str_list(data.get("onsite", [])),
             offsite=as_optional_str_list(data.get("offsite", [])),
             stacks=as_int_dict(data.get("stacks", {})),
-            character_progress=as_character_progress_dict(data.get("character_progress", {})),
+            inventory=as_int_dict(data.get("inventory", {})),
+            character_progress=as_character_progress_dict(
+                data.get("character_progress", {})
+            ),
             character_stats=as_character_stats_dict(data.get("character_stats", {})),
-            character_initial_stats=as_character_stats_dict(data.get("character_initial_stats", {})),
+            character_initial_stats=as_character_stats_dict(
+                data.get("character_initial_stats", {})
+            ),
             character_deaths=as_int_dict(data.get("character_deaths", {})),
-            idle_exp_bonus_seconds=as_float(data.get("idle_exp_bonus_seconds", 0.0), default=0.0),
-            idle_exp_penalty_seconds=as_float(data.get("idle_exp_penalty_seconds", 0.0), default=0.0),
-            idle_shared_exp_percentage=as_int(data.get("idle_shared_exp_percentage", 1), default=1),
-            idle_risk_reward_level=as_int(data.get("idle_risk_reward_level", 0), default=0),
+            idle_exp_bonus_seconds=as_float(
+                data.get("idle_exp_bonus_seconds", 0.0), default=0.0
+            ),
+            idle_exp_penalty_seconds=as_float(
+                data.get("idle_exp_penalty_seconds", 0.0), default=0.0
+            ),
+            idle_shared_exp_percentage=as_int(
+                data.get("idle_shared_exp_percentage", 1), default=1
+            ),
+            idle_risk_reward_level=as_int(
+                data.get("idle_risk_reward_level", 0), default=0
+            ),
             idle_exp_mult=as_float(data.get("idle_exp_mult", 1.0), default=1.0),
             layout_tick_cooldown_seconds=as_float(
-                data.get("layout_tick_cooldown_seconds", DEFAULT_LAYOUT_TICK_COOLDOWN_SECONDS),
+                data.get(
+                    "layout_tick_cooldown_seconds", DEFAULT_LAYOUT_TICK_COOLDOWN_SECONDS
+                ),
                 default=DEFAULT_LAYOUT_TICK_COOLDOWN_SECONDS,
             ),
             layout_owned_ordering=_normalize_layout_owned_ordering(
@@ -152,6 +181,7 @@ class SaveManager:
             "onsite": save.onsite,
             "offsite": save.offsite,
             "stacks": save.stacks,
+            "inventory": save.inventory,
             "character_progress": save.character_progress,
             "character_stats": save.character_stats,
             "character_initial_stats": save.character_initial_stats,
@@ -167,8 +197,10 @@ class SaveManager:
 
         self._path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = self._path.with_suffix(self._path.suffix + ".tmp")
-        tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
-        tmp_path.replace(self._path)
+        _ = tmp_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+        )
+        _ = tmp_path.replace(self._path)
 
 
 def _default_save_path() -> Path:
@@ -180,7 +212,9 @@ def _default_save_path() -> Path:
     if home.exists():
         return home / ".midoriai" / "stainedlgassodysseyidle" / "idlesave.json"
 
-    base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
+    base = QStandardPaths.writableLocation(
+        QStandardPaths.StandardLocation.AppDataLocation
+    )
     if not base:
         base = str(Path.cwd())
     return Path(base) / "stainedlgassodysseyidle" / "idlesave.json"
@@ -202,7 +236,9 @@ def _normalized_save(save: RunSave) -> RunSave:
     party_hp_max = max(1, int(getattr(save, "party_hp_max", DEFAULT_PARTY_HP_MAX)))
     party_hp_current = max(0, int(getattr(save, "party_hp_current", party_hp_max)))
     party_hp_current = min(party_hp_current, party_hp_max)
-    party_hp_last_idle_heal_at = float(max(0.0, float(getattr(save, "party_hp_last_idle_heal_at", 0.0))))
+    party_hp_last_idle_heal_at = float(
+        max(0.0, float(getattr(save, "party_hp_last_idle_heal_at", 0.0)))
+    )
 
     onsite = list(save.onsite[:ONSITE_SLOTS])
     onsite.extend([None] * (ONSITE_SLOTS - len(onsite)))
@@ -210,7 +246,9 @@ def _normalized_save(save: RunSave) -> RunSave:
     offsite = list(save.offsite[:OFFSITE_SLOTS])
     offsite.extend([None] * (OFFSITE_SLOTS - len(offsite)))
 
-    raw_standby = [item if item else None for item in list(save.standby[:STANDBY_SLOTS])]
+    raw_standby = [
+        item if item else None for item in list(save.standby[:STANDBY_SLOTS])
+    ]
     raw_standby.extend([None] * (STANDBY_SLOTS - len(raw_standby)))
     standby: list[str | None] = [None] * STANDBY_SLOTS
     for item in raw_standby:
@@ -259,31 +297,38 @@ def _normalized_save(save: RunSave) -> RunSave:
     for item in bar:
         deduped_bar.append(item if item else None)
 
-    party_chars = {item for item in (deduped_onsite + deduped_offsite + standby) if item}
+    party_chars = {
+        item for item in (deduped_onsite + deduped_offsite + standby) if item
+    }
     stacks: dict[str, int] = {}
     for key, value in save.stacks.items():
-        if key in party_chars and isinstance(value, int) and value > 0:
+        if key in party_chars and value > 0:
             stacks[key] = value
 
     for char_id in party_chars:
         stacks[char_id] = max(1, int(stacks.get(char_id, 1)))
 
+    item_catalog = get_all_items()
+    inventory: dict[str, int] = {}
+    for key, value in save.inventory.items():
+        item_id = key.strip()
+        item_class = item_catalog.get(item_id)
+        if not item_id or item_class is None:
+            continue
+        count = int(value)
+        if count <= 0:
+            continue
+        inventory[item_id] = count
+
     deaths: dict[str, int] = {}
-    raw_deaths = getattr(save, "character_deaths", {}) or {}
-    if isinstance(raw_deaths, dict):
-        for key, value in raw_deaths.items():
-            if not isinstance(key, str):
-                continue
-            char_id = key.strip()
-            if not char_id:
-                continue
-            try:
-                count = int(value)
-            except (TypeError, ValueError):
-                continue
-            if count <= 0:
-                continue
-            deaths[char_id] = count
+    for key, value in save.character_deaths.items():
+        char_id = key.strip()
+        if not char_id:
+            continue
+        count = int(value)
+        if count <= 0:
+            continue
+        deaths[char_id] = count
 
     return RunSave(
         version=SAVE_VERSION,
@@ -299,21 +344,38 @@ def _normalized_save(save: RunSave) -> RunSave:
         offsite=deduped_offsite,
         standby=standby,
         stacks=stacks,
+        inventory=inventory,
         character_progress=normalized_character_progress(save.character_progress),
         character_stats=normalized_character_stats(save.character_stats),
-        character_initial_stats=normalized_character_stats(save.character_initial_stats),
+        character_initial_stats=normalized_character_stats(
+            save.character_initial_stats
+        ),
         character_deaths=deaths,
-        idle_exp_bonus_seconds=float(max(0.0, getattr(save, "idle_exp_bonus_seconds", 0.0))),
-        idle_exp_penalty_seconds=float(max(0.0, getattr(save, "idle_exp_penalty_seconds", 0.0))),
-        idle_shared_exp_percentage=max(1, min(95, int(getattr(save, "idle_shared_exp_percentage", 1)))),
-        idle_risk_reward_level=max(0, min(150, int(getattr(save, "idle_risk_reward_level", 0)))),
+        idle_exp_bonus_seconds=float(
+            max(0.0, getattr(save, "idle_exp_bonus_seconds", 0.0))
+        ),
+        idle_exp_penalty_seconds=float(
+            max(0.0, getattr(save, "idle_exp_penalty_seconds", 0.0))
+        ),
+        idle_shared_exp_percentage=max(
+            1, min(95, int(getattr(save, "idle_shared_exp_percentage", 1)))
+        ),
+        idle_risk_reward_level=max(
+            0, min(150, int(getattr(save, "idle_risk_reward_level", 0)))
+        ),
         winstreak=max(0, int(getattr(save, "winstreak", 0))),
         idle_exp_mult=max(1.0, float(getattr(save, "idle_exp_mult", 1.0))),
         battle_start_time=float(max(0.0, getattr(save, "battle_start_time", 0.0))),
         layout_tick_cooldown_seconds=float(
             max(
                 0.0,
-                float(getattr(save, "layout_tick_cooldown_seconds", DEFAULT_LAYOUT_TICK_COOLDOWN_SECONDS)),
+                float(
+                    getattr(
+                        save,
+                        "layout_tick_cooldown_seconds",
+                        DEFAULT_LAYOUT_TICK_COOLDOWN_SECONDS,
+                    )
+                ),
             )
         ),
         layout_owned_ordering=_normalize_layout_owned_ordering(
@@ -341,7 +403,9 @@ def new_run_save(
 
 
 def sanitize_save_characters(*, save: RunSave, allowed_char_ids: set[str]) -> RunSave:
-    allowed = {str(char_id).strip() for char_id in allowed_char_ids if str(char_id).strip()}
+    allowed = {
+        str(char_id).strip() for char_id in allowed_char_ids if str(char_id).strip()
+    }
     if not allowed:
         return _normalized_save(save)
 
@@ -367,12 +431,25 @@ def sanitize_save_characters(*, save: RunSave, allowed_char_ids: set[str]) -> Ru
     save.standby = sanitize_slots(list(save.standby))
 
     save.stacks = {key: value for key, value in save.stacks.items() if key in allowed}
-    save.character_progress = {key: value for key, value in save.character_progress.items() if key in allowed}
-    save.character_stats = {key: value for key, value in save.character_stats.items() if key in allowed}
-    save.character_initial_stats = {
-        key: value for key, value in save.character_initial_stats.items() if key in allowed
+    save.inventory = {
+        key: value
+        for key, value in save.inventory.items()
+        if key in get_item_ids() and value > 0
     }
-    save.character_deaths = {key: value for key, value in save.character_deaths.items() if key in allowed}
+    save.character_progress = {
+        key: value for key, value in save.character_progress.items() if key in allowed
+    }
+    save.character_stats = {
+        key: value for key, value in save.character_stats.items() if key in allowed
+    }
+    save.character_initial_stats = {
+        key: value
+        for key, value in save.character_initial_stats.items()
+        if key in allowed
+    }
+    save.character_deaths = {
+        key: value for key, value in save.character_deaths.items() if key in allowed
+    }
 
     return _normalized_save(save)
 
@@ -382,8 +459,6 @@ def reset_character_progress_for_new_run(
 ) -> dict[str, dict[str, float | int]]:
     reset: dict[str, dict[str, float | int]] = {}
     for char_id, raw in progress_by_id.items():
-        raw = raw if isinstance(raw, dict) else {}
-
         try:
             exp_multiplier = max(0.0, float(raw.get("exp_multiplier", 1.0)))
         except (TypeError, ValueError):
@@ -419,6 +494,7 @@ def reset_character_progress_for_new_run(
             "next_vitality_gain_level": 0,
             "next_mitigation_gain_level": 0,
             "max_hp_level_bonus_version": 0,
+            "shard_bar_ticks": 0,
         }
 
     return reset
