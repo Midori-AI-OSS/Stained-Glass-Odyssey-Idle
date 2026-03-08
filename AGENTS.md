@@ -120,8 +120,9 @@ Mode selection rule: if a request starts with a mode name, use that mode unless 
 
 Stained Glass Odyssey Idle is an idle/incremental game in the shared Stained Glass universe.
 
-- Maintain idle progression systems.
-- Keep visual style consistent with stained glass aesthetics.
-- Prefer code and docstrings for documentation; keep notes minimal and scoped.
-- Verify game balance and progression impacts.
-- Ensure character assets follow project art guidelines.
+  - Maintain idle progression systems.
+  - Keep visual style consistent with stained glass aesthetics.
+  - Prefer code and docstrings for documentation; keep notes minimal and scoped.
+  - Verify game balance and progression impacts.
+  - Ensure character assets follow project art guidelines.
+  - Gameplay progression must not use hard caps; only soft caps are allowed and only when explicitly requested.
