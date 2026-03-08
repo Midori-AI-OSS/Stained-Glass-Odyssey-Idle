@@ -5,6 +5,7 @@ import time
 
 from PySide6.QtCore import QRect
 from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtGui import QLinearGradient
 from PySide6.QtGui import QPainter
@@ -45,6 +46,46 @@ def _blend_factor_for_progress(progress: float) -> float:
     return (phase - 0.50) / 0.15
 
 
+def _get_blended_color_for_progress(
+    progress: float,
+    thresholds: list[tuple[float, tuple[int, int, int, int]]],
+    default_rgba: tuple[int, int, int, int],
+) -> tuple[int, int, int, int]:
+    """Get blended color based on progress and color thresholds.
+
+    Args:
+        progress: Current progress value (0.0 to 1.0)
+        thresholds: List of (threshold_value, rgba_color) tuples
+        default_rgba: Default RGBA color to use below first threshold
+
+    Returns:
+        RGBA tuple representing the blended color
+    """
+    if not thresholds:
+        return default_rgba
+
+    first_threshold, first_color = thresholds[0]
+
+    if progress <= first_threshold:
+        if first_threshold <= 0:
+            return first_color
+        factor = progress / first_threshold
+        return _blend_rgba(default_rgba, first_color, factor)
+
+    for i in range(1, len(thresholds)):
+        prev_threshold, prev_color = thresholds[i - 1]
+        curr_threshold, curr_color = thresholds[i]
+
+        if progress <= curr_threshold:
+            range_size = curr_threshold - prev_threshold
+            if range_size <= 0:
+                return prev_color
+            factor = (progress - prev_threshold) / range_size
+            return _blend_rgba(prev_color, curr_color, factor)
+
+    return thresholds[-1][1]
+
+
 class AnimatedProgressBar(QWidget):
     """Reusable progress bar with smooth animations and visual effects.
 
@@ -63,6 +104,10 @@ class AnimatedProgressBar(QWidget):
         self._reset_active = False
         self._shimmer_phase = 0.0
         self._last_frame_at = 0.0
+
+        # Text display configuration
+        self._text = ""
+        self._text_alignment = Qt.AlignmentFlag.AlignCenter
 
         # Color transition configuration
         self._color_thresholds: list[tuple[float, tuple[int, int, int, int]]] = []
@@ -149,6 +194,19 @@ class AnimatedProgressBar(QWidget):
         self._end_color = end_color
         self.update()
 
+    def setText(
+        self, text: str, alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignCenter
+    ) -> None:
+        """Set the text to display inside the progress bar.
+
+        Args:
+            text: The text to display
+            alignment: Text alignment (left, center, right) - defaults to center
+        """
+        self._text = text
+        self._text_alignment = alignment
+        self.update()
+
     def _should_animate(self) -> bool:
         """Check if animation should be running."""
         if self._reset_active:
@@ -222,7 +280,7 @@ class AnimatedProgressBar(QWidget):
             painter.end()
             return
 
-        # Draw track
+        # Draw track (background)
         painter.setPen(QPen(QColor(*DEFAULT_TRACK_BORDER_RGBA), 1.0))
         painter.setBrush(QColor(*DEFAULT_TRACK_FILL_RGBA))
         painter.drawRect(track)
@@ -236,17 +294,17 @@ class AnimatedProgressBar(QWidget):
 
             # Determine fill color based on thresholds or gradient
             fill_color = QColor(*DEFAULT_BASE_RGBA)  # Default blue
+            use_gradient = False
+            fill_gradient = None
 
-            # Check color thresholds first
+            # Check color thresholds first (with smooth blending)
             if self._color_thresholds:
-                # Find the color for current progress
-                color = None
-                for threshold, rgba in reversed(self._color_thresholds):
-                    if self._display_progress >= threshold:
-                        color = rgba
-                        break
-                if color:
-                    fill_color = QColor(*color)
+                blended_rgba = _get_blended_color_for_progress(
+                    self._display_progress,
+                    self._color_thresholds,
+                    DEFAULT_BASE_RGBA,
+                )
+                fill_color = QColor(*blended_rgba)
 
             # Use gradient if enabled and no threshold color
             elif self._gradient_enabled:
@@ -270,10 +328,12 @@ class AnimatedProgressBar(QWidget):
                 fill_gradient.setColorAt(0.0, QColor(*start_rgba))
                 fill_gradient.setColorAt(0.5, QColor(*mid_rgba))
                 fill_gradient.setColorAt(1.0, QColor(*end_rgba))
-                painter.setPen(QPen(QColor(255, 255, 255, 22), 1.0))
+                use_gradient = True
+
+            painter.setPen(QPen(QColor(255, 255, 255, 22), 1.0))
+            if use_gradient and fill_gradient is not None:
                 painter.setBrush(fill_gradient)
             else:
-                painter.setPen(QPen(QColor(255, 255, 255, 22), 1.0))
                 painter.setBrush(fill_color)
 
             painter.drawRect(fill_rect)
@@ -315,5 +375,12 @@ class AnimatedProgressBar(QWidget):
                 painter.setClipRect(fill_rect)
                 painter.drawRect(shimmer_rect)
                 painter.restore()
+
+        # Draw text on top of everything (if set)
+        if self._text:
+            painter.setPen(QPen(QColor(255, 255, 255, 255)))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            text_rect = self.rect()
+            painter.drawText(text_rect, self._text_alignment, self._text)
 
         painter.end()

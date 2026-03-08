@@ -11,16 +11,17 @@ from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QPushButton
-from endless_idler.ui.components.progress_bar import AnimatedProgressBar
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
 from endless_idler.combat.party_stats import apply_base_stat_multiplier
 from endless_idler.combat.party_stats import build_scaled_character_stats
+from endless_idler.ui.components.progress_bar import AnimatedProgressBar
 from endless_idler.ui.party_builder_common import build_character_stats_tooltip
 from endless_idler.ui.party_builder_common import format_idle_exp_rate_suffix
 from endless_idler.ui.tooltip import hide_stained_tooltip
 from endless_idler.ui.tooltip import show_stained_tooltip
+from endless_idler.utils import normalize_progress
 
 
 IDLE_OFFSITE_PORTRAIT_SIZE = 56
@@ -124,15 +125,29 @@ class IdleOffsiteCard(QFrame):
         self._hp_bar.setProperty("stat", "hp")
         self._hp_bar.setFixedHeight(12)
         self._hp_bar.set_value(1.0)
+        self._hp_bar.setText("HP 0 / 1000")
+        self._hp_bar._gradient_enabled = False
+        self._hp_bar.set_color_thresholds(
+            [
+                (0.0, (231, 76, 60, 170)),
+                (0.25, (243, 156, 18, 170)),
+                (0.45, (241, 196, 15, 185)),
+                (0.65, (46, 204, 113, 165)),
+            ]
+        )
         body.addWidget(self._hp_bar)
 
-        self._exp_bar = QProgressBar()
+        self._exp_bar = AnimatedProgressBar()
         self._exp_bar.setObjectName("idleExpBar")
         self._exp_bar.setFixedHeight(12)
-        self._exp_bar.setTextVisible(True)
-        self._exp_bar.setRange(0, 30)
-        self._exp_bar.setValue(0)
-        self._exp_bar.setFormat("EXP 0 / 30")
+        self._exp_bar.set_value(0.0)
+        self._exp_bar.setText("EXP 0 / 30")
+        self._exp_bar._gradient_enabled = False
+        self._exp_bar.set_gradient_colors(
+            start_color=(52, 152, 219, 170),
+            mid_color=(52, 152, 219, 170),
+            end_color=(52, 152, 219, 170),
+        )
         body.addWidget(self._exp_bar)
 
         # Element tint will be applied on first update_display call
@@ -208,14 +223,14 @@ class IdleOffsiteCard(QFrame):
                 gain_per_second = 0.0
 
         self._name_label.setText(f"{self._display_name} ({max(1, level)})")
-        self._exp_bar.setRange(0, max(1, int(next_exp)))
-        self._exp_bar.setValue(int(exp))
+        next_exp_val = max(1, int(next_exp))
+        current_exp = max(0, int(exp))
+        self._exp_bar.set_value(current_exp / next_exp_val)
         rate_suffix = format_idle_exp_rate_suffix(gain_per_second)
-        self._exp_bar.setFormat(
-            f"EXP {max(0, int(exp))} / {max(1, int(next_exp))}{rate_suffix}"
-        )
+        self._exp_bar.setText(f"EXP {current_exp} / {next_exp_val}{rate_suffix}")
 
         self._hp_bar.set_value(normalize_progress(hp, max_hp))
+        self._hp_bar.setText(f"HP {int(hp)} / {int(max_hp)}")
 
         # Show rebirth button when level >= 50
         self._rebirth_button.setVisible(level >= 50)
