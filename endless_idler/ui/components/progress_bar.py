@@ -11,6 +11,14 @@ from PySide6.QtGui import QPainter
 from PySide6.QtGui import QPen
 from PySide6.QtWidgets import QWidget
 
+from endless_idler.ui.theme.progress_bar import DEFAULT_BASE_RGBA
+from endless_idler.ui.theme.progress_bar import DEFAULT_SHIMMER_RGBA
+from endless_idler.ui.theme.progress_bar import DEFAULT_AURORA_MID_RGBA
+from endless_idler.ui.theme.progress_bar import DEFAULT_AURORA_END_RGBA
+from endless_idler.ui.theme.progress_bar import DEFAULT_TRACK_FILL_RGBA
+from endless_idler.ui.theme.progress_bar import DEFAULT_AURORA_START_RGBA
+from endless_idler.ui.theme.progress_bar import DEFAULT_TRACK_BORDER_RGBA
+
 
 def _clamp01(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
@@ -38,7 +46,10 @@ def _blend_factor_for_progress(progress: float) -> float:
 
 
 class AnimatedProgressBar(QWidget):
-    """Reusable progress bar with smooth animations and visual effects."""
+    """Reusable progress bar with smooth animations and visual effects.
+
+    Requires theme/progress_bar.py tokens for visual consistency.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -212,8 +223,8 @@ class AnimatedProgressBar(QWidget):
             return
 
         # Draw track
-        painter.setPen(QPen(QColor(255, 255, 255, 24), 1.0))
-        painter.setBrush(QColor(0, 0, 0, 42))
+        painter.setPen(QPen(QColor(*DEFAULT_TRACK_BORDER_RGBA), 1.0))
+        painter.setBrush(QColor(*DEFAULT_TRACK_FILL_RGBA))
         painter.drawRect(track)
 
         inner = track.adjusted(1, 1, -1, -1)
@@ -224,7 +235,7 @@ class AnimatedProgressBar(QWidget):
             )
 
             # Determine fill color based on thresholds or gradient
-            fill_color = QColor(52, 152, 219, 170)  # Default blue
+            fill_color = QColor(*DEFAULT_BASE_RGBA)  # Default blue
 
             # Check color thresholds first
             if self._color_thresholds:
@@ -241,13 +252,13 @@ class AnimatedProgressBar(QWidget):
             elif self._gradient_enabled:
                 aurora_mix = _blend_factor_for_progress(self._display_progress)
                 start_rgba = _blend_rgba(
-                    (52, 152, 219, 170), (78, 170, 230, 170), aurora_mix
+                    DEFAULT_BASE_RGBA, DEFAULT_AURORA_START_RGBA, aurora_mix
                 )
                 mid_rgba = _blend_rgba(
-                    (52, 152, 219, 170), (62, 178, 130, 170), aurora_mix
+                    DEFAULT_BASE_RGBA, DEFAULT_AURORA_MID_RGBA, aurora_mix
                 )
                 end_rgba = _blend_rgba(
-                    (52, 152, 219, 170), (215, 188, 120, 176), aurora_mix
+                    DEFAULT_BASE_RGBA, DEFAULT_AURORA_END_RGBA, aurora_mix
                 )
 
                 fill_gradient = QLinearGradient(
@@ -282,16 +293,22 @@ class AnimatedProgressBar(QWidget):
                     half_width * 2,
                     fill_rect.height(),
                 )
-                shimmer_alpha = int(max(0.0, min(255.0, 128 * self._display_shimmer)))
+                shimmer_alpha = int(
+                    max(
+                        0.0, min(255.0, DEFAULT_SHIMMER_RGBA[3] * self._display_shimmer)
+                    )
+                )
                 shimmer_gradient = QLinearGradient(
                     shimmer_rect.left(),
                     shimmer_rect.top(),
                     shimmer_rect.right(),
                     shimmer_rect.top(),
                 )
-                shimmer_gradient.setColorAt(0.0, QColor(255, 255, 255, 0))
-                shimmer_gradient.setColorAt(0.5, QColor(255, 255, 255, shimmer_alpha))
-                shimmer_gradient.setColorAt(1.0, QColor(255, 255, 255, 0))
+                shimmer_gradient.setColorAt(0.0, QColor(*DEFAULT_SHIMMER_RGBA[:3], 0))
+                shimmer_gradient.setColorAt(
+                    0.5, QColor(*DEFAULT_SHIMMER_RGBA[:3], shimmer_alpha)
+                )
+                shimmer_gradient.setColorAt(1.0, QColor(*DEFAULT_SHIMMER_RGBA[:3], 0))
                 painter.setPen(QPen(QColor(255, 255, 255, 0), 0.0))
                 painter.setBrush(shimmer_gradient)
                 painter.save()
