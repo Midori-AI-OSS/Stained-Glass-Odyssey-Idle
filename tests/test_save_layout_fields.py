@@ -37,7 +37,7 @@ def test_layout_fields_normalize_invalid_values(monkeypatch, tmp_path: Path) -> 
     save_path.write_text(
         json.dumps(
             {
-                "version": 9,
+                "version": 10,
                 "party_level": 1,
                 "party_level_up_cost": 4,
                 "party_hp_max": 100,

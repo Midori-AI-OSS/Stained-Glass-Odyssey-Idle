@@ -10,12 +10,17 @@ from endless_idler.save import DEFAULT_RUN_TOKENS
 from endless_idler.save import SaveManager
 
 
-def test_default_save_path_uses_stainedlgassodysseyidle_folder(monkeypatch, tmp_path: Path) -> None:
+def test_default_save_path_uses_stainedlgassodysseyidle_folder(
+    monkeypatch, tmp_path: Path
+) -> None:
     monkeypatch.delenv("ENDLESS_IDLER_SAVE_PATH", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path))
 
     manager = SaveManager()
-    assert manager.path == tmp_path / ".midoriai" / "stainedlgassodysseyidle" / "idlesave.json"
+    assert (
+        manager.path
+        == tmp_path / ".midoriai" / "stainedlgassodysseyidle" / "idlesave.json"
+    )
 
 
 def test_old_default_path_is_not_loaded(monkeypatch, tmp_path: Path) -> None:
@@ -31,7 +36,9 @@ def test_old_default_path_is_not_loaded(monkeypatch, tmp_path: Path) -> None:
     assert manager.load() is None
 
 
-def test_load_ignores_legacy_run_fields_and_save_strips_them(monkeypatch, tmp_path: Path) -> None:
+def test_load_ignores_legacy_run_fields_and_save_strips_them(
+    monkeypatch, tmp_path: Path
+) -> None:
     save_path = tmp_path / "save.json"
     monkeypatch.setenv("ENDLESS_IDLER_SAVE_PATH", str(save_path))
 
@@ -73,14 +80,16 @@ def test_load_ignores_legacy_run_fields_and_save_strips_them(monkeypatch, tmp_pa
     assert rewritten["offsite"][0] == "becca"
 
 
-def test_load_ignores_removed_idle_timer_legacy_fields(monkeypatch, tmp_path: Path) -> None:
+def test_load_ignores_removed_idle_timer_legacy_fields(
+    monkeypatch, tmp_path: Path
+) -> None:
     save_path = tmp_path / "save.json"
     monkeypatch.setenv("ENDLESS_IDLER_SAVE_PATH", str(save_path))
 
     save_path.write_text(
         json.dumps(
             {
-                "version": 9,
+                "version": 10,
                 "party_level": 1,
                 "idle_exp_bonus_until": 9999999999,
                 "idle_exp_penalty_until": 9999999999,

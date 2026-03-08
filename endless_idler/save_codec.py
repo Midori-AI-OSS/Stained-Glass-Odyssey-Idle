@@ -1,17 +1,45 @@
+"""Serialization helpers used by the save system.
+
+These helpers normalize loosely typed payload data before `RunSave` objects are
+constructed. `as_int_dict()` is shared by character stacks, death counters, and
+the inventory item stack map.
+"""
+
 from __future__ import annotations
 
+
 def as_int(value: object, *, default: int) -> int:
-    try:
-        return int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return default
+        try:
+            return int(stripped)
+        except ValueError:
+            return default
+    return default
 
 
 def as_float(value: object, *, default: float) -> float:
-    try:
-        return float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return float(default)
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return float(default)
+        try:
+            return float(stripped)
+        except ValueError:
+            return float(default)
+    return float(default)
 
 
 def as_str_list(value: object) -> list[str]:
@@ -81,10 +109,18 @@ def as_character_progress_dict(value: object) -> dict[str, dict[str, float | int
         rebirth_power = as_float(raw_progress.get("rebirth_power", 1.0), default=1.0)
         prestige_count = as_int(raw_progress.get("prestige_count", 0), default=0)
         death_stacks = as_int(raw_progress.get("death_exp_debuff_stacks", 0), default=0)
-        death_until = as_float(raw_progress.get("death_exp_debuff_until", 0.0), default=0.0)
-        next_vitality_gain_level = as_int(raw_progress.get("next_vitality_gain_level", 0), default=0)
-        next_mitigation_gain_level = as_int(raw_progress.get("next_mitigation_gain_level", 0), default=0)
-        max_hp_level_bonus_version = as_int(raw_progress.get("max_hp_level_bonus_version", 0), default=0)
+        death_until = as_float(
+            raw_progress.get("death_exp_debuff_until", 0.0), default=0.0
+        )
+        next_vitality_gain_level = as_int(
+            raw_progress.get("next_vitality_gain_level", 0), default=0
+        )
+        next_mitigation_gain_level = as_int(
+            raw_progress.get("next_mitigation_gain_level", 0), default=0
+        )
+        max_hp_level_bonus_version = as_int(
+            raw_progress.get("max_hp_level_bonus_version", 0), default=0
+        )
 
         progress: dict[str, float | int] = {
             "level": max(1, level),
@@ -155,9 +191,15 @@ def normalized_character_progress(
         prestige_count = as_int(raw.get("prestige_count", 0), default=0)
         death_stacks = as_int(raw.get("death_exp_debuff_stacks", 0), default=0)
         death_until = as_float(raw.get("death_exp_debuff_until", 0.0), default=0.0)
-        next_vitality_gain_level = as_int(raw.get("next_vitality_gain_level", 0), default=0)
-        next_mitigation_gain_level = as_int(raw.get("next_mitigation_gain_level", 0), default=0)
-        max_hp_level_bonus_version = as_int(raw.get("max_hp_level_bonus_version", 0), default=0)
+        next_vitality_gain_level = as_int(
+            raw.get("next_vitality_gain_level", 0), default=0
+        )
+        next_mitigation_gain_level = as_int(
+            raw.get("next_mitigation_gain_level", 0), default=0
+        )
+        max_hp_level_bonus_version = as_int(
+            raw.get("max_hp_level_bonus_version", 0), default=0
+        )
         normalized[char_id] = {
             "level": max(1, level),
             "exp": float(max(0.0, exp)),
