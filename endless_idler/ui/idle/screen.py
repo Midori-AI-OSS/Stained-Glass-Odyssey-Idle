@@ -166,6 +166,7 @@ class IdleScreenWidget(QWidget):
             ),
             risk_reward_level=int(getattr(self._save, "idle_risk_reward_level", 0)),
             battle_start_time=float(getattr(self._save, "battle_start_time", 0.0)),
+            blessings_data=dict(getattr(self._save, "blessings", {}) or {}),
         )
 
         self._onsite_cards: list[IdleOnsiteCharacterCard] = []

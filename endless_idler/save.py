@@ -7,23 +7,26 @@ import random
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 from typing import cast
 
 from PySide6.QtCore import QStandardPaths
 
 from endless_idler.inventory import get_all_items
 from endless_idler.inventory import get_item_ids
+from endless_idler.save_codec import as_blessings_dict
 from endless_idler.save_codec import as_character_progress_dict
 from endless_idler.save_codec import as_character_stats_dict
 from endless_idler.save_codec import as_float
 from endless_idler.save_codec import as_int
 from endless_idler.save_codec import as_int_dict
 from endless_idler.save_codec import as_optional_str_list
+from endless_idler.save_codec import normalized_blessings
 from endless_idler.save_codec import normalized_character_progress
 from endless_idler.save_codec import normalized_character_stats
 
 
-SAVE_VERSION = 10
+SAVE_VERSION = 11
 DEFAULT_RUN_TOKENS = 20
 DEFAULT_CHARACTER_COST = 1
 DEFAULT_SHOP_REROLL_COST = 2
@@ -69,6 +72,38 @@ class RunSave:
     character_stats: dict[str, dict[str, float]] = field(default_factory=dict)
     character_initial_stats: dict[str, dict[str, float]] = field(default_factory=dict)
     character_deaths: dict[str, int] = field(default_factory=dict)
+    blessings: dict[str, dict[str, Any]] = field(
+        default_factory=lambda: {
+            "global": {
+                "odyssey_steps": 0,
+                "odyssey_unlocked": True,
+            },
+            "fire": {
+                "steps": 0,
+                "unlocked": False,
+            },
+            "ice": {
+                "steps": 0,
+                "unlocked": False,
+            },
+            "wind": {
+                "steps": 0,
+                "unlocked": False,
+            },
+            "lightning": {
+                "steps": 0,
+                "unlocked": False,
+            },
+            "light": {
+                "steps": 0,
+                "unlocked": False,
+            },
+            "dark": {
+                "steps": 0,
+                "unlocked": False,
+            },
+        }
+    )
     idle_exp_bonus_seconds: float = 0.0
     idle_exp_penalty_seconds: float = 0.0
     idle_shared_exp_percentage: int = 1
@@ -144,6 +179,7 @@ class SaveManager:
                 data.get("character_initial_stats", {})
             ),
             character_deaths=as_int_dict(data.get("character_deaths", {})),
+            blessings=as_blessings_dict(data.get("blessings", {})),
             idle_exp_bonus_seconds=as_float(
                 data.get("idle_exp_bonus_seconds", 0.0), default=0.0
             ),
@@ -186,6 +222,7 @@ class SaveManager:
             "character_stats": save.character_stats,
             "character_initial_stats": save.character_initial_stats,
             "character_deaths": save.character_deaths,
+            "blessings": save.blessings,
             "idle_exp_bonus_seconds": save.idle_exp_bonus_seconds,
             "idle_exp_penalty_seconds": save.idle_exp_penalty_seconds,
             "idle_shared_exp_percentage": save.idle_shared_exp_percentage,
@@ -351,6 +388,7 @@ def _normalized_save(save: RunSave) -> RunSave:
             save.character_initial_stats
         ),
         character_deaths=deaths,
+        blessings=normalized_blessings(getattr(save, "blessings", {})),
         idle_exp_bonus_seconds=float(
             max(0.0, getattr(save, "idle_exp_bonus_seconds", 0.0))
         ),

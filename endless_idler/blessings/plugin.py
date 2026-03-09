@@ -21,6 +21,9 @@ class BlessingPlugin:
         step_seconds: Interval between each step in seconds (e.g., 300.0 for 5 minutes)
         multiplier_formula: Callable that takes step count and returns multiplier
         max_steps: Optional maximum number of steps before capping
+        target_damage_type: Damage type this blessing affects (fire, ice, wind, lightning, light, dark)
+        is_unlocked: Whether the blessing is unlocked
+        unlock_condition: Description of how to unlock the blessing
     """
 
     blessing_id: str
@@ -29,6 +32,9 @@ class BlessingPlugin:
     step_seconds: float
     multiplier_formula: Callable[[int], float]
     max_steps: int | None = None
+    target_damage_type: str | None = None
+    is_unlocked: bool = True
+    unlock_condition: str | None = None
 
     def get_multiplier(self, steps: int) -> float:
         """Calculate the multiplier for a given step count.

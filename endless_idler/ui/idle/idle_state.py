@@ -84,6 +84,7 @@ class IdleGameState(QObject):
         shared_exp_percentage: int = 1,
         risk_reward_level: int = 0,
         battle_start_time: float = 0.0,
+        blessings_data: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         super().__init__()
         self._char_ids = char_ids
@@ -120,6 +121,7 @@ class IdleGameState(QObject):
         self._offsite_exp_share = OFFSITE_EXP_SHARE_PER_CHAR
         self._battle_start_time = float(max(0.0, battle_start_time))
         self._idle_session_started_at = float(self._time())
+        self._blessings_data = blessings_data if blessings_data else {}
 
         self._tick_count = 0
         self._shared_exp_percentage = max(1, min(95, int(shared_exp_percentage)))
@@ -839,7 +841,34 @@ class IdleGameState(QObject):
         modifier *= self._death_exp_debuff_multiplier(data)
         modifier *= float(data.get("passive_modifier", 1.0))
         modifier *= self._exp_multiplier_for_char(char_id)
+        modifier *= self._damage_type_blessing_bonus(char_id)
         return max(0.0, modifier)
+
+    def _damage_type_blessing_bonus(self, char_id: str) -> float:
+        plugin = self._plugins_by_id.get(char_id)
+        if plugin is None:
+            return 1.0
+        damage_type_id = normalize_damage_type_id(
+            str(getattr(plugin, "damage_type_id", "generic") or "generic")
+        )
+        if not damage_type_id:
+            return 1.0
+        bonus = 1.0
+        if damage_type_id == "generic":
+            for dtype in SHARD_ALLOWED_TYPES:
+                blessing_info = self._blessings_data.get(dtype, {})
+                if not isinstance(blessing_info, dict):
+                    continue
+                if not blessing_info.get("unlocked", False):
+                    continue
+                steps = int(blessing_info.get("steps", 0))
+                bonus += steps * 0.0001
+        elif damage_type_id in SHARD_ALLOWED_TYPES:
+            blessing_info = self._blessings_data.get(damage_type_id, {})
+            if isinstance(blessing_info, dict) and blessing_info.get("unlocked", False):
+                steps = int(blessing_info.get("steps", 0))
+                bonus += steps * 0.0001
+        return bonus
 
     def _exp_recipients(
         self,
