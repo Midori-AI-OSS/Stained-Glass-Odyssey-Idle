@@ -5,6 +5,9 @@ from PySide6.QtWidgets import QApplication
 from endless_idler.ui.theme.app_shell_widget import (
     STYLESHEET as APP_SHELL_WIDGET_STYLESHEET,
 )
+from endless_idler.ui.theme.blessing_panel_widget import (
+    STYLESHEET as BLESSING_PANEL_WIDGET_STYLESHEET,
+)
 from endless_idler.ui.theme.home_widget import STYLESHEET as HOME_WIDGET_STYLESHEET
 from endless_idler.ui.theme.layout_screen_widget import (
     STYLESHEET as LAYOUT_SCREEN_WIDGET_STYLESHEET,
@@ -42,6 +45,7 @@ from endless_idler.ui.theme.shard_progress_bar_widget import (
 def build_stained_glass_stylesheet() -> str:
     sections = (
         APP_SHELL_WIDGET_STYLESHEET,
+        BLESSING_PANEL_WIDGET_STYLESHEET,
         HOME_WIDGET_STYLESHEET,
         LAYOUT_SCREEN_WIDGET_STYLESHEET,
         PARTY_HP_HEADER_STYLESHEET,
