@@ -24,6 +24,7 @@ from endless_idler.ui.party_builder_common import build_character_stats_tooltip
 from endless_idler.ui.party_builder_common import format_idle_exp_rate_suffix
 from endless_idler.ui.tooltip import hide_stained_tooltip
 from endless_idler.ui.tooltip import show_stained_tooltip
+from endless_idler.ui.widgets.shard_progress_bar import ShardProgressBar
 from endless_idler.utils import normalize_progress
 
 
@@ -129,15 +130,15 @@ class OnsiteCharacterCardBase(QFrame):
         self._portrait.set_portrait(portrait_path, placeholder=placeholder)
         root.addWidget(self._portrait, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        body = QVBoxLayout()
-        body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(6)
-        root.addLayout(body, 1)
+        self._body = QVBoxLayout()
+        self._body.setContentsMargins(0, 0, 0, 0)
+        self._body.setSpacing(6)
+        root.addLayout(self._body, 1)
 
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
         header.setSpacing(8)
-        body.addLayout(header)
+        self._body.addLayout(header)
 
         self._name_label = QLabel(self._base_name)
         self._name_label.setObjectName("onsiteCharName")
@@ -176,14 +177,14 @@ class OnsiteCharacterCardBase(QFrame):
         if not self._is_idle_mode:
             level_label = QLabel("Level: 1")
             level_label.setObjectName("onsiteCharLevel")
-            body.addWidget(level_label)
+            self._body.addWidget(level_label)
             self._level_label = level_label
 
         self._stack_label: QLabel | None = None
         if not self._is_idle_mode:
             stack_label = QLabel(f"Stack: {self._stack_count}")
             stack_label.setObjectName("onsiteCharStack")
-            body.addWidget(stack_label)
+            self._body.addWidget(stack_label)
             self._stack_label = stack_label
 
         self._hp_bar = AnimatedProgressBar()
@@ -201,8 +202,8 @@ class OnsiteCharacterCardBase(QFrame):
         )
 
         if self._is_idle_mode:
-            body.addStretch(1)
-        body.addWidget(self._hp_bar)
+            self._body.addStretch(1)
+        self._body.addWidget(self._hp_bar)
 
         self._exp_bar = AnimatedProgressBar()
         self._exp_bar.setObjectName("onsiteExpBar")
@@ -215,10 +216,10 @@ class OnsiteCharacterCardBase(QFrame):
             mid_color=(52, 152, 219, 170),
             end_color=(52, 152, 219, 170),
         )
-        body.addWidget(self._exp_bar)
+        self._body.addWidget(self._exp_bar)
 
         if not self._is_idle_mode:
-            body.addStretch(1)
+            self._body.addStretch(1)
         self.set_level(1)
 
     def set_stack_count(self, stack_count: int) -> None:
@@ -472,6 +473,13 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
             parent=parent,
         )
 
+        # Shard progress bar (only visible when character has shard reward types)
+        self._shard_bar = ShardProgressBar()
+        self._shard_bar.setVisible(False)
+        # Insert after exp bar
+        exp_bar_index = self._body.indexOf(self._exp_bar)
+        self._body.insertWidget(exp_bar_index + 1, self._shard_bar)
+
     @property
     def char_id(self) -> str:
         return self._char_id
@@ -594,6 +602,22 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
             )
         else:
             self.set_action_button(label="", visible=False, on_click=None)
+
+        # Update shard progress bar if character has shard reward types
+        shard_reward_types = data.get("shard_reward_types")
+        if isinstance(shard_reward_types, tuple) and len(shard_reward_types) > 0:
+            shard_bar_ticks = int(data.get("shard_bar_ticks", 0))
+            element_id = str(
+                getattr(self._plugin, "damage_type_id", "generic") or "generic"
+            )
+            self._shard_bar.set_shard_data(
+                shard_bar_ticks=shard_bar_ticks,
+                element_id=element_id,
+                shard_types=shard_reward_types,
+            )
+            self._shard_bar.setVisible(True)
+        else:
+            self._shard_bar.setVisible(False)
 
         stars = getattr(self._plugin, "stars", None) if self._plugin else None
         display_name = (
