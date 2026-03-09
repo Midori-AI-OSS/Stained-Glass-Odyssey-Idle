@@ -13,18 +13,33 @@ from endless_idler.ui.idle.idle_state import IDLE_BLESSING_STEP_MULTIPLIER
 from endless_idler.ui.idle.idle_state import MIN_EXP_GAIN_PER_TICK
 
 
-def _plugins_by_id(*, onsite_placement: str = "onsite", offsite_placement: str = "offsite") -> dict[str, CharacterPlugin]:
-    onsite = CharacterPlugin(char_id="onsite", display_name="Onsite", placement=onsite_placement)
-    offsite = CharacterPlugin(char_id="offsite", display_name="Offsite", placement=offsite_placement)
+IDLE_BLESSING_STEP_SECONDS = 300.0
+
+
+def _plugins_by_id(
+    *, onsite_placement: str = "onsite", offsite_placement: str = "offsite"
+) -> dict[str, CharacterPlugin]:
+    onsite = CharacterPlugin(
+        char_id="onsite", display_name="Onsite", placement=onsite_placement
+    )
+    offsite = CharacterPlugin(
+        char_id="offsite", display_name="Offsite", placement=offsite_placement
+    )
     return {"onsite": onsite, "offsite": offsite}
 
 
-def _plugins_for_ids(*, onsite_ids: list[str], offsite_ids: list[str]) -> dict[str, CharacterPlugin]:
+def _plugins_for_ids(
+    *, onsite_ids: list[str], offsite_ids: list[str]
+) -> dict[str, CharacterPlugin]:
     plugins: dict[str, CharacterPlugin] = {}
     for char_id in onsite_ids:
-        plugins[char_id] = CharacterPlugin(char_id=char_id, display_name=char_id, placement="onsite")
+        plugins[char_id] = CharacterPlugin(
+            char_id=char_id, display_name=char_id, placement="onsite"
+        )
     for char_id in offsite_ids:
-        plugins[char_id] = CharacterPlugin(char_id=char_id, display_name=char_id, placement="offsite")
+        plugins[char_id] = CharacterPlugin(
+            char_id=char_id, display_name=char_id, placement="offsite"
+        )
     return plugins
 
 
@@ -54,7 +69,9 @@ def test_blessing_multiplier_compounds_to_target_after_30_minutes(monkeypatch) -
     monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
 
     state = _build_state()
-    assert math.isclose(state.get_idle_blessing_multiplier(), 1.0, rel_tol=0.0, abs_tol=1e-12)
+    assert math.isclose(
+        state.get_idle_blessing_multiplier(), 1.0, rel_tol=0.0, abs_tol=1e-12
+    )
 
     now["value"] += 299.9
     assert state.get_idle_blessing_step_count() == 0
@@ -64,7 +81,9 @@ def test_blessing_multiplier_compounds_to_target_after_30_minutes(monkeypatch) -
 
     now["value"] += 1500.0
     assert state.get_idle_blessing_step_count() == 6
-    assert math.isclose(state.get_idle_blessing_multiplier(), 1.025, rel_tol=1e-9, abs_tol=1e-9)
+    assert math.isclose(
+        state.get_idle_blessing_multiplier(), 1.025, rel_tol=1e-9, abs_tol=1e-9
+    )
 
 
 def test_blessing_resets_with_new_idle_session(monkeypatch) -> None:
@@ -77,7 +96,9 @@ def test_blessing_resets_with_new_idle_session(monkeypatch) -> None:
 
     second_state = _build_state()
     assert second_state.get_idle_blessing_step_count() == 0
-    assert math.isclose(second_state.get_idle_blessing_multiplier(), 1.0, rel_tol=0.0, abs_tol=1e-12)
+    assert math.isclose(
+        second_state.get_idle_blessing_multiplier(), 1.0, rel_tol=0.0, abs_tol=1e-12
+    )
 
 
 def test_onsite_blessing_applies_to_offsite_indirectly(monkeypatch) -> None:
@@ -96,11 +117,15 @@ def test_onsite_blessing_applies_to_offsite_indirectly(monkeypatch) -> None:
 
     onsite_ratio = onsite_blessed / onsite_base
     offsite_ratio = offsite_blessed / offsite_base
-    assert math.isclose(onsite_ratio, IDLE_BLESSING_STEP_MULTIPLIER, rel_tol=1e-9, abs_tol=1e-9)
-    assert math.isclose(offsite_ratio, IDLE_BLESSING_STEP_MULTIPLIER, rel_tol=1e-9, abs_tol=1e-9)
+    assert math.isclose(
+        onsite_ratio, IDLE_BLESSING_STEP_MULTIPLIER, rel_tol=1e-9, abs_tol=1e-9
+    )
+    assert math.isclose(
+        offsite_ratio, IDLE_BLESSING_STEP_MULTIPLIER, rel_tol=1e-9, abs_tol=1e-9
+    )
     assert not math.isclose(
         offsite_ratio,
-        IDLE_BLESSING_STEP_MULTIPLIER ** 2,
+        IDLE_BLESSING_STEP_MULTIPLIER**2,
         rel_tol=1e-4,
         abs_tol=1e-4,
     )
@@ -111,7 +136,9 @@ def test_blessing_countdown_wraps_every_five_minutes(monkeypatch) -> None:
     monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
 
     state = _build_state()
-    assert state.get_idle_blessing_seconds_to_next_step() == 300
+    assert state.get_idle_blessing_seconds_to_next_step() == int(
+        IDLE_BLESSING_STEP_SECONDS
+    )
 
     now["value"] += 271.0
     assert state.get_idle_blessing_seconds_to_next_step() == 29
@@ -120,7 +147,9 @@ def test_blessing_countdown_wraps_every_five_minutes(monkeypatch) -> None:
     assert state.get_idle_blessing_seconds_to_next_step() == 5
 
     now["value"] += 5.0
-    assert state.get_idle_blessing_seconds_to_next_step() == 300
+    assert state.get_idle_blessing_seconds_to_next_step() == int(
+        IDLE_BLESSING_STEP_SECONDS
+    )
 
 
 def test_misplaced_onsite_character_uses_exp_and_stat_penalties(monkeypatch) -> None:
@@ -184,7 +213,9 @@ def test_misplaced_offsite_character_uses_exp_penalty(monkeypatch) -> None:
     )
 
 
-def test_shared_exp_slider_does_not_reduce_onsite_gain_when_offsite_empty(monkeypatch) -> None:
+def test_shared_exp_slider_does_not_reduce_onsite_gain_when_offsite_empty(
+    monkeypatch,
+) -> None:
     now = {"value": 160_000.0}
     monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
 
@@ -195,7 +226,9 @@ def test_shared_exp_slider_does_not_reduce_onsite_gain_when_offsite_empty(monkey
     gain_at_max_share = state.get_exp_gain_per_tick("onsite")
 
     assert gain_at_min_share > 0.0
-    assert math.isclose(gain_at_min_share, gain_at_max_share, rel_tol=1e-9, abs_tol=1e-9)
+    assert math.isclose(
+        gain_at_min_share, gain_at_max_share, rel_tol=1e-9, abs_tol=1e-9
+    )
 
 
 def test_shared_exp_slider_still_redistributes_when_offsite_exists(monkeypatch) -> None:
@@ -223,12 +256,16 @@ def test_exp_gain_floor_applies_to_tiny_positive_values(monkeypatch) -> None:
     state.set_shared_exp_percentage(95)
 
     per_tick_gain = state.get_exp_gain_per_tick("onsite")
-    assert math.isclose(per_tick_gain, MIN_EXP_GAIN_PER_TICK, rel_tol=0.0, abs_tol=1e-12)
+    assert math.isclose(
+        per_tick_gain, MIN_EXP_GAIN_PER_TICK, rel_tol=0.0, abs_tol=1e-12
+    )
 
     before = float(state.get_char_data("onsite")["exp"])
     state.process_tick()
     after = float(state.get_char_data("onsite")["exp"])
-    assert math.isclose(after - before, MIN_EXP_GAIN_PER_TICK, rel_tol=0.0, abs_tol=1e-12)
+    assert math.isclose(
+        after - before, MIN_EXP_GAIN_PER_TICK, rel_tol=0.0, abs_tol=1e-12
+    )
 
 
 def test_onsite_pool_is_split_equally_by_onsite_count(monkeypatch) -> None:
@@ -236,7 +273,9 @@ def test_onsite_pool_is_split_equally_by_onsite_count(monkeypatch) -> None:
     monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
 
     single_plugins = _plugins_for_ids(onsite_ids=["onsite_a"], offsite_ids=[])
-    split_plugins = _plugins_for_ids(onsite_ids=["onsite_a", "onsite_b"], offsite_ids=[])
+    split_plugins = _plugins_for_ids(
+        onsite_ids=["onsite_a", "onsite_b"], offsite_ids=[]
+    )
 
     single_state = _build_state(
         plugins=single_plugins,

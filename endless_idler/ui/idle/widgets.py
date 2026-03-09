@@ -21,6 +21,7 @@ from endless_idler.ui.party_builder_common import build_character_stats_tooltip
 from endless_idler.ui.party_builder_common import format_idle_exp_rate_suffix
 from endless_idler.ui.tooltip import hide_stained_tooltip
 from endless_idler.ui.tooltip import show_stained_tooltip
+from endless_idler.ui.widgets.shard_progress_bar import ShardProgressBar
 from endless_idler.utils import normalize_progress
 
 
@@ -150,6 +151,11 @@ class IdleOffsiteCard(QFrame):
         )
         body.addWidget(self._exp_bar)
 
+        # Shard progress bar (only visible when character has shard reward types)
+        self._shard_bar = ShardProgressBar()
+        self._shard_bar.setVisible(False)
+        body.addWidget(self._shard_bar)
+
         # Element tint will be applied on first update_display call
         for widget in (
             self._portrait,
@@ -238,6 +244,22 @@ class IdleOffsiteCard(QFrame):
         # Show prestige button when exp_multiplier >= 10
         exp_multiplier = float(data.get("exp_multiplier", 1.0))
         self._prestige_button.setVisible(exp_multiplier >= 10.0)
+
+        # Update shard progress bar if character has shard reward types
+        shard_reward_types = data.get("shard_reward_types")
+        if isinstance(shard_reward_types, tuple) and len(shard_reward_types) > 0:
+            shard_bar_ticks = int(data.get("shard_bar_ticks", 0))
+            element_id = str(
+                getattr(self._plugin, "damage_type_id", "generic") or "generic"
+            )
+            self._shard_bar.set_shard_data(
+                shard_bar_ticks=shard_bar_ticks,
+                element_id=element_id,
+                shard_types=shard_reward_types,
+            )
+            self._shard_bar.setVisible(True)
+        else:
+            self._shard_bar.setVisible(False)
 
         # Apply element tint on each update
         self._apply_element_tint(data)

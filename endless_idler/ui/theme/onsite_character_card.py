@@ -135,4 +135,16 @@ QProgressBar#onsiteStatBar[statKey="regain"]::chunk {
 QProgressBar#onsiteStatBar[statKey="mitigation"]::chunk {
     background-color: rgba(149, 165, 166, 175);
 }
+
+/* Shard Progress Bar */
+QWidget#shardProgressBarWidget {
+    background-color: transparent;
+    min-height: 18px;
+}
+
+QLabel#shardProgressBarLabel {
+    color: rgba(255, 255, 255, 220);
+    font-size: 10px;
+    font-weight: 500;
+}
 """.strip()
