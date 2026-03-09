@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from dataclasses import field
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +25,8 @@ class BlessingPlugin:
         target_damage_type: Damage type this blessing affects (fire, ice, wind, lightning, light, dark)
         is_unlocked: Whether the blessing is unlocked
         unlock_condition: Description of how to unlock the blessing
+        is_persistent: Whether this blessing saves across sessions
+        save_schema: Fields to save: {"steps": int, "unlocked": bool}
     """
 
     blessing_id: str
@@ -35,6 +38,8 @@ class BlessingPlugin:
     target_damage_type: str | None = None
     is_unlocked: bool = True
     unlock_condition: str | None = None
+    is_persistent: bool = True
+    save_schema: dict[str, type] = field(default_factory=dict)
 
     def get_multiplier(self, steps: int) -> float:
         """Calculate the multiplier for a given step count.

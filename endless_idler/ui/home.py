@@ -12,9 +12,12 @@ from PySide6.QtWidgets import QWidget
 
 from endless_idler.blessings import discover_blessing_plugins
 from endless_idler.blessings import get_default_blessing
+from endless_idler.blessings.lunar_blessing import get_lunar_progress_per_tick
+from endless_idler.blessings.lunar_blessing import LUNAR_STEP_SECONDS
+from endless_idler.blessings.lunar_blessing import LUNAR_WEEK_SECONDS
 from endless_idler.blessings.plugin import BlessingPlugin
-from endless_idler.ui.components.blessing_panel import BlessingPanel
 from endless_idler.run_save_store import RunSaveStore
+from endless_idler.ui.components.blessing_panel import BlessingPanel
 
 if TYPE_CHECKING:
     from endless_idler.save import RunSave
@@ -51,15 +54,8 @@ class HomePage(QWidget):
         tabs.setCurrentIndex(0)
         self._panel_layout.addWidget(tabs)
 
-        self._odyssey_panel = BlessingPanel()
-        self._odyssey_panel.set_blessing_name("Odyssey's Blessing")
-        self._odyssey_panel.set_mod_value("x1.0000")
-        self._odyssey_panel.set_tooltip_html(self._build_odyssey_tooltip())
-        self._panel_layout.addWidget(self._odyssey_panel)
-
-        self._damage_blessings: list[BlessingPlugin] = []
         self._blessing_panels: dict[str, BlessingPanel] = {}
-        self._create_damage_blessing_panels()
+        self._create_blessing_panels()
 
         self._panel_layout.addStretch(1)
 
@@ -72,59 +68,84 @@ class HomePage(QWidget):
     def _get_save(self) -> "RunSave":
         return self._save_store.current
 
-    def _create_damage_blessing_panels(self) -> None:
-        all_blessings = discover_blessing_plugins()
-        damage_blessings = [
-            b for b in all_blessings if b.target_damage_type is not None
-        ]
-        self._damage_blessings = damage_blessings
+    def _is_blessing_unlocked(self, plugin: BlessingPlugin) -> bool:
+        """Check if a blessing is unlocked based on plugin and save state."""
+        if not plugin.is_unlocked:
+            return False
         save = self._get_save()
-        for blessing in damage_blessings:
-            blessing_id = blessing.blessing_id
-            damage_type = blessing.target_damage_type
-            if damage_type is None:
-                continue
-            blessing_data = save.blessings.get(damage_type, {})
-            if not blessing_data.get("unlocked", False):
+        if plugin.target_damage_type is not None:
+            blessing_data = save.blessings.get(plugin.target_damage_type, {})
+            return blessing_data.get("unlocked", False)
+        return True
+
+    def _is_session_based(self, plugin: BlessingPlugin) -> bool:
+        """Check if a blessing is session-based (Odyssey's Blessing)."""
+        return plugin.blessing_id == "odyssey_blessing"
+
+    def _is_lunar_blessing(self, plugin: BlessingPlugin) -> bool:
+        """Check if this is Lunar's Blessing (special dual display)."""
+        return plugin.blessing_id == "lunar_blessing"
+
+    def _create_blessing_panels(self) -> None:
+        """Create blessing panels dynamically from discovered plugins."""
+        all_blessings = discover_blessing_plugins()
+        for plugin in all_blessings:
+            if not self._is_blessing_unlocked(plugin):
                 continue
             panel = BlessingPanel()
-            panel.set_blessing_name(blessing.display_name)
-            panel.set_color_id(damage_type)
-            self._blessing_panels[blessing_id] = panel
+            panel.set_blessing_name(plugin.display_name)
+            panel.set_tooltip_html(plugin.description)
+            if plugin.target_damage_type is not None:
+                panel.set_color_id(plugin.target_damage_type)
+            elif self._is_lunar_blessing(plugin):
+                panel.set_color_id("lunar")
+            self._blessing_panels[plugin.blessing_id] = panel
             self._panel_layout.addWidget(panel)
 
-    def _update_damage_panels(self) -> None:
-        save = self._get_save()
-        for blessing in self._damage_blessings:
-            blessing_id = blessing.blessing_id
-            damage_type = blessing.target_damage_type
-            if damage_type is None:
-                continue
-            panel = self._blessing_panels.get(blessing_id)
-            if panel is None:
-                continue
-            blessing_data = save.blessings.get(damage_type, {})
-            steps = blessing_data.get("steps", 0)
-            max_steps = blessing.max_steps or 12
-            progress = min(1.0, steps / max_steps) if max_steps > 0 else 0.0
-            bonus_pct = (steps * 0.0001) * 100
-            panel.set_current_progress(progress)
-            panel.set_mod_value(f"+{bonus_pct:.2f}%")
-            panel.set_tooltip_html(
-                self._build_damage_tooltip(blessing, steps, bonus_pct, max_steps)
-            )
+    def _get_blessing_steps(self, plugin: BlessingPlugin) -> int:
+        """Get the current step count for a blessing."""
+        if self._is_session_based(plugin):
+            elapsed = self._elapsed_seconds()
+            return max(0, int(elapsed // plugin.step_seconds))
+        else:
+            save = self._get_save()
+            if plugin.target_damage_type is not None:
+                blessing_data = save.blessings.get(plugin.blessing_id, {})
+            else:
+                blessing_data = save.blessings.get(plugin.blessing_id, {})
+            return blessing_data.get("steps", 0)
 
-    def _build_damage_tooltip(
-        self,
-        blessing: BlessingPlugin,
-        steps: int,
-        bonus_pct: float,
-        max_steps: int,
-    ) -> str:
-        time_to_next = int(blessing.step_seconds)
+    def _get_blessing_progress(self, plugin: BlessingPlugin) -> float:
+        """Get the current progress for a blessing (0.0 to 1.0)."""
+        if self._is_session_based(plugin):
+            elapsed = self._elapsed_seconds()
+            phase = elapsed % plugin.step_seconds
+            return max(0.0, min(1.0, phase / plugin.step_seconds))
+        else:
+            save = self._get_save()
+            blessing_data = save.blessings.get(plugin.blessing_id, {})
+            step_start_time = blessing_data.get("step_start_time", 0.0)
+            current_time = time.time()
+            elapsed_in_step = current_time - step_start_time
+            progress = elapsed_in_step / plugin.step_seconds
+            return max(0.0, min(1.0, progress))
+
+    def _build_tooltip(self, plugin: BlessingPlugin, steps: int) -> str:
+        """Build tooltip HTML for a blessing."""
+        if self._is_session_based(plugin):
+            return self._build_odyssey_tooltip()
+        elif self._is_lunar_blessing(plugin):
+            progress_data = get_lunar_progress_per_tick(steps)
+            return self._build_lunar_tooltip(steps, progress_data)
+        else:
+            return self._build_damage_tooltip(plugin, steps)
+
+    def _build_damage_tooltip(self, plugin: BlessingPlugin, steps: int) -> str:
+        """Build tooltip for damage-type blessings."""
+        bonus_pct = (steps * 0.0001) * 100
+        time_to_next = int(plugin.step_seconds)
         return (
-            f"<b>{blessing.display_name}</b><br>"
-            f"Steps: <b>{steps}</b> / {max_steps}<br>"
+            f"<b>{plugin.display_name}</b><br>"
             f"Current Bonus: <b>+{bonus_pct:.2f}%</b><br>"
             f"Time to next step: <b>{self._format_seconds(time_to_next)}</b>"
         )
@@ -169,25 +190,52 @@ class HomePage(QWidget):
 
     def _build_odyssey_tooltip(self) -> str:
         multiplier = self._get_multiplier()
-        steps = self._get_step_count()
         seconds_to_next = self._get_seconds_to_next_step()
         return (
             "<b>Odyssey's Blessing</b><br>"
             f"Current: <b>x{multiplier:.4f}</b><br>"
-            f"Stacks gained: <b>{max(0, int(steps))}</b><br>"
             f"Next blessing in: <b>{self._format_seconds(seconds_to_next)}</b><br><br>"
             f"+{(1.025 ** (1.0 / 6.0) - 1.0) * 100.0:.3f}% every 5 minutes."
         )
 
+    def _build_lunar_tooltip(self, steps: int, progress_data: dict[str, float]) -> str:
+        exp_gain = progress_data["exp_gain_pct"]
+        exp_reduction = progress_data["exp_reduction_pct"]
+        weeks = progress_data["progress_weeks"]
+        minutes_to_next = LUNAR_STEP_SECONDS / 60.0
+        total_minutes = steps * minutes_to_next
+        minutes_into_week = total_minutes % (LUNAR_WEEK_SECONDS / 60.0)
+        minutes_remaining = (LUNAR_WEEK_SECONDS / 60.0) - minutes_into_week
+        return (
+            "<b>Lunar's Blessing</b><br>"
+            f"<b>+{exp_gain:.1f}%</b> experience gained<br>"
+            f"<b>-{exp_reduction:.1f}%</b> experience needed per level<br><br>"
+            f"Progress: <b>{weeks:.2f}</b> weeks<br>"
+            f"Next step in: <b>{self._format_seconds(int(minutes_remaining * 60))}</b><br><br>"
+            f"Each week grants +1% exp gain and -1% exp needed. "
+            f"After 50%, diminishing returns apply (each 10% requires 2x time)."
+        )
+
     def _update_blessing_display(self) -> None:
-        steps = self._get_step_count()
-        cycle_progress = self._get_cycle_progress()
-        multiplier = self._get_multiplier()
-
-        self._odyssey_panel.set_current_progress(cycle_progress)
-        self._odyssey_panel.set_mod_value(f"x{multiplier:.4f}")
-        self._odyssey_panel.set_tooltip_html(self._build_odyssey_tooltip())
-
-        self._update_damage_panels()
-
-        self._last_step_count = steps
+        """Update all blessing panels with current state."""
+        all_blessings = discover_blessing_plugins()
+        for plugin in all_blessings:
+            if not self._is_blessing_unlocked(plugin):
+                continue
+            panel = self._blessing_panels.get(plugin.blessing_id)
+            if panel is None:
+                continue
+            steps = self._get_blessing_steps(plugin)
+            progress = self._get_blessing_progress(plugin)
+            multiplier = plugin.get_multiplier(steps)
+            panel.set_current_progress(progress)
+            if self._is_lunar_blessing(plugin):
+                progress_data = get_lunar_progress_per_tick(steps)
+                panel.set_mod_value_dual(progress_data["display_pct"])
+            elif self._is_session_based(plugin):
+                panel.set_mod_value(f"x{multiplier:.4f}")
+            else:
+                bonus_pct = (steps * 0.0001) * 100
+                panel.set_mod_value(f"+{bonus_pct:.2f}%")
+            panel.set_tooltip_html(self._build_tooltip(plugin, steps))
+        self._last_step_count = self._get_step_count()

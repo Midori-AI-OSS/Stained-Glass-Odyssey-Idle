@@ -36,7 +36,13 @@ blessing = BlessingPlugin(
     ),
     step_seconds=LIGHT_STEP_SECONDS,
     multiplier_formula=_light_multiplier_formula,
-    max_steps=12,
+    max_steps=None,
     target_damage_type="light",
     is_unlocked=False,
+    is_persistent=True,
+    save_schema={
+        "steps": int,
+        "unlocked": bool,
+        "step_start_time": float,
+    },
 )

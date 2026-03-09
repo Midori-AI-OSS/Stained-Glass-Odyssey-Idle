@@ -84,6 +84,18 @@ class BlessingPanel(QFrame):
         """
         self._mod_label.setText(str(value))
 
+    def set_mod_value_dual(self, value: float, prefix: str = "+/-") -> None:
+        """Set the mod value in dual-value mode (e.g., "+/- 25%").
+
+        Used for blessings that have both positive and negative effects
+        that are equal in magnitude (like Lunar's Blessing).
+
+        Args:
+            value: The numerical value to display
+            prefix: The prefix string (default: "+/-")
+        """
+        self._mod_label.setText(f"{prefix} {value:.0f}%")
+
     def set_tooltip_html(self, html: str | None) -> None:
         """Set the tooltip HTML content. If None or empty, no tooltip is shown.
 

@@ -12,6 +12,7 @@ from typing import cast
 
 from PySide6.QtCore import QStandardPaths
 
+from endless_idler.blessings.registry import discover_blessing_plugins
 from endless_idler.inventory import get_all_items
 from endless_idler.inventory import get_item_ids
 from endless_idler.save_codec import as_blessings_dict
@@ -52,6 +53,30 @@ _LAYOUT_OWNED_ORDERING_VALUES = frozenset(
 )
 
 
+def _get_default_blessings() -> dict[str, dict[str, Any]]:
+    """Generate default blessing data from registered plugins."""
+    defaults: dict[str, dict[str, Any]] = {}
+    for plugin in discover_blessing_plugins():
+        if not plugin.is_persistent:
+            continue
+
+        blessing_defaults: dict[str, Any] = {}
+        for field_name, field_type in plugin.save_schema.items():
+            if field_type is int:
+                blessing_defaults[field_name] = 0
+            elif field_type is float:
+                blessing_defaults[field_name] = 0.0
+            elif field_type is bool:
+                if field_name == "unlocked":
+                    blessing_defaults[field_name] = plugin.is_unlocked
+                else:
+                    blessing_defaults[field_name] = False
+
+        defaults[plugin.blessing_id] = blessing_defaults
+
+    return defaults
+
+
 @dataclass(slots=True)
 class RunSave:
     version: int = SAVE_VERSION
@@ -72,38 +97,7 @@ class RunSave:
     character_stats: dict[str, dict[str, float]] = field(default_factory=dict)
     character_initial_stats: dict[str, dict[str, float]] = field(default_factory=dict)
     character_deaths: dict[str, int] = field(default_factory=dict)
-    blessings: dict[str, dict[str, Any]] = field(
-        default_factory=lambda: {
-            "global": {
-                "odyssey_steps": 0,
-                "odyssey_unlocked": True,
-            },
-            "fire": {
-                "steps": 0,
-                "unlocked": False,
-            },
-            "ice": {
-                "steps": 0,
-                "unlocked": False,
-            },
-            "wind": {
-                "steps": 0,
-                "unlocked": False,
-            },
-            "lightning": {
-                "steps": 0,
-                "unlocked": False,
-            },
-            "light": {
-                "steps": 0,
-                "unlocked": False,
-            },
-            "dark": {
-                "steps": 0,
-                "unlocked": False,
-            },
-        }
-    )
+    blessings: dict[str, dict[str, Any]] = field(default_factory=_get_default_blessings)
     idle_exp_bonus_seconds: float = 0.0
     idle_exp_penalty_seconds: float = 0.0
     idle_shared_exp_percentage: int = 1

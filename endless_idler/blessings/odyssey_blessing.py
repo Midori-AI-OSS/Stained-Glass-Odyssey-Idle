@@ -37,4 +37,6 @@ blessing = BlessingPlugin(
     step_seconds=ODYSSEY_STEP_SECONDS,
     multiplier_formula=_odyssey_multiplier_formula,
     max_steps=None,
+    is_persistent=False,
+    save_schema={},
 )

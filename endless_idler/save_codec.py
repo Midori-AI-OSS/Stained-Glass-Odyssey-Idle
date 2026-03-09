@@ -224,115 +224,111 @@ def normalized_character_progress(
     return normalized
 
 
-def as_blessings_dict(value: object) -> dict[str, dict[str, Any]]:
-    """Normalize blessings data from save file.
+def _default_blessings() -> dict[str, dict[str, Any]]:
+    """Generate default blessings from plugin discovery."""
+    from endless_idler.blessings.registry import discover_blessing_plugins
 
-    Returns a dict with blessing_id -> {steps, unlocked} or similar structure.
-    Handles the 'global' blessing which has different keys (odyssey_steps, odyssey_unlocked).
-    """
+    defaults: dict[str, dict[str, Any]] = {}
+    for plugin in discover_blessing_plugins():
+        if not plugin.is_persistent:
+            continue
+
+        blessing_defaults: dict[str, Any] = {}
+        for field_name, field_type in plugin.save_schema.items():
+            if field_type is int:
+                blessing_defaults[field_name] = 0
+            elif field_type is float:
+                blessing_defaults[field_name] = 0.0
+            elif field_type is bool:
+                blessing_defaults[field_name] = (
+                    plugin.is_unlocked if field_name == "unlocked" else False
+                )
+
+        defaults[plugin.blessing_id] = blessing_defaults
+
+    return defaults
+
+
+def as_blessings_dict(value: object) -> dict[str, dict[str, Any]]:
+    """Normalize blessings data using plugin schemas."""
+    from endless_idler.blessings.registry import discover_blessing_plugins
+
     if not isinstance(value, dict):
         return _default_blessings()
 
     result: dict[str, dict[str, Any]] = {}
 
-    # Process global blessing separately (has odyssey_steps, odyssey_unlocked)
-    global_raw = value.get("global", {})
-    if isinstance(global_raw, dict):
-        odyssey_steps = as_int(global_raw.get("odyssey_steps", 0), default=0)
-        odyssey_unlocked = bool(global_raw.get("odyssey_unlocked", True))
-        result["global"] = {
-            "odyssey_steps": max(0, odyssey_steps),
-            "odyssey_unlocked": odyssey_unlocked,
-        }
-    else:
-        result["global"] = {"odyssey_steps": 0, "odyssey_unlocked": True}
+    for plugin in discover_blessing_plugins():
+        if not plugin.is_persistent:
+            continue
 
-    # Process elemental blessings (fire, ice, wind, lightning, light, dark)
-    elemental_blessings = ["fire", "ice", "wind", "lightning", "light", "dark"]
-    for blessing_id in elemental_blessings:
-        raw = value.get(blessing_id, {})
-        if isinstance(raw, dict):
-            steps = as_int(raw.get("steps", 0), default=0)
-            unlocked = bool(raw.get("unlocked", False))
-            result[blessing_id] = {
-                "steps": max(0, steps),
-                "unlocked": unlocked,
-            }
-        else:
-            result[blessing_id] = {"steps": 0, "unlocked": False}
+        raw_blessing = value.get(plugin.blessing_id, {})
+        if not isinstance(raw_blessing, dict):
+            raw_blessing = {}
+
+        normalized: dict[str, Any] = {}
+        for field_name, field_type in plugin.save_schema.items():
+            raw_value = raw_blessing.get(field_name)
+
+            if field_type is int:
+                normalized[field_name] = max(0, as_int(raw_value, default=0))
+            elif field_type is float:
+                normalized[field_name] = max(0.0, as_float(raw_value, default=0.0))
+            elif field_type is bool:
+                if field_name == "unlocked":
+                    normalized[field_name] = (
+                        bool(raw_value) if raw_value is not None else plugin.is_unlocked
+                    )
+                else:
+                    normalized[field_name] = (
+                        bool(raw_value) if raw_value is not None else False
+                    )
+
+        result[plugin.blessing_id] = normalized
 
     return result
-
-
-def _default_blessings() -> dict[str, dict[str, Any]]:
-    """Return the default blessings structure."""
-    return {
-        "global": {
-            "odyssey_steps": 0,
-            "odyssey_unlocked": True,
-        },
-        "fire": {
-            "steps": 0,
-            "unlocked": False,
-        },
-        "ice": {
-            "steps": 0,
-            "unlocked": False,
-        },
-        "wind": {
-            "steps": 0,
-            "unlocked": False,
-        },
-        "lightning": {
-            "steps": 0,
-            "unlocked": False,
-        },
-        "light": {
-            "steps": 0,
-            "unlocked": False,
-        },
-        "dark": {
-            "steps": 0,
-            "unlocked": False,
-        },
-    }
 
 
 def normalized_blessings(
     value: dict[str, dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    """Normalize and validate blessings data.
+    """Normalize and validate blessings data using plugin schemas.
 
-    Ensures all required blessings exist with proper types.
+    Ensures all persistent blessings exist with proper types.
     """
+    from endless_idler.blessings.registry import discover_blessing_plugins
+
     defaults = _default_blessings()
     result: dict[str, dict[str, Any]] = {}
 
-    # Normalize global blessing
-    global_raw = value.get("global", {})
-    if isinstance(global_raw, dict):
-        odyssey_steps = as_int(global_raw.get("odyssey_steps", 0), default=0)
-        odyssey_unlocked = bool(global_raw.get("odyssey_unlocked", True))
-        result["global"] = {
-            "odyssey_steps": max(0, odyssey_steps),
-            "odyssey_unlocked": odyssey_unlocked,
-        }
-    else:
-        result["global"] = defaults["global"].copy()
+    for plugin in discover_blessing_plugins():
+        if not plugin.is_persistent:
+            continue
 
-    # Normalize elemental blessings
-    elemental_blessings = ["fire", "ice", "wind", "lightning", "light", "dark"]
-    for blessing_id in elemental_blessings:
-        raw = value.get(blessing_id, {})
-        if isinstance(raw, dict):
-            steps = as_int(raw.get("steps", 0), default=0)
-            unlocked = bool(raw.get("unlocked", False))
-            result[blessing_id] = {
-                "steps": max(0, steps),
-                "unlocked": unlocked,
-            }
-        else:
-            result[blessing_id] = defaults[blessing_id].copy()
+        raw = value.get(plugin.blessing_id, {})
+        if not isinstance(raw, dict):
+            result[plugin.blessing_id] = defaults.get(plugin.blessing_id, {}).copy()
+            continue
+
+        normalized: dict[str, Any] = {}
+        for field_name, field_type in plugin.save_schema.items():
+            raw_value = raw.get(field_name)
+
+            if field_type is int:
+                normalized[field_name] = max(0, as_int(raw_value, default=0))
+            elif field_type is float:
+                normalized[field_name] = max(0.0, as_float(raw_value, default=0.0))
+            elif field_type is bool:
+                if field_name == "unlocked":
+                    normalized[field_name] = (
+                        bool(raw_value) if raw_value is not None else plugin.is_unlocked
+                    )
+                else:
+                    normalized[field_name] = (
+                        bool(raw_value) if raw_value is not None else False
+                    )
+
+        result[plugin.blessing_id] = normalized
 
     return result
 
