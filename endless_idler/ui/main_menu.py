@@ -138,18 +138,28 @@ class MainMenuWindow(QMainWindow):
         topbar_layout.addStretch(1)
 
         self._radio_control = RadioControlWidget(topbar)
-        topbar_layout.addWidget(self._radio_control, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        topbar_layout.addWidget(
+            self._radio_control,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
 
         self._stack = QStackedWidget(shell)
         shell_layout.addWidget(self._stack, 1)
 
-        self._home_screen = HomePage(self)
-        self._layout_screen = LayoutScreenWidget(save_store=self._save_store, parent=self)
+        self._home_screen = HomePage(save_store=self._save_store, parent=self)
+        self._layout_screen = LayoutScreenWidget(
+            save_store=self._save_store, parent=self
+        )
         self._settings_screen = SettingsPage(self)
         self._settings_screen.settings_changed.connect(self._on_settings_changed)
         self._settings_screen.save_now_requested.connect(self._on_save_now_requested)
-        self._settings_screen.save_backup_requested.connect(self._on_save_backup_requested)
-        self._settings_screen.save_reset_requested.connect(self._on_save_reset_requested)
+        self._settings_screen.save_backup_requested.connect(
+            self._on_save_backup_requested
+        )
+        self._settings_screen.save_reset_requested.connect(
+            self._on_save_reset_requested
+        )
         self._idle_placeholder = self._build_idle_placeholder(self)
 
         self._stack.addWidget(self._home_screen)
@@ -157,8 +167,12 @@ class MainMenuWindow(QMainWindow):
         self._stack.addWidget(self._idle_placeholder)
         self._stack.addWidget(self._settings_screen)
 
-        self._radio_control.play_requested.connect(self._on_radio_control_play_requested)
-        self._radio_control.volume_changed.connect(self._on_radio_control_volume_changed)
+        self._radio_control.play_requested.connect(
+            self._on_radio_control_play_requested
+        )
+        self._radio_control.volume_changed.connect(
+            self._on_radio_control_volume_changed
+        )
         if self._radio_controller is not None:
             self._radio_controller.state_changed.connect(self._on_radio_state_changed)
 
@@ -254,7 +268,9 @@ class MainMenuWindow(QMainWindow):
         self._stack.setCurrentWidget(self._settings_screen)
         self._set_active_nav(self._PAGE_SETTINGS)
 
-    def _idle_lineup_signature(self) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, int], ...], int]:
+    def _idle_lineup_signature(
+        self,
+    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, int], ...], int]:
         return IdleScreenWidget.build_lineup_signature(self._save_store.current)
 
     def _dispose_idle_runtime(self, *, persist: bool) -> None:
@@ -268,7 +284,10 @@ class MainMenuWindow(QMainWindow):
 
     def _ensure_idle_runtime(self) -> None:
         current_signature = self._idle_lineup_signature()
-        if self._idle_screen is not None and self._idle_screen.lineup_signature == current_signature:
+        if (
+            self._idle_screen is not None
+            and self._idle_screen.lineup_signature == current_signature
+        ):
             return
         if self._idle_screen is not None:
             self._dispose_idle_runtime(persist=True)
@@ -449,7 +468,9 @@ class MainMenuWindow(QMainWindow):
         self._radio_control.set_service_available(service_available)
         self._radio_control.set_playing(bool(snapshot.get("is_playing") or False))
         self._radio_control.set_radio_enabled(bool(snapshot.get("enabled") or False))
-        self._radio_control.set_connection_state(str(snapshot.get("connection_state") or "idle"))
+        self._radio_control.set_connection_state(
+            str(snapshot.get("connection_state") or "idle")
+        )
         self._radio_control.set_volume(clamp_volume(snapshot.get("volume")))
         self._radio_control.set_status_tooltip(str(snapshot.get("status_text") or ""))
         self._update_window_title_from_radio_state(snapshot)
@@ -464,7 +485,9 @@ class MainMenuWindow(QMainWindow):
             return
 
         channel_label = str(state.get("channel_label") or "all").strip() or "all"
-        current_track = self._normalize_radio_window_track_title(state.get("current_track"))
+        current_track = self._normalize_radio_window_track_title(
+            state.get("current_track")
+        )
         last_track = self._normalize_radio_window_track_title(state.get("last_track"))
         service_available = bool(state.get("service_available"))
         degraded_from_playback = bool(state.get("degraded_from_playback"))

@@ -14,7 +14,7 @@ from endless_idler.blessings import discover_blessing_plugins
 from endless_idler.blessings import get_default_blessing
 from endless_idler.blessings.plugin import BlessingPlugin
 from endless_idler.ui.components.blessing_panel import BlessingPanel
-from endless_idler.ui.stores import get_save_store
+from endless_idler.run_save_store import RunSaveStore
 
 if TYPE_CHECKING:
     from endless_idler.save import RunSave
@@ -23,8 +23,9 @@ if TYPE_CHECKING:
 class HomePage(QWidget):
     """Decorative home shell inspired by Agents Runner dashboard chrome."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, save_store: RunSaveStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._save_store = save_store
         self.setObjectName("HomePageRoot")
 
         self._home_session_started_at = time.time()
@@ -69,7 +70,7 @@ class HomePage(QWidget):
         self._update_blessing_display()
 
     def _get_save(self) -> "RunSave":
-        return get_save_store().current
+        return self._save_store.current
 
     def _create_damage_blessing_panels(self) -> None:
         all_blessings = discover_blessing_plugins()
