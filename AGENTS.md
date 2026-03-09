@@ -76,7 +76,7 @@ Required run-log fields:
 ## UI Development Requirements (Mandatory)
 
 When working on UI components, you MUST:
-1. Read `/home/lunamidori/nfs/Midori-AI-Github/Midori-AI-Mono-Repo/Endless-Idler/.agents/instructions/reusable_ui_components.md`
+1. Read `.agents/instructions/reusable_ui_components.md`
 2. Use existing reusable components whenever possible
 3. Contribute improvements to reusable components rather than creating duplicates
 
