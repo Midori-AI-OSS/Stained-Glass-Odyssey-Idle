@@ -14,10 +14,7 @@ def _build_state(
     progress: dict[str, dict[str, float | int]] | None = None,
     inventory: dict[str, int] | None = None,
 ) -> IdleGameState:
-    plugins_by_id = {
-        plugin.char_id: plugin
-        for plugin in discover_character_plugins()
-    }
+    plugins_by_id = {plugin.char_id: plugin for plugin in discover_character_plugins()}
     plugin = plugins_by_id.get(char_id)
     if plugin is None:
         raise ValueError(f"Missing runtime plugin for test character {char_id!r}.")
@@ -67,22 +64,26 @@ def test_dual_type_shard_award_uses_random_constituent(monkeypatch) -> None:
     assert inventory == {"wind_shard": 1}
 
 
-def test_generic_damage_type_character_is_not_shard_eligible(monkeypatch) -> None:
+def test_generic_damage_type_character_receives_random_elemental_shards(
+    monkeypatch,
+) -> None:
     inventory: dict[str, int] = {}
     state = _build_state(
         char_id="luna",
-        progress={"luna": {"shard_bar_ticks": 0}},
+        progress={"luna": {"shard_bar_ticks": 99}},
         inventory=inventory,
     )
     monkeypatch.setattr(state._rng, "random", lambda: 0.0)
+    monkeypatch.setattr(state._rng, "choice", lambda options: options[0])
 
-    for _ in range(SHARD_ROLL_INTERVAL_TICKS * 3):
+    for _ in range(SHARD_ROLL_INTERVAL_TICKS):
         state.process_tick()
 
     data = state.get_char_data("luna")
     assert isinstance(data, dict)
     assert int(data["shard_bar_ticks"]) == 0
-    assert inventory == {}
+    # Generic characters receive random elemental shards (first option is chosen here)
+    assert inventory == {"dark_shard": 1}
 
 
 def test_export_progress_includes_shard_bar_ticks() -> None:

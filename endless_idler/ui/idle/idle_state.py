@@ -9,12 +9,16 @@ from typing import Any
 from PySide6.QtCore import QObject
 from PySide6.QtCore import Signal
 
+from endless_idler.blessings import get_default_blessing
+from endless_idler.blessings.plugin import BlessingPlugin
 from endless_idler.characters.placement_rules import MISPLACED_EXP_MULTIPLIER
 from endless_idler.characters.placement_rules import MISPLACED_STAT_MULTIPLIER
 from endless_idler.characters.placement_rules import plugin_lane_mismatch
 from endless_idler.combat.damage_types import normalize_damage_type_id
 from endless_idler.combat.party_stats import apply_base_stat_multiplier
-from endless_idler.combat.party_stats import apply_offsite_stat_share as apply_offsite_stat_share_to_stats
+from endless_idler.combat.party_stats import (
+    apply_offsite_stat_share as apply_offsite_stat_share_to_stats,
+)
 from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.combat.party_stats import party_scaling
 from endless_idler.combat.stats import Stats
@@ -32,9 +36,8 @@ DEATH_EXP_DEBUFF_PER_STACK = 0.05
 SHARED_EXP_ONSITE_MULTIPLIER = 0.75
 SHARED_EXP_OFFSITE_MULTIPLIER = 1.5
 IDLE_TICK_INTERVAL_SECONDS = 0.1
-IDLE_BLESSING_STEP_SECONDS = 300.0
-IDLE_BLESSING_STEP_MULTIPLIER = 1.025 ** (1.0 / 6.0)
 MIN_EXP_GAIN_PER_TICK = 0.0001
+IDLE_BLESSING_STEP_MULTIPLIER = 1.025 ** (1.0 / 6.0)
 SHARD_ROLL_INTERVAL_TICKS = 10
 SHARD_BAR_CYCLE_TICKS = 100
 SHARD_BASE_CHANCE_PERCENT = 0.0001
@@ -52,10 +55,7 @@ SHARD_ALLOWED_TYPES = frozenset(
         "dark",
     }
 )
-SHARD_ITEM_ID_BY_TYPE = {
-    key: f"{key}_shard"
-    for key in SHARD_ALLOWED_TYPES
-}
+SHARD_ITEM_ID_BY_TYPE = {key: f"{key}_shard" for key in SHARD_ALLOWED_TYPES}
 SHARD_EMA_ALPHA = 1.0 - math.exp(
     -IDLE_TICK_INTERVAL_SECONDS / SHARD_EXP_SMOOTHING_SECONDS
 )
@@ -87,19 +87,25 @@ class IdleGameState(QObject):
     ) -> None:
         super().__init__()
         self._char_ids = char_ids
-        self._offsite_ids: list[str] = [str(item) for item in (offsite_ids or []) if item]
+        self._offsite_ids: list[str] = [
+            str(item) for item in (offsite_ids or []) if item
+        ]
         self._party_level = party_level
         self._stacks = stacks
         self._plugins_by_id = plugins_by_id
         self._misplaced_onsite_ids: set[str] = {
             char_id
             for char_id in self._char_ids
-            if plugin_lane_mismatch(lane="onsite", plugin=self._plugins_by_id.get(char_id))
+            if plugin_lane_mismatch(
+                lane="onsite", plugin=self._plugins_by_id.get(char_id)
+            )
         }
         self._misplaced_offsite_ids: set[str] = {
             char_id
             for char_id in self._offsite_ids
-            if plugin_lane_mismatch(lane="offsite", plugin=self._plugins_by_id.get(char_id))
+            if plugin_lane_mismatch(
+                lane="offsite", plugin=self._plugins_by_id.get(char_id)
+            )
         }
         self._rng = rng
         self._progress_by_id = progress_by_id or {}
@@ -128,7 +134,9 @@ class IdleGameState(QObject):
             stack = max(1, int(stacks.get(char_id, 1)))
             stars = max(1, int(getattr(plugin, "stars", 1) or 1))
             plugin_base_stats = getattr(plugin, "base_stats", None)
-            base_stats: dict[str, float] = dict(plugin_base_stats) if isinstance(plugin_base_stats, dict) else {}
+            base_stats: dict[str, float] = (
+                dict(plugin_base_stats) if isinstance(plugin_base_stats, dict) else {}
+            )
             saved_stats = self._stats_by_id.get(char_id)
             if isinstance(saved_stats, dict):
                 for key, raw in saved_stats.items():
@@ -192,15 +200,21 @@ class IdleGameState(QObject):
                 except (TypeError, ValueError):
                     rebirth_power = 1.0
                 try:
-                    death_exp_debuff_stacks = max(0, int(saved.get("death_exp_debuff_stacks", 0)))
+                    death_exp_debuff_stacks = max(
+                        0, int(saved.get("death_exp_debuff_stacks", 0))
+                    )
                 except (TypeError, ValueError):
                     death_exp_debuff_stacks = 0
                 try:
-                    death_exp_debuff_until = float(max(0.0, float(saved.get("death_exp_debuff_until", 0.0))))
+                    death_exp_debuff_until = float(
+                        max(0.0, float(saved.get("death_exp_debuff_until", 0.0)))
+                    )
                 except (TypeError, ValueError):
                     death_exp_debuff_until = 0.0
                 try:
-                    max_hp_level_bonus_version = max(0, int(saved.get("max_hp_level_bonus_version", 0)))
+                    max_hp_level_bonus_version = max(
+                        0, int(saved.get("max_hp_level_bonus_version", 0))
+                    )
                 except (TypeError, ValueError):
                     max_hp_level_bonus_version = 0
                 try:
@@ -218,7 +232,9 @@ class IdleGameState(QObject):
                 base_stats["max_hp"] = intrinsic_hp + max(0, level - 1) * 10.0
                 max_hp_level_bonus_version = 1
 
-            scale = party_scaling(party_level=self._party_level, stars=stars, stacks=stack)
+            scale = party_scaling(
+                party_level=self._party_level, stars=stars, stacks=stack
+            )
             max_hp = max(1, int(float(base_stats.get("max_hp", 1000.0)) * scale))
             # Passive modifier formula: (stacks * 0.05) + 1.0
             # Provides 5% bonus per stack, starting at 1.05 with 1 stack
@@ -239,7 +255,9 @@ class IdleGameState(QObject):
                 "initial_base_stats": initial_base_stats,
                 "stack": stack,
                 "base_aggro": getattr(plugin, "base_aggro", None),
-                "damage_reduction_passes": getattr(plugin, "damage_reduction_passes", None),
+                "damage_reduction_passes": getattr(
+                    plugin, "damage_reduction_passes", None
+                ),
                 "exp_multiplier": exp_multiplier,
                 "req_multiplier": req_multiplier,
                 "rebirths": rebirths,
@@ -297,6 +315,9 @@ class IdleGameState(QObject):
                     options.append(normalized)
         elif raw in SHARD_ALLOWED_TYPES:
             options.append(raw)
+        elif raw == "generic":
+            # Generic damage types can earn all 6 elemental shard types
+            options.extend(sorted(SHARD_ALLOWED_TYPES))
 
         return tuple(options)
 
@@ -382,7 +403,10 @@ class IdleGameState(QObject):
         data["shard_bar_ticks"] = ticks
 
     def _is_misplaced_character(self, char_id: str) -> bool:
-        return char_id in self._misplaced_onsite_ids or char_id in self._misplaced_offsite_ids
+        return (
+            char_id in self._misplaced_onsite_ids
+            or char_id in self._misplaced_offsite_ids
+        )
 
     def _exp_multiplier_for_char(self, char_id: str) -> float:
         if self._is_misplaced_character(char_id):
@@ -417,8 +441,12 @@ class IdleGameState(QObject):
             progress: dict[str, float | int] = {
                 "level": max(1, int(data.get("level", 1))),
                 "exp": float(max(0.0, float(data.get("exp", 0.0)))),
-                "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
-                "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
+                "exp_multiplier": float(
+                    max(0.0, float(data.get("exp_multiplier", 1.0)))
+                ),
+                "max_hp_level_bonus_version": max(
+                    0, int(data.get("max_hp_level_bonus_version", 0))
+                ),
                 "rebirths": max(0, int(data.get("rebirths", 0))),
             }
             reserve_stats = build_scaled_character_stats(
@@ -455,8 +483,12 @@ class IdleGameState(QObject):
             progress = {
                 "level": max(1, int(data.get("level", 1))),
                 "exp": float(max(0.0, float(data.get("exp", 0.0)))),
-                "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
-                "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
+                "exp_multiplier": float(
+                    max(0.0, float(data.get("exp_multiplier", 1.0)))
+                ),
+                "max_hp_level_bonus_version": max(
+                    0, int(data.get("max_hp_level_bonus_version", 0))
+                ),
                 "rebirths": max(0, int(data.get("rebirths", 0))),
             }
             party_stats_item = build_scaled_character_stats(
@@ -475,7 +507,9 @@ class IdleGameState(QObject):
             party_snapshots.append((data, party_stats_item))
 
         if party_stats and reserves:
-            apply_offsite_stat_share_to_stats(party=party_stats, reserves=reserves, share=0.10)
+            apply_offsite_stat_share_to_stats(
+                party=party_stats, reserves=reserves, share=0.10
+            )
 
         for data, stats in [*party_snapshots, *reserve_snapshots]:
             try:
@@ -489,7 +523,9 @@ class IdleGameState(QObject):
 
             ratio = old_hp / old_max_hp if old_max_hp > 0 else 1.0
             data["max_hp"] = max(1, int(stats.max_hp))
-            data["hp"] = max(0.0, min(float(data["max_hp"]), ratio * float(data["max_hp"])))
+            data["hp"] = max(
+                0.0, min(float(data["max_hp"]), ratio * float(data["max_hp"]))
+            )
 
     def rebirth_character(self, char_id: str) -> bool:
         data = self._char_data.get(char_id)
@@ -529,7 +565,9 @@ class IdleGameState(QObject):
             power=power,
             stars=self._progression_stars_for_char(char_id),
         )
-        data["exp_multiplier"] = float(max(0.0, float(data.get("exp_multiplier", 1.0)))) + exp_mult_gain
+        data["exp_multiplier"] = (
+            float(max(0.0, float(data.get("exp_multiplier", 1.0)))) + exp_mult_gain
+        )
 
         data["rebirths"] = max(0, int(data.get("rebirths", 0))) + 1
 
@@ -541,10 +579,10 @@ class IdleGameState(QObject):
     def prestige_character(self, char_id: str) -> bool:
         """
         Apply prestige to a character, resetting their EXP multiplier and applying permanent stat gain bonuses.
-        
+
         Requirements:
         - EXP multiplier must be >= 10
-        
+
         Effects:
         1. EXP Multiplier Reset:
            new_exp_mult = max(0.01, 0.5 * (0.5 ** (prestige_count - 1)))
@@ -553,52 +591,57 @@ class IdleGameState(QObject):
            - Third prestige: 0.125
            - Fourth prestige: 0.0625
            - Fifth+ prestige: 0.01 (floor)
-           
+
         2. Stat Gain Multiplier:
            Doubles stat gains per level-up (2 ** prestige_count)
-           
+
         3. Post-Floor EXP Penalty:
            After EXP multiplier hits the floor (0.01),
            add 2x EXP required per level-up for each additional prestige
-        
+
         Args:
             char_id: The character ID to prestige
-            
+
         Returns:
             True if prestige was successful, False otherwise
         """
         data = self._char_data.get(char_id)
         if not data:
             return False
-        
+
         # Check unlock condition: EXP multiplier >= 10
         exp_multiplier = float(max(0.0, float(data.get("exp_multiplier", 1.0))))
         if exp_multiplier < 10.0:
             return False
-        
+
         # Increment prestige count
         prestige_count = max(0, int(data.get("prestige_count", 0)))
         prestige_count += 1
         data["prestige_count"] = prestige_count
-        
+
         # Apply EXP multiplier reset formula
         # new_exp_mult = max(0.01, 0.5 * (0.5 ** (prestige_count - 1)))
         new_exp_mult = 0.5 * (0.5 ** (prestige_count - 1))
         new_exp_mult = max(0.01, new_exp_mult)
         data["exp_multiplier"] = new_exp_mult
-        
+
         # Apply post-floor EXP penalty if needed
         # After floor (prestige_count >= 5), add 2x per additional prestige
         if new_exp_mult <= 0.01 and prestige_count >= 5:
             # Calculate how many prestiges past the floor
-            prestiges_past_floor = prestige_count - 4  # First 4 prestiges get us to floor
+            prestiges_past_floor = (
+                prestige_count - 4
+            )  # First 4 prestiges get us to floor
             # Apply 2x EXP penalty for each prestige past floor
-            penalty_multiplier = 2.0 ** prestiges_past_floor
-            data["req_multiplier"] = float(max(0.0, float(data.get("req_multiplier", 1.0)))) * penalty_multiplier
-        
+            penalty_multiplier = 2.0**prestiges_past_floor
+            data["req_multiplier"] = (
+                float(max(0.0, float(data.get("req_multiplier", 1.0))))
+                * penalty_multiplier
+            )
+
         # Note: Stat gain multiplier (2^prestige_count) is applied during level-up
         # This is handled in the _apply_weighted_stat_upgrades method
-        
+
         return True
 
     def process_tick(self) -> None:
@@ -640,10 +683,14 @@ class IdleGameState(QObject):
 
             if self._risk_reward_level > 0:
                 char_level = max(1, int(data.get("level", 1)))
-                speed_modifier = 0.5 * (1 - (0.00001 * (char_level * self._risk_reward_level)))
+                speed_modifier = 0.5 * (
+                    1 - (0.00001 * (char_level * self._risk_reward_level))
+                )
                 speed_modifier = max(0.1, speed_modifier)
-                ticks_per_drain = max(1, int(speed_modifier / IDLE_TICK_INTERVAL_SECONDS))
-                
+                ticks_per_drain = max(
+                    1, int(speed_modifier / IDLE_TICK_INTERVAL_SECONDS)
+                )
+
                 if self._tick_count % ticks_per_drain == 0:
                     drain = 5.5 * self._risk_reward_level
                     data["hp"] = max(0.0, data["hp"] - drain)
@@ -701,7 +748,9 @@ class IdleGameState(QObject):
         )
 
         if char_id in self._char_ids:
-            if not any(recipient_id == char_id for recipient_id, _ in onsite_recipients):
+            if not any(
+                recipient_id == char_id for recipient_id, _ in onsite_recipients
+            ):
                 return 0.0
             recipient_modifier = self._recipient_exp_modifier_for_char(
                 char_id=char_id,
@@ -711,7 +760,9 @@ class IdleGameState(QObject):
             return self._apply_min_exp_gain_floor(gain)
 
         if char_id in self._offsite_ids:
-            if not any(recipient_id == char_id for recipient_id, _ in offsite_recipients):
+            if not any(
+                recipient_id == char_id for recipient_id, _ in offsite_recipients
+            ):
                 return 0.0
             offsite_allocated_share = offsite_drip_share + offsite_baseline_bonus
             recipient_modifier = self._recipient_exp_modifier_for_char(
@@ -752,7 +803,7 @@ class IdleGameState(QObject):
         if self._exp_penalty_seconds > 0.0:
             multiplier *= LOSS_EXP_MULTIPLIER
         return multiplier
-    
+
     def _calculate_idle_exp_mult(self) -> float:
         return self.get_idle_blessing_multiplier()
 
@@ -772,7 +823,7 @@ class IdleGameState(QObject):
     ) -> float:
         gain = 1.0
         if self._risk_reward_level > 0:
-            gain *= (self._risk_reward_level + 1)
+            gain *= self._risk_reward_level + 1
         gain *= exp_multiplier
         gain *= self._exp_gain_scale
         gain *= idle_exp_mult
@@ -790,7 +841,9 @@ class IdleGameState(QObject):
         modifier *= self._exp_multiplier_for_char(char_id)
         return max(0.0, modifier)
 
-    def _exp_recipients(self) -> tuple[list[tuple[str, dict[str, Any]]], list[tuple[str, dict[str, Any]]]]:
+    def _exp_recipients(
+        self,
+    ) -> tuple[list[tuple[str, dict[str, Any]]], list[tuple[str, dict[str, Any]]]]:
         onsite_recipients: list[tuple[str, dict[str, Any]]] = []
         for char_id in self._char_ids:
             data = self._char_data.get(char_id)
@@ -810,7 +863,13 @@ class IdleGameState(QObject):
         *,
         exp_multiplier: float,
         idle_exp_mult: float,
-    ) -> tuple[list[tuple[str, dict[str, Any]]], list[tuple[str, dict[str, Any]]], float, float, float]:
+    ) -> tuple[
+        list[tuple[str, dict[str, Any]]],
+        list[tuple[str, dict[str, Any]]],
+        float,
+        float,
+        float,
+    ]:
         onsite_recipients, offsite_recipients = self._exp_recipients()
         onsite_count = len(onsite_recipients)
         if onsite_count <= 0:
@@ -830,7 +889,13 @@ class IdleGameState(QObject):
         onsite_allocated_share = onsite_retained_pool / onsite_count
 
         if not offsite_recipients:
-            return onsite_recipients, offsite_recipients, onsite_allocated_share, 0.0, 0.0
+            return (
+                onsite_recipients,
+                offsite_recipients,
+                onsite_allocated_share,
+                0.0,
+                0.0,
+            )
 
         offsite_count = len(offsite_recipients)
         offsite_drip_share = drip_pool / offsite_count
@@ -848,33 +913,43 @@ class IdleGameState(QObject):
             return 0.0
         return max(MIN_EXP_GAIN_PER_TICK, float(gain))
 
+    def _blessing(self) -> BlessingPlugin:
+        return get_default_blessing()
+
     def _idle_blessing_elapsed_seconds(self) -> float:
         now = float(self._time())
         return max(0.0, now - self._idle_session_started_at)
 
     def get_idle_blessing_step_count(self) -> int:
         elapsed = self._idle_blessing_elapsed_seconds()
-        return max(0, int(elapsed // IDLE_BLESSING_STEP_SECONDS))
+        blessing = self._blessing()
+        return max(0, int(elapsed // blessing.step_seconds))
 
     def get_idle_blessing_multiplier(self) -> float:
         steps = self.get_idle_blessing_step_count()
-        return float(IDLE_BLESSING_STEP_MULTIPLIER ** steps)
+        blessing = self._blessing()
+        return blessing.get_multiplier(steps)
 
     def get_idle_blessing_cycle_progress(self) -> float:
         elapsed = self._idle_blessing_elapsed_seconds()
-        phase = elapsed % IDLE_BLESSING_STEP_SECONDS
-        return max(0.0, min(1.0, phase / IDLE_BLESSING_STEP_SECONDS))
+        blessing = self._blessing()
+        phase = elapsed % blessing.step_seconds
+        return max(0.0, min(1.0, phase / blessing.step_seconds))
 
     def get_idle_blessing_seconds_to_next_step(self) -> int:
         elapsed = self._idle_blessing_elapsed_seconds()
-        phase = elapsed % IDLE_BLESSING_STEP_SECONDS
-        remaining = IDLE_BLESSING_STEP_SECONDS - phase
+        blessing = self._blessing()
+        phase = elapsed % blessing.step_seconds
+        remaining = blessing.step_seconds - phase
         if remaining <= 1e-9:
-            remaining = IDLE_BLESSING_STEP_SECONDS
+            remaining = blessing.step_seconds
         return max(0, int(math.ceil(remaining)))
 
     def export_run_buff_seconds(self) -> tuple[float, float]:
-        return (float(max(0.0, self._exp_bonus_seconds)), float(max(0.0, self._exp_penalty_seconds)))
+        return (
+            float(max(0.0, self._exp_bonus_seconds)),
+            float(max(0.0, self._exp_penalty_seconds)),
+        )
 
     def _level_up(self, char_id: str) -> None:
         data = self._char_data.get(char_id)
@@ -886,7 +961,9 @@ class IdleGameState(QObject):
 
         base_stats = data.get("base_stats")
         if isinstance(base_stats, dict):
-            self._apply_weighted_stat_upgrades(char_id=char_id, base_stats=base_stats, level=int(data["level"]))
+            self._apply_weighted_stat_upgrades(
+                char_id=char_id, base_stats=base_stats, level=int(data["level"])
+            )
             self._apply_sparse_growth(char_id=char_id, base_stats=base_stats)
             base_stats["max_hp"] = float(base_stats.get("max_hp", 1000.0)) + 10.0
 
@@ -908,7 +985,9 @@ class IdleGameState(QObject):
         data["next_exp"] = (level * 30 * req_mult * tax) * self._rng.uniform(0.95, 1.05)
         self._apply_offsite_stat_share_to_onsite_hp()
 
-    def _apply_weighted_stat_upgrades(self, *, char_id: str, base_stats: dict[str, float], level: int) -> None:
+    def _apply_weighted_stat_upgrades(
+        self, *, char_id: str, base_stats: dict[str, float], level: int
+    ) -> None:
         data = self._char_data.get(char_id)
         prestige_count = 0
         if data:
@@ -961,7 +1040,9 @@ class IdleGameState(QObject):
         if max(0, int(data.get("next_mitigation_gain_level", 0))) <= level:
             data["next_mitigation_gain_level"] = level + self._rng.randint(10, 15)
 
-    def _apply_sparse_growth(self, *, char_id: str, base_stats: dict[str, float]) -> None:
+    def _apply_sparse_growth(
+        self, *, char_id: str, base_stats: dict[str, float]
+    ) -> None:
         data = self._char_data.get(char_id)
         if not data:
             return
@@ -1030,11 +1111,15 @@ class IdleGameState(QObject):
             except (TypeError, ValueError):
                 prestige_count = 0
             try:
-                death_exp_debuff_stacks = max(0, int(data.get("death_exp_debuff_stacks", 0)))
+                death_exp_debuff_stacks = max(
+                    0, int(data.get("death_exp_debuff_stacks", 0))
+                )
             except (TypeError, ValueError):
                 death_exp_debuff_stacks = 0
             try:
-                death_exp_debuff_until = float(max(0.0, float(data.get("death_exp_debuff_until", 0.0))))
+                death_exp_debuff_until = float(
+                    max(0.0, float(data.get("death_exp_debuff_until", 0.0)))
+                )
             except (TypeError, ValueError):
                 death_exp_debuff_until = 0.0
             try:
@@ -1053,9 +1138,15 @@ class IdleGameState(QObject):
                 "prestige_count": prestige_count,
                 "death_exp_debuff_stacks": death_exp_debuff_stacks,
                 "death_exp_debuff_until": death_exp_debuff_until,
-                "next_vitality_gain_level": max(0, int(data.get("next_vitality_gain_level", 0))),
-                "next_mitigation_gain_level": max(0, int(data.get("next_mitigation_gain_level", 0))),
-                "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
+                "next_vitality_gain_level": max(
+                    0, int(data.get("next_vitality_gain_level", 0))
+                ),
+                "next_mitigation_gain_level": max(
+                    0, int(data.get("next_mitigation_gain_level", 0))
+                ),
+                "max_hp_level_bonus_version": max(
+                    0, int(data.get("max_hp_level_bonus_version", 0))
+                ),
                 "shard_bar_ticks": shard_bar_ticks % SHARD_BAR_CYCLE_TICKS,
             }
         return payload

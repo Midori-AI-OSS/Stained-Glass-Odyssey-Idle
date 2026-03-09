@@ -9,24 +9,6 @@ Last updated: 2026-03-07
 
 ## Planned Mechanics (Target Design)
 
-### Mech 2: Blessing Upgrade Layer and Shard Progression
-
-Planned intent:
-- Introduce blessing systems as pluginized modules, similar to character plugin structure.
-- Add shard progression bars as a long-term growth system.
-
-Locked decisions:
-- Bars are per-character, not global.
-- 100 ticks completes a bar cycle.
-- Completion grants consumable shard output.
-- Pacing target is very slow (years-scale direction).
-- High-EXP dampener concept for shard odds:
-  - `p_eff = p_base / (1 + 15000 * floor((exp_s - 1000) / 100))`
-
-Pending:
-- Exact unit definition for `p_base` (percent vs probability conversion details).
-- Exact years-scale balancing targets.
-
 ### Mech 3: Rebirth Shard Drops and Blessing Channeling
 
 Planned intent:
