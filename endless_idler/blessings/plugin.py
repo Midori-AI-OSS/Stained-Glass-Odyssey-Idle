@@ -7,6 +7,14 @@ from dataclasses import dataclass
 from dataclasses import field
 
 
+def _default_shimmer_formula(seconds_to_next: float) -> float:
+    if seconds_to_next > 30:
+        return 0.0
+    if seconds_to_next <= 5:
+        return 1.0
+    return (30.0 - seconds_to_next) / 25.0
+
+
 @dataclass(frozen=True, slots=True)
 class BlessingPlugin:
     """A blessing plugin that provides idle progression bonuses.
@@ -41,6 +49,7 @@ class BlessingPlugin:
     is_persistent: bool = True
     save_schema: dict[str, type] = field(default_factory=dict)
     tooltip_formatter: Callable[[int, dict], str] | None = None
+    shimmer_formula: Callable[[float], float] | None = None
 
     def get_multiplier(self, steps: int) -> float:
         """Calculate the multiplier for a given step count.
@@ -83,3 +92,8 @@ class BlessingPlugin:
             f"Current Bonus: <b>+{bonus_pct:.2f}%</b><br>"
             f"Time to next step: <b>{time_str}</b>"
         )
+
+    def get_shimmer_intensity(self, seconds_to_next: float) -> float:
+        if self.shimmer_formula is not None:
+            return float(self.shimmer_formula(seconds_to_next))
+        return _default_shimmer_formula(seconds_to_next)
