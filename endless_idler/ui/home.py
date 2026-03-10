@@ -128,6 +128,21 @@ class HomePage(QWidget):
             progress = elapsed_in_step / plugin.step_seconds
             return max(0.0, min(1.0, progress))
 
+    def _get_seconds_to_next_step(self, plugin: BlessingPlugin) -> float:
+        if self._is_session_based(plugin):
+            elapsed = self._elapsed_seconds()
+            phase = elapsed % plugin.step_seconds
+            return max(0.0, plugin.step_seconds - phase)
+        else:
+            save = self._get_save()
+            blessing_data = save.blessings.get(plugin.blessing_id, {})
+            step_start_time = blessing_data.get("step_start_time", 0.0)
+            if step_start_time <= 0.0:
+                return plugin.step_seconds
+            current_time = time.time()
+            elapsed_in_step = current_time - step_start_time
+            return max(0.0, plugin.step_seconds - elapsed_in_step)
+
     def _build_tooltip(self, plugin: BlessingPlugin, steps: int) -> str:
         """Build tooltip HTML for a blessing using plugin's formatter."""
         from typing import Any
@@ -154,6 +169,9 @@ class HomePage(QWidget):
             progress = self._get_blessing_progress(plugin)
             multiplier = plugin.get_multiplier(steps)
             panel.set_current_progress(progress)
+            seconds_to_next = self._get_seconds_to_next_step(plugin)
+            shimmer = plugin.get_shimmer_intensity(seconds_to_next)
+            panel.set_shimmer(shimmer)
             if self._is_lunar_blessing(plugin):
                 progress_data = get_lunar_progress_per_tick(steps)
                 panel.set_mod_value_dual(progress_data["display_pct"])
