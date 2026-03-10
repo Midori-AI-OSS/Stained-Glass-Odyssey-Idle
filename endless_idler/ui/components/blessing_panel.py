@@ -76,6 +76,9 @@ class BlessingPanel(QFrame):
         """
         self._progress_bar.set_value(float(progress))
 
+    def set_shimmer(self, intensity: float) -> None:
+        self._progress_bar.set_shimmer(float(intensity))
+
     def set_mod_value(self, value: str) -> None:
         """Set the mod value displayed (e.g., "x1.2500" or "+25%").
 
