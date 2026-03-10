@@ -621,6 +621,9 @@ class IdleScreenWidget(QWidget):
             )
             save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
             save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
+            blessings = dict(getattr(save, "blessings", {}) or {})
+            blessings.update(self._idle_state.export_blessings())
+            save.blessings = blessings
             self._save_store.persist()
         except Exception:
             pass

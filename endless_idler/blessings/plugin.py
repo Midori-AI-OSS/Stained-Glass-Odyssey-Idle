@@ -40,6 +40,7 @@ class BlessingPlugin:
     unlock_condition: str | None = None
     is_persistent: bool = True
     save_schema: dict[str, type] = field(default_factory=dict)
+    tooltip_formatter: Callable[[int, dict], str] | None = None
 
     def get_multiplier(self, steps: int) -> float:
         """Calculate the multiplier for a given step count.
@@ -53,3 +54,32 @@ class BlessingPlugin:
         if self.max_steps is not None:
             steps = min(steps, self.max_steps)
         return float(self.multiplier_formula(steps))
+
+    def format_tooltip(self, steps: int, context: dict) -> str:
+        """Generate tooltip HTML for this blessing.
+
+        Args:
+            steps: Current step count
+            context: Dictionary containing:
+                - save: RunSave instance (for persistent blessings)
+                - session_start_time: float (for session-based blessings)
+
+        Returns:
+            HTML string for tooltip display
+        """
+        if self.tooltip_formatter is not None:
+            return self.tooltip_formatter(steps, context)
+        return self._default_tooltip(steps)
+
+    def _default_tooltip(self, steps: int) -> str:
+        """Default tooltip for damage-type blessings."""
+        bonus_pct = (steps * 0.0001) * 100
+        time_to_next = int(self.step_seconds)
+        minutes = time_to_next // 60
+        seconds = time_to_next % 60
+        time_str = f"{minutes:02d}:{seconds:02d}"
+        return (
+            f"<b>{self.display_name}</b><br>"
+            f"Current Bonus: <b>+{bonus_pct:.2f}%</b><br>"
+            f"Time to next step: <b>{time_str}</b>"
+        )

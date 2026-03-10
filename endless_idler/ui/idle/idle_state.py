@@ -9,6 +9,7 @@ from typing import Any
 from PySide6.QtCore import QObject
 from PySide6.QtCore import Signal
 
+from endless_idler.blessings import discover_blessing_plugins
 from endless_idler.blessings import get_default_blessing
 from endless_idler.blessings.plugin import BlessingPlugin
 from endless_idler.characters.placement_rules import MISPLACED_EXP_MULTIPLIER
@@ -649,6 +650,10 @@ class IdleGameState(QObject):
     def process_tick(self) -> None:
         self._tick_count += 1
         self.tick_update.emit(self._tick_count)
+
+        if self._tick_count % 10 == 0:
+            self._process_blessing_ticks()
+
         roll_ready = self._tick_count % SHARD_ROLL_INTERVAL_TICKS == 0
 
         exp_multiplier = self._current_exp_multiplier()
@@ -1220,6 +1225,17 @@ class IdleGameState(QObject):
             payload[char_id] = sanitized
         return payload
 
+    def export_blessings(self) -> dict[str, dict[str, Any]]:
+        payload: dict[str, dict[str, Any]] = {}
+        for blessing_id, raw in self._blessings_data.items():
+            if not isinstance(blessing_id, str):
+                continue
+            clean_id = blessing_id.strip()
+            if not clean_id or not isinstance(raw, dict):
+                continue
+            payload[clean_id] = dict(raw)
+        return payload
+
     def get_misplacement_stat_multiplier(self, char_id: str) -> float:
         clean_id = str(char_id or "").strip()
         if not clean_id:
@@ -1243,3 +1259,40 @@ class IdleGameState(QObject):
 
     def get_risk_reward_level(self) -> int:
         return self._risk_reward_level
+
+    def _process_blessing_ticks(self) -> dict[str, dict[str, Any]]:
+        """Process blessing tick updates for persistent blessings.
+
+        Checks each persistent blessing and increments steps when enough
+        time has elapsed. Returns the updated blessings data for persistence.
+
+        Returns:
+            Updated blessings data dict
+        """
+        current_time = time.time()
+        updated_blessings: dict[str, dict[str, Any]] = dict(self._blessings_data)
+
+        for plugin in discover_blessing_plugins():
+            if not plugin.is_persistent:
+                continue
+
+            blessing_id = plugin.blessing_id
+            blessing_data: dict[str, Any] = dict(updated_blessings.get(blessing_id, {}))
+
+            step_start_time = float(blessing_data.get("step_start_time", 0.0))
+            if step_start_time <= 0.0:
+                blessing_data["step_start_time"] = current_time
+                blessing_data["steps"] = blessing_data.get("steps", 0)
+                updated_blessings[blessing_id] = blessing_data
+                continue
+
+            elapsed = current_time - step_start_time
+            if elapsed >= plugin.step_seconds:
+                steps = int(blessing_data.get("steps", 0))
+                steps += 1
+                blessing_data["steps"] = steps
+                blessing_data["step_start_time"] = current_time
+                updated_blessings[blessing_id] = blessing_data
+
+        self._blessings_data = updated_blessings
+        return updated_blessings

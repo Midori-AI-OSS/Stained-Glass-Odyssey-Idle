@@ -87,24 +87,66 @@ def get_lunar_progress_per_tick(steps: int) -> dict[str, float]:
     }
 
 
+def _format_lunar_tooltip(steps: int, context: dict) -> str:
+    """Format tooltip for Lunar's Blessing."""
+    import time
+    from typing import Any
+
+    save = context.get("save")
+    if save is None:
+        return "<b>Lunar's Blessing</b><br>Save data unavailable"
+
+    blessing_data = save.blessings.get("lunar_blessing", {})
+    step_start_time = blessing_data.get("step_start_time", 0.0)
+    current_time = time.time()
+
+    if step_start_time <= 0.0:
+        seconds_until_next = int(LUNAR_STEP_SECONDS)
+    else:
+        elapsed = current_time - step_start_time
+        seconds_until_next = max(0, int(LUNAR_STEP_SECONDS - elapsed))
+
+    progress_data = get_lunar_progress_per_tick(steps)
+    exp_gain = progress_data["exp_gain_pct"]
+    exp_reduction = progress_data["exp_reduction_pct"]
+    weeks = progress_data["progress_weeks"]
+
+    LUNAR_WEEK_MINUTES = LUNAR_WEEK_SECONDS / 60.0
+    per_minute_gain = (1.0 / LUNAR_WEEK_MINUTES) * 100
+    per_minute_reduction = (1.0 / LUNAR_WEEK_MINUTES) * 100
+
+    # Format time as MM:SS
+    minutes = seconds_until_next // 60
+    seconds = seconds_until_next % 60
+    time_str = f"{minutes:02d}:{seconds:02d}"
+
+    return (
+        "<b>Lunar's Blessing</b><br>"
+        f"<b>+{exp_gain:.1f}%</b> experience gained<br>"
+        f"<b>-{exp_reduction:.1f}%</b> experience needed per level<br>"
+        f"+{per_minute_gain:.4f}% per minute<br>"
+        f"-{per_minute_reduction:.4f}% per minute<br><br>"
+        f"Progress: <b>{weeks:.2f}</b> weeks<br>"
+        f"Next tick in: <b>{time_str}</b>"
+    )
+
+
 blessing = BlessingPlugin(
     blessing_id="lunar_blessing",
     display_name="Lunar's Blessing",
-    description=(
-        "Lunar's Blessing grants experience bonuses over time. "
-        "Each week, gain +1% experience gained and -1% experience needed per level. "
-        "After reaching 50%, diminishing returns apply: each additional 10% requires 2x the time."
-    ),
+    description="Accumulates over a week to provide permanent global experience bonuses.",
     step_seconds=LUNAR_STEP_SECONDS,
     multiplier_formula=_lunar_multiplier_formula,
     max_steps=None,
-    target_damage_type=None,
-    is_unlocked=True,
+    is_unlocked=False,
+    unlock_condition="Reach level 100 with any character",
     is_persistent=True,
     save_schema={
         "steps": int,
         "total_minutes": int,
         "last_tick_time": float,
         "step_start_time": float,
+        "unlocked": bool,
     },
+    tooltip_formatter=_format_lunar_tooltip,
 )
