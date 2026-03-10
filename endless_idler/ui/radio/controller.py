@@ -21,7 +21,7 @@ from PySide6.QtNetwork import QNetworkRequest
 try:
     from PySide6.QtMultimedia import QAudioOutput
     from PySide6.QtMultimedia import QMediaPlayer
-except Exception:  # pragma: no cover - runtime capability path
+except ImportError:  # pragma: no cover - runtime capability path
     QAudioOutput = None  # type: ignore[assignment]
     QMediaPlayer = None  # type: ignore[assignment]
 
@@ -155,7 +155,7 @@ class RadioController(QObject):
             self._player.errorOccurred.connect(self._on_media_error)
             self._player.mediaStatusChanged.connect(self._on_media_status_changed)
             self._status_text = "Radio ready."
-        except Exception as exc:
+        except (RuntimeError, TypeError, ValueError) as exc:
             self._log_error_throttled("media_init", f"media init failed: {exc}")
             self._qt_available = False
             self._audio_output = None
@@ -189,7 +189,7 @@ class RadioController(QObject):
     def clamp_volume(value: object) -> int:
         try:
             parsed = int(str(value).strip())
-        except Exception:
+        except (TypeError, ValueError):
             parsed = 70
         return max(0, min(100, parsed))
 
@@ -197,7 +197,7 @@ class RadioController(QObject):
     def normalize_loudness_boost_factor(cls, value: object) -> float:
         try:
             parsed = float(str(value).strip())
-        except Exception:
+        except (TypeError, ValueError):
             parsed = cls.LOUDNESS_BOOST_DEFAULT
         parsed = max(cls.LOUDNESS_BOOST_MIN, min(cls.LOUDNESS_BOOST_MAX, parsed))
         step_count = int(
@@ -222,7 +222,7 @@ class RadioController(QObject):
             probe_player = QMediaPlayer()
             probe_player.setAudioOutput(probe_audio)
             return True
-        except Exception as exc:
+        except (RuntimeError, TypeError) as exc:
             logger.warning("radio probe failed: %s", exc)
             return False
         finally:
@@ -308,10 +308,7 @@ class RadioController(QObject):
         self._set_runtime_timers_active(False)
         self._stop_channel_fades()
         self._cancel_reconnect(reset_attempts=True)
-        try:
-            self.stop_playback()
-        except Exception:
-            pass
+        self.stop_playback()
         self._clear_player_source()
 
     def set_enabled(self, enabled: bool, *, start_when_enabled: bool = False) -> None:
@@ -513,7 +510,7 @@ class RadioController(QObject):
             self._status_text = f"Playing Midori AI Radio ({self._active_quality})."
             self._emit_state()
             return True
-        except Exception as exc:
+        except RuntimeError as exc:
             self._log_error_throttled("start_playback", f"playback start failed: {exc}")
             self._status_text = "Unable to start radio playback."
             self._emit_state()
@@ -528,8 +525,8 @@ class RadioController(QObject):
         if self._player is not None:
             try:
                 self._player.stop()
-            except Exception:
-                pass
+            except RuntimeError as exc:
+                self._log_error_throttled("stop_playback", f"stop failed: {exc}")
         self._stop_channel_fades()
         self._reset_fade_gain()
         self._is_playing = False
@@ -631,7 +628,12 @@ class RadioController(QObject):
                         error_text = str(error.get("message") or "API returned not-ok")
                     if not error_text:
                         error_text = "API returned not-ok"
-        except Exception as exc:
+        except (
+            TypeError,
+            ValueError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+        ) as exc:
             is_error = True
             error_text = str(exc or "invalid response")
         finally:
@@ -777,7 +779,7 @@ class RadioController(QObject):
                         )
                     )
                     self._player.play()
-            except Exception as exc:
+            except RuntimeError as exc:
                 self._log_error_throttled(
                     "quality_apply",
                     f"quality apply failed ({pending}): {exc}",
@@ -898,7 +900,7 @@ class RadioController(QObject):
             return status
         try:
             return media_status_type(int(status))
-        except Exception:
+        except (TypeError, ValueError):
             return None
 
     def _restart_media_statuses(self) -> set[Any]:
@@ -955,14 +957,12 @@ class RadioController(QObject):
     def _media_status_name(self, status: Any) -> str:
         media_status = self._coerce_media_status(status)
         if media_status is not None:
-            try:
-                return str(media_status.name)
-            except Exception:
-                pass
-        try:
-            return str(status.name)
-        except Exception:
-            pass
+            media_status_name = getattr(media_status, "name", None)
+            if isinstance(media_status_name, str):
+                return media_status_name
+        status_name = getattr(status, "name", None)
+        if isinstance(status_name, str):
+            return status_name
         return str(status)
 
     def _should_auto_reconnect(
@@ -1072,13 +1072,19 @@ class RadioController(QObject):
             if force_restart:
                 try:
                     self._player.stop()
-                except Exception:
-                    pass
+                except RuntimeError as exc:
+                    self._log_error_throttled(
+                        "reconnect_stop",
+                        f"pre-reconnect stop failed: {exc}",
+                    )
                 self._is_playing = False
                 try:
                     self._player.setSource(QUrl())
-                except Exception:
-                    pass
+                except RuntimeError as exc:
+                    self._log_error_throttled(
+                        "reconnect_clear_source",
+                        f"pre-reconnect clear source failed: {exc}",
+                    )
             self._player.setSource(
                 QUrl(
                     self._build_stream_url(
@@ -1088,7 +1094,7 @@ class RadioController(QObject):
                 )
             )
             self._player.play()
-        except Exception as exc:
+        except RuntimeError as exc:
             self._log_error_throttled(
                 "reconnect",
                 f"reconnect failed ({quality_to_use}): {exc}",
@@ -1227,13 +1233,13 @@ class RadioController(QObject):
             self._channel_fade_out.setStartValue(float(self._fade_gain))
             self._channel_fade_out.setEndValue(0.0)
             self._channel_fade_out.start()
-        except Exception:
+        except RuntimeError:
             self._fallback_restart_for_channel_switch()
 
     def _on_fade_animation_value(self, value: object) -> None:
         try:
             parsed = float(str(value))
-        except Exception:
+        except (TypeError, ValueError):
             return
         self._fade_gain = max(0.0, min(1.0, parsed))
         self._apply_audio_output_volume()
@@ -1266,7 +1272,7 @@ class RadioController(QObject):
                 )
             )
             self._player.play()
-        except Exception as exc:
+        except RuntimeError as exc:
             self._log_error_throttled(
                 "channel_switch",
                 f"channel switch failed ({pending_channel}): {exc}",
@@ -1283,7 +1289,7 @@ class RadioController(QObject):
             self._channel_fade_in.setStartValue(float(self._fade_gain))
             self._channel_fade_in.setEndValue(1.0)
             self._channel_fade_in.start()
-        except Exception:
+        except RuntimeError:
             self._fallback_restart_for_channel_switch()
 
     def _on_channel_fade_in_finished(self) -> None:
@@ -1336,5 +1342,5 @@ class RadioController(QObject):
             return
         try:
             self._player.setSource(QUrl())
-        except Exception:
-            pass
+        except RuntimeError as exc:
+            self._log_error_throttled("clear_source", f"clear source failed: {exc}")

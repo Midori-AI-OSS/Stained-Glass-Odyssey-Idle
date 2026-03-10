@@ -644,7 +644,7 @@ class IdleGameState(QObject):
     def process_tick(self) -> dict[str, Any]:
         with self._lock:
             self._tick_count += 1
-            self.tick_update.emit(self._tick_count)
+            tick_count = self._tick_count
             dt = float(max(0.0, IDLE_TICK_INTERVAL_SECONDS))
             self._elapsed_seconds += dt
             self._process_blessing_ticks(delta_seconds=dt)
@@ -720,7 +720,9 @@ class IdleGameState(QObject):
             if self._advance_run_buffs and dt > 0.0:
                 self._exp_bonus_seconds = max(0.0, self._exp_bonus_seconds - dt)
                 self._exp_penalty_seconds = max(0.0, self._exp_penalty_seconds - dt)
-            return self.export_runtime_snapshot()
+            snapshot = self.export_runtime_snapshot()
+        self.tick_update.emit(tick_count)
+        return snapshot
 
     def get_exp_gain_per_second(self, char_id: str) -> float:
         per_tick = self.get_exp_gain_per_tick(char_id)

@@ -12,6 +12,7 @@ from PySide6.QtCore import Signal
 
 FIXED_TICK_RATE_HZ = 30
 FIXED_TICK_INTERVAL_SECONDS = 1.0 / FIXED_TICK_RATE_HZ
+WORKER_JOIN_TIMEOUT_SECONDS = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,7 +125,7 @@ class SharedTickRuntime(QObject):
             self._worker = None
             self._stop_event.set()
         if worker is not None and worker.is_alive():
-            worker.join()
+            worker.join(timeout=WORKER_JOIN_TIMEOUT_SECONDS)
 
     def _run_loop(self) -> None:
         next_tick_at = time.perf_counter()

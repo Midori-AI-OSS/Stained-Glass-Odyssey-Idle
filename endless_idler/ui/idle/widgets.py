@@ -206,7 +206,7 @@ class IdleOffsiteCard(QFrame):
         self._apply_portrait_size()
         try:
             super().resizeEvent(event)  # type: ignore[misc]
-        except Exception:
+        except (RuntimeError, TypeError):
             return
 
     def update_display(self) -> None:
@@ -225,7 +225,7 @@ class IdleOffsiteCard(QFrame):
         if callable(getter):
             try:
                 gain_per_second = float(getter(self._char_id))
-            except Exception:
+            except (TypeError, ValueError):
                 gain_per_second = 0.0
 
         self._name_label.setText(f"{self._display_name} ({max(1, level)})")
@@ -303,7 +303,7 @@ class IdleOffsiteCard(QFrame):
         if callable(party_level_getter):
             try:
                 party_level = max(1, int(party_level_getter()))
-            except Exception:
+            except (TypeError, ValueError):
                 party_level = 1
 
         progress: dict[str, float | int] = {
@@ -333,7 +333,7 @@ class IdleOffsiteCard(QFrame):
         try:
             stats.hp = max(0, int(float(data.get("hp", stats.hp))))
         except (TypeError, ValueError):
-            pass
+            stats.hp = max(0, int(getattr(stats, "hp", 0)))
 
         name = getattr(self._plugin, "display_name", None) or self._char_id
         tooltip_html = build_character_stats_tooltip(
@@ -353,14 +353,14 @@ class IdleOffsiteCard(QFrame):
 
         try:
             super().enterEvent(event)  # type: ignore[misc]
-        except Exception:
+        except (RuntimeError, TypeError):
             return
 
     def leaveEvent(self, event: object) -> None:
         hide_stained_tooltip()
         try:
             super().leaveEvent(event)  # type: ignore[misc]
-        except Exception:
+        except (RuntimeError, TypeError):
             return
 
     def _apply_element_tint(self, data: dict) -> None:
@@ -394,7 +394,7 @@ class IdleOffsiteCard(QFrame):
         if callable(party_level_getter):
             try:
                 party_level = max(1, int(party_level_getter()))
-            except Exception:
+            except (TypeError, ValueError):
                 party_level = 1
 
         stats = build_scaled_character_stats(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import random
+import threading
 
 from collections.abc import Sequence
 
@@ -120,6 +121,7 @@ class IdleScreenWidget(QWidget):
         self._rr_slider = QSlider(Qt.Orientation.Horizontal)
         self._tick_runtime = tick_runtime or SharedTickRuntime(parent=self)
         self._tick_runtime_key = f"idle-screen-{id(self)}"
+        self._tick_cooldown_lock = threading.Lock()
         self._latest_tick_payload: dict[str, object] = {}
         start_idle_heal_timer(self._save)
         self._save_store.persist()
@@ -309,23 +311,29 @@ class IdleScreenWidget(QWidget):
     ) -> dict[str, object]:
         del tick_count
         del monotonic_seconds
-        if self._tick_cooldown_seconds > 0.0:
-            self._tick_cooldown_seconds = max(
-                0.0,
-                self._tick_cooldown_seconds - IDLE_TICK_INTERVAL_SECONDS,
-            )
-            self._save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
+        with self._tick_cooldown_lock:
+            cooldown_seconds = self._tick_cooldown_seconds
+            if cooldown_seconds > 0.0:
+                cooldown_seconds = max(
+                    0.0,
+                    cooldown_seconds - IDLE_TICK_INTERVAL_SECONDS,
+                )
+                self._tick_cooldown_seconds = cooldown_seconds
+                self._save.layout_tick_cooldown_seconds = cooldown_seconds
+        if cooldown_seconds > 0.0:
             return {
-                "cooldown_seconds": self._tick_cooldown_seconds,
+                "cooldown_seconds": cooldown_seconds,
                 "idle_state": self._idle_state.export_runtime_snapshot(),
             }
         return {
-            "cooldown_seconds": self._tick_cooldown_seconds,
+            "cooldown_seconds": cooldown_seconds,
             "idle_state": self._idle_state.process_tick(),
         }
 
     def _update_tick_cooldown_label(self) -> None:
-        remaining_seconds = int(math.ceil(self._tick_cooldown_seconds))
+        with self._tick_cooldown_lock:
+            cooldown_seconds = self._tick_cooldown_seconds
+        remaining_seconds = int(math.ceil(cooldown_seconds))
         if remaining_seconds <= 0:
             self._tick_cooldown_label.setVisible(False)
             self._tick_cooldown_label.setText("")
@@ -500,8 +508,12 @@ class IdleScreenWidget(QWidget):
     def _on_tick_snapshot(self, snapshot: TickSnapshot) -> None:
         payload = dict(snapshot.payload)
         self._latest_tick_payload = payload
-        cooldown_raw = payload.get("cooldown_seconds", self._tick_cooldown_seconds)
-        self._tick_cooldown_seconds = self._coerce_float(cooldown_raw, 0.0)
+        with self._tick_cooldown_lock:
+            current_cooldown = self._tick_cooldown_seconds
+        cooldown_raw = payload.get("cooldown_seconds", current_cooldown)
+        cooldown_seconds = self._coerce_float(cooldown_raw, 0.0)
+        with self._tick_cooldown_lock:
+            self._tick_cooldown_seconds = cooldown_seconds
         self._update_tick_cooldown_label()
         self._refresh_character_cards()
         healed = apply_idle_party_heal(self._save)
@@ -623,7 +635,8 @@ class IdleScreenWidget(QWidget):
             0,
             min(150, self._coerce_int(snapshot.get("risk_reward_level", 0), 0)),
         )
-        save.layout_tick_cooldown_seconds = float(self._tick_cooldown_seconds)
+        with self._tick_cooldown_lock:
+            save.layout_tick_cooldown_seconds = float(self._tick_cooldown_seconds)
 
     @staticmethod
     def _coerce_float(value: object, default: float) -> float:
