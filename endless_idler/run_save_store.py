@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import random
-import time
 
+from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import fields
 from datetime import datetime
 from datetime import timezone
 from pathlib import Path
 from shutil import copy2
-from typing import Callable
 
 from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.save import RunSave
@@ -18,6 +17,7 @@ from endless_idler.save import new_run_save
 from endless_idler.save import sanitize_save_characters
 from endless_idler.save_bootstrap import bootstrap_party
 from endless_idler.save_bootstrap import should_bootstrap_party
+from endless_idler.save_queue import AsyncSaveQueue
 
 
 class RunSaveStore:
@@ -27,9 +27,11 @@ class RunSaveStore:
         plugins: list[CharacterPlugin],
         save_manager: SaveManager | None = None,
         rng: random.Random | None = None,
-        persist_interval_seconds: float = 15.0,
+        persist_interval_seconds: float = 0.0,
         time_fn: Callable[[], float] | None = None,
     ) -> None:
+        del persist_interval_seconds
+        del time_fn
         self._plugins = list(plugins)
         self._allowed_char_ids = {
             plugin.char_id
@@ -39,9 +41,7 @@ class RunSaveStore:
         self._save_manager = save_manager or SaveManager()
         self._rng = rng or random.Random()
         self._current: RunSave | None = None
-        self._persist_interval_seconds = max(0.0, float(persist_interval_seconds))
-        self._time_fn = time_fn or time.monotonic
-        self._last_persist_at: float | None = None
+        self._save_queue = AsyncSaveQueue()
 
     @property
     def path(self) -> Path:
@@ -72,21 +72,16 @@ class RunSaveStore:
         return self.current
 
     def persist(self, *, force: bool = False) -> None:
-        now = float(self._time_fn())
-        last_persist_at = self._last_persist_at
-        if force or last_persist_at is None or self._persist_interval_seconds <= 0.0:
-            should_flush = True
-        else:
-            elapsed = now - float(last_persist_at)
-            should_flush = elapsed >= self._persist_interval_seconds
-        if not should_flush:
-            return
-
         current = self.current
-        normalized = self._normalized_copy(current)
-        self._copy_save(source=normalized, target=current)
-        self._save_manager.save(current)
-        self._last_persist_at = now
+        snapshot = self._normalized_copy(current)
+
+        def _write_snapshot() -> None:
+            self._save_manager.save(snapshot)
+
+        self._save_queue.enqueue(_write_snapshot)
+        if force:
+            self._save_queue.flush()
+            self._copy_save(source=snapshot, target=current)
 
     def backup_current(self) -> Path:
         self.persist(force=True)
@@ -95,6 +90,10 @@ class RunSaveStore:
         backup_path = self._backup_path_for(timestamp)
         copy2(source, backup_path)
         return backup_path
+
+    def shutdown(self) -> None:
+        self.persist(force=True)
+        self._save_queue.shutdown()
 
     def delete_active_save(self) -> None:
         try:

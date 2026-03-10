@@ -26,7 +26,6 @@ from endless_idler.settings import normalize_channel
 from endless_idler.tick_runtime import SharedTickRuntime
 from endless_idler.ui.home import HomePage
 from endless_idler.ui.idle import IdleScreenWidget
-from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
 from endless_idler.ui.layout import LayoutScreenWidget
 from endless_idler.ui.lucide_icons import lucide_icon
 from endless_idler.ui.radio import RadioController
@@ -52,10 +51,7 @@ class MainMenuWindow(QMainWindow):
         self._save_store.load_or_create()
 
         self._idle_screen: IdleScreenWidget | None = None
-        self._tick_runtime = SharedTickRuntime(
-            interval_seconds=IDLE_TICK_INTERVAL_SECONDS,
-            parent=self,
-        )
+        self._tick_runtime = SharedTickRuntime(parent=self)
         self._nav_buttons: dict[str, QToolButton] = {}
 
         self.setWindowTitle(self.APP_TITLE)
@@ -185,11 +181,8 @@ class MainMenuWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._idle_screen is not None:
             self._idle_screen.shutdown()
-        else:
-            try:
-                self._save_store.persist(force=True)
-            except OSError:
-                pass
+        self._tick_runtime.stop()
+        self._save_store.shutdown()
         if self._radio_controller is not None:
             self._radio_controller.shutdown()
         super().closeEvent(event)

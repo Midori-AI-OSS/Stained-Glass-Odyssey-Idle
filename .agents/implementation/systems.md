@@ -1,14 +1,15 @@
 # Systems State
 
 Date captured: 2026-03-05
-Last updated: 2026-03-07
+Last updated: 2026-03-10
 
 ## Runtime
 
 - Active runtime path is Home + Idle + Layout.
-- Battle/foe systems are legacy and are not part of the active runtime flow.
-- Layout is a shipped menu entry.
-- Layout uses dedicated drag/drop party management and not the old shop/reroll/sell/merge/fight/reward flow.
+- Idle runtime uses a fixed **30Hz** background tick engine (`SharedTickRuntime`).
+- Tick processing runs off the UI thread and publishes one `TickSnapshot` event payload per tick.
+- UI thread is reserved for rendering, input, and snapshot consumption.
+- Legacy `ui/legacy/` runtime/battle modules were removed.
 
 ## Save + Party Setup
 
@@ -24,8 +25,14 @@ Last updated: 2026-03-07
   - `alphabetical`
   - `recent`
 - `recent` ordering is a reversed display heuristic, not persisted acquisition history.
-- Layout edits use debounced autosave and apply an idle cooldown before the next idle tick window.
 
-## Blessing Runtime Gaps
+## Persistence
 
-- No live energy subsystem exists yet for blessing channeling.
+- Runtime autosaves enqueue writes via `AsyncSaveQueue` through `RunSaveStore.persist(force=False)`.
+- `persist(force=True)` flushes the queue synchronously.
+- Shutdown paths call save-store flush/shutdown to drain queued writes.
+
+## Blessing Runtime
+
+- Persistent blessing data is stored in `RunSave.blessings`.
+- Blessing progression advances deterministically from 30Hz tick deltas (`tick_elapsed_seconds`), not wall-clock timestamps.
