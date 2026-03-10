@@ -7,6 +7,8 @@ the inventory item stack map.
 
 from __future__ import annotations
 
+from typing import Any
+
 
 def as_int(value: object, *, default: int) -> int:
     if isinstance(value, bool):
@@ -121,9 +123,7 @@ def as_character_progress_dict(value: object) -> dict[str, dict[str, float | int
         max_hp_level_bonus_version = as_int(
             raw_progress.get("max_hp_level_bonus_version", 0), default=0
         )
-        shard_bar_ticks = as_int(
-            raw_progress.get("shard_bar_ticks", 0), default=0
-        )
+        shard_bar_ticks = as_int(raw_progress.get("shard_bar_ticks", 0), default=0)
 
         progress: dict[str, float | int] = {
             "level": max(1, level),
@@ -204,9 +204,7 @@ def normalized_character_progress(
         max_hp_level_bonus_version = as_int(
             raw.get("max_hp_level_bonus_version", 0), default=0
         )
-        shard_bar_ticks = as_int(
-            raw.get("shard_bar_ticks", 0), default=0
-        )
+        shard_bar_ticks = as_int(raw.get("shard_bar_ticks", 0), default=0)
         normalized[char_id] = {
             "level": max(1, level),
             "exp": float(max(0.0, exp)),
@@ -224,6 +222,115 @@ def normalized_character_progress(
             "shard_bar_ticks": max(0, shard_bar_ticks),
         }
     return normalized
+
+
+def _default_blessings() -> dict[str, dict[str, Any]]:
+    """Generate default blessings from plugin discovery."""
+    from endless_idler.blessings.registry import discover_blessing_plugins
+
+    defaults: dict[str, dict[str, Any]] = {}
+    for plugin in discover_blessing_plugins():
+        if not plugin.is_persistent:
+            continue
+
+        blessing_defaults: dict[str, Any] = {}
+        for field_name, field_type in plugin.save_schema.items():
+            if field_type is int:
+                blessing_defaults[field_name] = 0
+            elif field_type is float:
+                blessing_defaults[field_name] = 0.0
+            elif field_type is bool:
+                blessing_defaults[field_name] = (
+                    plugin.is_unlocked if field_name == "unlocked" else False
+                )
+
+        defaults[plugin.blessing_id] = blessing_defaults
+
+    return defaults
+
+
+def as_blessings_dict(value: object) -> dict[str, dict[str, Any]]:
+    """Normalize blessings data using plugin schemas."""
+    from endless_idler.blessings.registry import discover_blessing_plugins
+
+    if not isinstance(value, dict):
+        return _default_blessings()
+
+    result: dict[str, dict[str, Any]] = {}
+
+    for plugin in discover_blessing_plugins():
+        if not plugin.is_persistent:
+            continue
+
+        raw_blessing = value.get(plugin.blessing_id, {})
+        if not isinstance(raw_blessing, dict):
+            raw_blessing = {}
+
+        normalized: dict[str, Any] = {}
+        for field_name, field_type in plugin.save_schema.items():
+            raw_value = raw_blessing.get(field_name)
+
+            if field_type is int:
+                normalized[field_name] = max(0, as_int(raw_value, default=0))
+            elif field_type is float:
+                normalized[field_name] = max(0.0, as_float(raw_value, default=0.0))
+            elif field_type is bool:
+                if field_name == "unlocked":
+                    normalized[field_name] = (
+                        bool(raw_value) if raw_value is not None else plugin.is_unlocked
+                    )
+                else:
+                    normalized[field_name] = (
+                        bool(raw_value) if raw_value is not None else False
+                    )
+
+        result[plugin.blessing_id] = normalized
+
+    return result
+
+
+def normalized_blessings(
+    value: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Normalize and validate blessings data using plugin schemas.
+
+    Ensures all persistent blessings exist with proper types.
+    """
+    from endless_idler.blessings.registry import discover_blessing_plugins
+
+    defaults = _default_blessings()
+    result: dict[str, dict[str, Any]] = {}
+
+    for plugin in discover_blessing_plugins():
+        if not plugin.is_persistent:
+            continue
+
+        raw = value.get(plugin.blessing_id, {})
+        if not isinstance(raw, dict):
+            result[plugin.blessing_id] = defaults.get(plugin.blessing_id, {}).copy()
+            continue
+
+        normalized: dict[str, Any] = {}
+        for field_name, field_type in plugin.save_schema.items():
+            raw_value = raw.get(field_name)
+
+            if field_type is int:
+                normalized[field_name] = max(0, as_int(raw_value, default=0))
+            elif field_type is float:
+                normalized[field_name] = max(0.0, as_float(raw_value, default=0.0))
+            elif field_type is bool:
+                if field_name == "unlocked":
+                    normalized[field_name] = (
+                        bool(raw_value) if raw_value is not None else plugin.is_unlocked
+                    )
+                else:
+                    normalized[field_name] = (
+                        bool(raw_value) if raw_value is not None else False
+                    )
+
+        result[plugin.blessing_id] = normalized
+
+    return result
 
 
 def normalized_character_stats(

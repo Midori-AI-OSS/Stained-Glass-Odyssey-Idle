@@ -7,6 +7,8 @@ from pathlib import Path
 from endless_idler.save import BAR_SLOTS
 from endless_idler.save import DEFAULT_FIGHT_NUMBER
 from endless_idler.save import DEFAULT_RUN_TOKENS
+from endless_idler.save import SAVE_VERSION
+from endless_idler.save import RunSave
 from endless_idler.save import SaveManager
 
 
@@ -102,3 +104,64 @@ def test_load_ignores_removed_idle_timer_legacy_fields(
     assert loaded is not None
     assert loaded.idle_exp_bonus_seconds == 0.0
     assert loaded.idle_exp_penalty_seconds == 0.0
+
+
+def test_legacy_lunar_progress_is_reset_on_load(monkeypatch, tmp_path: Path) -> None:
+    save_path = tmp_path / "save.json"
+    monkeypatch.setenv("ENDLESS_IDLER_SAVE_PATH", str(save_path))
+
+    save_path.write_text(
+        json.dumps(
+            {
+                "version": SAVE_VERSION - 1,
+                "party_level": 1,
+                "blessings": {
+                    "lunar_blessing": {
+                        "steps": 123,
+                        "total_minutes": 456,
+                        "last_tick_time": 789.0,
+                        "step_start_time": 321.0,
+                        "unlocked": False,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = SaveManager().load()
+    assert loaded is not None
+
+    lunar = loaded.blessings["lunar_blessing"]
+    assert lunar["steps"] == 0
+    assert lunar["total_minutes"] == 0
+    assert lunar["last_tick_time"] == 0.0
+    assert lunar["step_start_time"] == 0.0
+    assert lunar["unlocked"] is False
+
+
+def test_current_version_lunar_progress_is_not_migrated(
+    monkeypatch, tmp_path: Path
+) -> None:
+    save_path = tmp_path / "save.json"
+    monkeypatch.setenv("ENDLESS_IDLER_SAVE_PATH", str(save_path))
+
+    save = RunSave()
+    save.blessings["lunar_blessing"] = {
+        "steps": 8,
+        "total_minutes": 40,
+        "last_tick_time": 100.0,
+        "step_start_time": 50.0,
+        "unlocked": True,
+    }
+    SaveManager().save(save)
+
+    loaded = SaveManager().load()
+    assert loaded is not None
+
+    lunar = loaded.blessings["lunar_blessing"]
+    assert lunar["steps"] == 8
+    assert lunar["total_minutes"] == 40
+    assert lunar["last_tick_time"] == 100.0
+    assert lunar["step_start_time"] == 50.0
+    assert lunar["unlocked"] is True

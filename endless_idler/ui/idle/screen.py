@@ -28,10 +28,8 @@ from endless_idler.run_save_store import RunSaveStore
 from endless_idler.run_rules import apply_idle_party_heal
 from endless_idler.run_rules import start_idle_heal_timer
 from endless_idler.tick_runtime import SharedTickRuntime
-from endless_idler.ui.idle.blessing_meter import IdleBlessingMeterWidget
 from endless_idler.ui.idle.widgets import IdleArena
 from endless_idler.ui.idle.widgets import IdleOffsiteCard
-from endless_idler.ui.idle.idle_state import IDLE_BLESSING_STEP_MULTIPLIER
 from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
 from endless_idler.ui.idle.idle_state import IdleGameState
 from endless_idler.ui.onsite import IdleOnsiteCharacterCard
@@ -47,7 +45,7 @@ def build_prestige_confirmation_html(
 ) -> str:
     current_count = max(0, int(prestige_count))
     new_prestige_count = current_count + 1
-    new_exp_mult = max(0.01, 0.5 * (0.5 ** current_count))
+    new_exp_mult = max(0.01, 0.5 * (0.5**current_count))
     current_stat_rate = calculate_prestige_stat_gain_rate(current_count, stars) * 100.0
     new_stat_rate = calculate_prestige_stat_gain_rate(new_prestige_count, stars) * 100.0
 
@@ -63,12 +61,10 @@ def build_prestige_confirmation_html(
 
     if new_exp_mult <= 0.01 and new_prestige_count >= 5:
         prestiges_past_floor = new_prestige_count - 4
-        penalty_multiplier = 2.0 ** prestiges_past_floor
+        penalty_multiplier = 2.0**prestiges_past_floor
         message += f"<br><b>Warning:</b> EXP requirement penalty applied (x{penalty_multiplier:.1f})<br>"
 
-    message += (
-        "<br>Your weighted stat gains per level will increase, while EXP gain rate will be reduced."
-    )
+    message += "<br>Your weighted stat gains per level will increase, while EXP gain rate will be reduced."
     return message
 
 
@@ -121,9 +117,6 @@ class IdleScreenWidget(QWidget):
         self._shared_exp_slider = QSlider(Qt.Orientation.Horizontal)
         self._rr_label = QLabel()
         self._rr_slider = QSlider(Qt.Orientation.Horizontal)
-        self._blessing_title_label = QLabel()
-        self._blessing_meter = IdleBlessingMeterWidget()
-        self._blessing_value_label = QLabel()
         self._tick_runtime = tick_runtime or SharedTickRuntime(
             interval_seconds=IDLE_TICK_INTERVAL_SECONDS,
             parent=self,
@@ -145,7 +138,9 @@ class IdleScreenWidget(QWidget):
             max(0.0, float(getattr(self._save, "layout_tick_cooldown_seconds", 0.0)))
         )
 
-        self._plugins = list(plugins) if plugins is not None else discover_character_plugins()
+        self._plugins = (
+            list(plugins) if plugins is not None else discover_character_plugins()
+        )
         self._plugin_by_id = {plugin.char_id: plugin for plugin in self._plugins}
         plugins_by_id: dict[str, object] = {
             key: value for key, value in self._plugin_by_id.items()
@@ -160,16 +155,19 @@ class IdleScreenWidget(QWidget):
             rng=self._rng,
             progress_by_id=dict(self._save.character_progress),
             stats_by_id=dict(self._save.character_stats),
-            initial_stats_by_id=dict(getattr(self._save, "character_initial_stats", {}) or {}),
+            initial_stats_by_id=dict(
+                getattr(self._save, "character_initial_stats", {}) or {}
+            ),
             inventory=self._save.inventory,
             exp_bonus_seconds=float(self._save.idle_exp_bonus_seconds),
             exp_penalty_seconds=float(self._save.idle_exp_penalty_seconds),
-            shared_exp_percentage=int(getattr(self._save, "idle_shared_exp_percentage", 1)),
+            shared_exp_percentage=int(
+                getattr(self._save, "idle_shared_exp_percentage", 1)
+            ),
             risk_reward_level=int(getattr(self._save, "idle_risk_reward_level", 0)),
             battle_start_time=float(getattr(self._save, "battle_start_time", 0.0)),
+            blessings_data=dict(getattr(self._save, "blessings", {}) or {}),
         )
-        self._last_blessing_step_count = self._idle_state.get_idle_blessing_step_count()
-        self._blessing_reset_remaining_seconds = 0.0
 
         self._onsite_cards: list[IdleOnsiteCharacterCard] = []
         self._offsite_cards: list[IdleOffsiteCard] = []
@@ -189,7 +187,11 @@ class IdleScreenWidget(QWidget):
         self._tick_cooldown_label = QLabel("")
         self._tick_cooldown_label.setObjectName("idleTickCooldownLabel")
         self._tick_cooldown_label.setVisible(False)
-        header.addWidget(self._tick_cooldown_label, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        header.addWidget(
+            self._tick_cooldown_label,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
 
         arena = IdleArena()
         self._arena = arena
@@ -270,9 +272,7 @@ class IdleScreenWidget(QWidget):
         right_column.setLayout(right_column_layout)
         right_column.setFixedWidth(220)
 
-        blessing_panel = self._make_blessing_panel()
         mods_panel = self._make_mods_panel()
-        right_column_layout.addWidget(blessing_panel)
         right_column_layout.addWidget(mods_panel)
         right_column_layout.addStretch(1)
 
@@ -284,7 +284,6 @@ class IdleScreenWidget(QWidget):
         arena_layout.setColumnStretch(2, 0)
 
         self._update_mods_ui()
-        self._update_blessing_ui()
 
         self._idle_state.tick_update.connect(self._on_tick)
         self._tick_runtime.subscribe(
@@ -298,7 +297,9 @@ class IdleScreenWidget(QWidget):
         self._update_tick_cooldown_label()
 
     @property
-    def lineup_signature(self) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, int], ...], int]:
+    def lineup_signature(
+        self,
+    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, int], ...], int]:
         return self._lineup_signature
 
     def _process_idle_tick(self) -> None:
@@ -358,7 +359,9 @@ class IdleScreenWidget(QWidget):
 
         rr_label = QLabel("Risk & Reward: 0")
         rr_label.setObjectName("idleRRLabel")
-        rr_help_text = "Boost: (Lvl+1)x EXP\nDrain: (5.5x Lvl) HP\nSpeed scales with level"
+        rr_help_text = (
+            "Boost: (Lvl+1)x EXP\nDrain: (5.5x Lvl) HP\nSpeed scales with level"
+        )
         rr_label.setToolTip(rr_help_text)
         layout.addWidget(rr_label)
         self._rr_label = rr_label
@@ -378,100 +381,6 @@ class IdleScreenWidget(QWidget):
 
         return panel
 
-    def _make_blessing_panel(self) -> QFrame:
-        panel = QFrame()
-        panel.setObjectName("idleBlessingPanel")
-        panel.setFixedWidth(220)
-
-        layout = QVBoxLayout()
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(8)
-        panel.setLayout(layout)
-
-        title = QLabel("Odyssey's Blessing")
-        title.setObjectName("idleBlessingTitle")
-        layout.addWidget(title)
-        self._blessing_title_label = title
-
-        row = QHBoxLayout()
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(8)
-        layout.addLayout(row)
-
-        meter = IdleBlessingMeterWidget()
-        meter.setObjectName("idleBlessingMeter")
-        row.addWidget(meter, 1)
-        self._blessing_meter = meter
-
-        value_label = QLabel("x1.0000")
-        value_label.setObjectName("idleBlessingValueLabel")
-        value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        row.addWidget(value_label, 0)
-        self._blessing_value_label = value_label
-
-        return panel
-
-    def _format_seconds(self, seconds: int) -> str:
-        value = max(0, int(seconds))
-        minutes = value // 60
-        remainder = value % 60
-        return f"{minutes:02d}:{remainder:02d}"
-
-    def _build_blessing_tooltip(self, *, multiplier: float, steps: int, seconds_to_next: int) -> str:
-        return (
-            "<b>Odyssey's Blessing</b><br>"
-            f"Current: <b>x{multiplier:.4f}</b><br>"
-            f"Stacks gained: <b>{max(0, int(steps))}</b><br>"
-            f"Next blessing in: <b>{self._format_seconds(seconds_to_next)}</b><br><br>"
-            f"+{(IDLE_BLESSING_STEP_MULTIPLIER - 1.0) * 100.0:.3f}% every 5 minutes."
-        )
-
-    def _compute_blessing_shimmer(self, *, seconds_to_next: int) -> float:
-        if seconds_to_next > 30:
-            return 0.0
-        if seconds_to_next <= 5:
-            return 1.0
-        return max(0.0, min(1.0, (30.0 - float(seconds_to_next)) / 25.0))
-
-    def _update_blessing_ui(self) -> None:
-        steps = self._idle_state.get_idle_blessing_step_count()
-        cycle_progress = self._idle_state.get_idle_blessing_cycle_progress()
-        seconds_to_next = self._idle_state.get_idle_blessing_seconds_to_next_step()
-        multiplier = self._idle_state.get_idle_blessing_multiplier()
-
-        if steps > self._last_blessing_step_count:
-            self._last_blessing_step_count = steps
-            self._blessing_reset_remaining_seconds = 3.0
-
-        shimmer = self._compute_blessing_shimmer(seconds_to_next=seconds_to_next)
-        reset_active = self._blessing_reset_remaining_seconds > 0.0
-        if reset_active:
-            normalized = self._blessing_reset_remaining_seconds / 3.0
-            visual_progress = max(0.0, min(1.0, normalized))
-            shimmer = max(0.0, min(1.0, normalized))
-            self._blessing_reset_remaining_seconds = max(
-                0.0,
-                self._blessing_reset_remaining_seconds - IDLE_TICK_INTERVAL_SECONDS,
-            )
-        else:
-            visual_progress = cycle_progress
-
-        self._blessing_meter.set_visual_state(
-            progress=visual_progress,
-            shimmer=shimmer,
-            reset_active=reset_active,
-        )
-        self._blessing_value_label.setText(f"x{multiplier:.4f}")
-
-        tooltip = self._build_blessing_tooltip(
-            multiplier=multiplier,
-            steps=steps,
-            seconds_to_next=seconds_to_next,
-        )
-        self._blessing_title_label.setToolTip(tooltip)
-        self._blessing_meter.setToolTip(tooltip)
-        self._blessing_value_label.setToolTip(tooltip)
-
     def _on_shared_exp_changed(self, value: int) -> None:
         self._idle_state.set_shared_exp_percentage(value)
         self._update_mods_ui()
@@ -490,7 +399,9 @@ class IdleScreenWidget(QWidget):
         self._rr_slider.setValue(rr_level)
 
     def _refresh_character_cards(self) -> None:
-        snapshots: list[tuple[IdleOnsiteCharacterCard, dict[str, object], Stats, float]] = []
+        snapshots: list[
+            tuple[IdleOnsiteCharacterCard, dict[str, object], Stats, float]
+        ] = []
         party_stats: list[Stats] = []
         for card in self._onsite_cards:
             snapshot = card.snapshot()
@@ -511,7 +422,9 @@ class IdleScreenWidget(QWidget):
 
         reserves: list[Stats] = []
         seen: set[str] = set()
-        for char_id in [str(item) for item in getattr(self, "_offsite_ids", []) if item]:
+        for char_id in [
+            str(item) for item in getattr(self, "_offsite_ids", []) if item
+        ]:
             if len(reserves) >= 6:
                 break
             if char_id in seen:
@@ -530,8 +443,12 @@ class IdleScreenWidget(QWidget):
             progress: dict[str, float | int] = {
                 "level": max(1, int(data.get("level", 1))),
                 "exp": float(max(0.0, float(data.get("exp", 0.0)))),
-                "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
-                "max_hp_level_bonus_version": max(0, int(data.get("max_hp_level_bonus_version", 0))),
+                "exp_multiplier": float(
+                    max(0.0, float(data.get("exp_multiplier", 1.0)))
+                ),
+                "max_hp_level_bonus_version": max(
+                    0, int(data.get("max_hp_level_bonus_version", 0))
+                ),
             }
             stats = build_scaled_character_stats(
                 plugin=plugin,
@@ -541,7 +458,9 @@ class IdleScreenWidget(QWidget):
                 progress=progress,
                 saved_base_stats=base_stats,
             )
-            misplacement_getter = getattr(self._idle_state, "get_misplacement_stat_multiplier", None)
+            misplacement_getter = getattr(
+                self._idle_state, "get_misplacement_stat_multiplier", None
+            )
             if callable(misplacement_getter):
                 misplacement_multiplier = float(misplacement_getter(char_id))
             else:
@@ -551,8 +470,10 @@ class IdleScreenWidget(QWidget):
 
         apply_offsite_stat_share(party=party_stats, reserves=reserves, share=0.10)
 
-        for (_card, _data, stats, ratio) in snapshots:
-            stats.hp = max(0, min(stats.max_hp, int(round(float(stats.max_hp) * ratio))))
+        for _card, _data, stats, ratio in snapshots:
+            stats.hp = max(
+                0, min(stats.max_hp, int(round(float(stats.max_hp) * ratio)))
+            )
 
         maxima = compute_stat_maxima(party_stats)
         for card, data, stats, _ratio in snapshots:
@@ -564,7 +485,6 @@ class IdleScreenWidget(QWidget):
     def _on_tick(self, tick_count: int) -> None:
         del tick_count
         self._update_tick_cooldown_label()
-        self._update_blessing_ui()
         self._refresh_character_cards()
         healed = 0
         try:
@@ -592,10 +512,12 @@ class IdleScreenWidget(QWidget):
             bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
             save.idle_exp_bonus_seconds = bonus_seconds
             save.idle_exp_penalty_seconds = penalty_seconds
-            save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
+            save.idle_shared_exp_percentage = (
+                self._idle_state.get_shared_exp_percentage()
+            )
             save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
             save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
-            self._save_store.persist()
+            self._save_store.persist(force=True)
         except Exception:
             return
 
@@ -604,26 +526,28 @@ class IdleScreenWidget(QWidget):
     def _prestige_character(self, char_id: str) -> None:
         """
         Apply prestige to a character with confirmation dialog.
-        
+
         Shows the player what will happen before they commit to the prestige.
         """
         # Get current character data
         data = self._idle_state.get_char_data(char_id)
         if not data:
             return
-        
+
         # Check if prestige is available
         exp_multiplier = float(data.get("exp_multiplier", 1.0))
         if exp_multiplier < 10.0:
             return
-        
+
         # Get current prestige count
         prestige_count = max(0, int(data.get("prestige_count", 0)))
 
         # Show confirmation dialog
         plugin = self._plugin_by_id.get(char_id)
         if plugin is None:
-            raise ValueError(f"Missing plugin metadata for prestige character {char_id!r}.")
+            raise ValueError(
+                f"Missing plugin metadata for prestige character {char_id!r}."
+            )
         display_name = getattr(plugin, "display_name", char_id)
 
         msg_box = QMessageBox(self)
@@ -638,17 +562,19 @@ class IdleScreenWidget(QWidget):
                 stars=int(getattr(plugin, "stars", 0) or 0),
             )
         )
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg_box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
         msg_box.setDefaultButton(QMessageBox.StandardButton.No)
 
         result = msg_box.exec()
         if result != QMessageBox.StandardButton.Yes:
             return
-        
+
         # Apply prestige
         if not self._idle_state.prestige_character(char_id):
             return
-        
+
         # Save the game state
         try:
             save = self._save
@@ -664,16 +590,18 @@ class IdleScreenWidget(QWidget):
             bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
             save.idle_exp_bonus_seconds = bonus_seconds
             save.idle_exp_penalty_seconds = penalty_seconds
-            save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
+            save.idle_shared_exp_percentage = (
+                self._idle_state.get_shared_exp_percentage()
+            )
             save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
             save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
-            self._save_store.persist()
+            self._save_store.persist(force=True)
         except Exception:
             return
-        
+
         self._refresh_character_cards()
 
-    def _autosave(self) -> None:
+    def _autosave(self, *, force: bool = False) -> None:
         try:
             save = self._save
             progress = dict(save.character_progress)
@@ -688,16 +616,21 @@ class IdleScreenWidget(QWidget):
             bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
             save.idle_exp_bonus_seconds = bonus_seconds
             save.idle_exp_penalty_seconds = penalty_seconds
-            save.idle_shared_exp_percentage = self._idle_state.get_shared_exp_percentage()
+            save.idle_shared_exp_percentage = (
+                self._idle_state.get_shared_exp_percentage()
+            )
             save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
             save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
-            self._save_store.persist()
+            blessings = dict(getattr(save, "blessings", {}) or {})
+            blessings.update(self._idle_state.export_blessings())
+            save.blessings = blessings
+            self._save_store.persist(force=force)
         except Exception:
             pass
 
     def force_persist(self) -> None:
         self._allow_shutdown_persist = True
-        self._autosave()
+        self._autosave(force=True)
 
     def _finish(self) -> None:
         self.shutdown()
@@ -709,4 +642,4 @@ class IdleScreenWidget(QWidget):
             self._autosave_timer.stop()
         self._allow_shutdown_persist = self._allow_shutdown_persist and persist
         if persist and self._allow_shutdown_persist:
-            self._autosave()
+            self._autosave(force=True)

@@ -56,6 +56,7 @@ Required run-log fields:
 - Prefer code and docstrings over long-lived documentation artifacts.
 - Do not update `README.md`.
 - Keep I/O and long-running work async-friendly where applicable.
+- Never run non-UI logic on the UI thread; move saving, tick processing, and heavy game logic to background/async workers, and marshal UI updates back to the UI thread.
 
 ### Python Style
 

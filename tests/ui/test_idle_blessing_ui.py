@@ -74,7 +74,8 @@ class _FakeSaveStore:
     def current(self) -> object:
         return self._current
 
-    def persist(self) -> None:
+    def persist(self, *, force: bool = False) -> None:
+        del force
         self.persist_calls += 1
 
 
@@ -120,7 +121,9 @@ class _FakeIdleStateForOffsite:
 
 def test_blessing_blend_factor_boundaries() -> None:
     assert _blend_factor_for_progress(0.50) == 0.0
-    assert math.isclose(_blend_factor_for_progress(0.575), 0.5, rel_tol=0.0, abs_tol=1e-12)
+    assert math.isclose(
+        _blend_factor_for_progress(0.575), 0.5, rel_tol=0.0, abs_tol=1e-12
+    )
     assert _blend_factor_for_progress(0.65) == 1.0
 
 
@@ -136,7 +139,9 @@ def test_blessing_meter_animation_timer_starts_and_settles() -> None:
     assert meter._display_shimmer > 0.0
     assert meter._shimmer_phase != phase_before
 
-    meter.set_visual_state(progress=meter._display_progress, shimmer=0.0, reset_active=False)
+    meter.set_visual_state(
+        progress=meter._display_progress, shimmer=0.0, reset_active=False
+    )
     for _ in range(180):
         if not meter._frame_timer.isActive():
             break
@@ -200,7 +205,9 @@ def test_idle_screen_panel_order_and_tooltip_text(monkeypatch) -> None:
     assert rr_label.toolTip() == rr_help
     assert rr_slider.toolTip() == rr_help
 
-    tooltip = screen._build_blessing_tooltip(multiplier=1.0, steps=0, seconds_to_next=300)
+    tooltip = screen._build_blessing_tooltip(
+        multiplier=1.0, steps=0, seconds_to_next=300
+    )
     assert "Applies to onsite source EXP gain only" not in tooltip
     assert "Offsite receives indirect bonus" not in tooltip
 
