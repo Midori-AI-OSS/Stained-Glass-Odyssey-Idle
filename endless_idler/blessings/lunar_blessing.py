@@ -90,7 +90,6 @@ def get_lunar_progress_per_tick(steps: int) -> dict[str, float]:
 def _format_lunar_tooltip(steps: int, context: dict) -> str:
     """Format tooltip for Lunar's Blessing."""
     import time
-    from typing import Any
 
     save = context.get("save")
     if save is None:
