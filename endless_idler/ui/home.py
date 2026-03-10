@@ -65,15 +65,16 @@ class HomePage(QWidget):
 
     def _is_blessing_unlocked(self, plugin: BlessingPlugin) -> bool:
         """Check if a blessing is unlocked based on plugin and save state."""
-        if not plugin.is_unlocked:
-            return False
+        if not plugin.is_persistent:
+            return plugin.is_unlocked
+
         save = self._get_save()
-        if plugin.is_persistent:
-            blessing_data = save.blessings.get(plugin.blessing_id, {})
-            if not isinstance(blessing_data, dict):
-                return False
-            return bool(blessing_data.get("unlocked", False))
-        return True
+        blessing_data = save.blessings.get(plugin.blessing_id, {})
+        if not isinstance(blessing_data, dict):
+            return plugin.is_unlocked
+        if "unlocked" in blessing_data:
+            return bool(blessing_data.get("unlocked"))
+        return plugin.is_unlocked
 
     def _is_session_based(self, plugin: BlessingPlugin) -> bool:
         """Check if a blessing is session-based (Odyssey's Blessing)."""

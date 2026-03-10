@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import math
 import random
+from typing import cast
 
 import endless_idler.ui.idle.idle_state as idle_state_module
 
+from endless_idler.blessings.lunar_blessing import LUNAR_STEP_SECONDS
+from endless_idler.blessings.lunar_blessing import LUNAR_WEEK_SECONDS
 from endless_idler.characters.placement_rules import MISPLACED_EXP_MULTIPLIER
 from endless_idler.characters.placement_rules import MISPLACED_STAT_MULTIPLIER
 from endless_idler.characters.plugins import CharacterPlugin
@@ -49,6 +52,7 @@ def _build_state(
     char_ids: list[str] | None = None,
     offsite_ids: list[str] | None = None,
     exp_gain_scale: float = 1.0,
+    blessings_data: dict[str, dict[str, object]] | None = None,
 ) -> IdleGameState:
     onsite_ids = list(char_ids) if char_ids is not None else ["onsite"]
     reserve_ids = list(offsite_ids) if offsite_ids is not None else ["offsite"]
@@ -58,9 +62,10 @@ def _build_state(
         offsite_ids=reserve_ids,
         party_level=1,
         stacks=stacks,
-        plugins_by_id=plugins or _plugins_by_id(),
+        plugins_by_id=cast(dict[str, object], plugins or _plugins_by_id()),
         rng=random.Random(7),
         exp_gain_scale=exp_gain_scale,
+        blessings_data=blessings_data,
     )
 
 
@@ -260,9 +265,13 @@ def test_exp_gain_floor_applies_to_tiny_positive_values(monkeypatch) -> None:
         per_tick_gain, MIN_EXP_GAIN_PER_TICK, rel_tol=0.0, abs_tol=1e-12
     )
 
-    before = float(state.get_char_data("onsite")["exp"])
+    before_data = state.get_char_data("onsite")
+    assert isinstance(before_data, dict)
+    before = float(before_data["exp"])
     state.process_tick()
-    after = float(state.get_char_data("onsite")["exp"])
+    after_data = state.get_char_data("onsite")
+    assert isinstance(after_data, dict)
+    after = float(after_data["exp"])
     assert math.isclose(
         after - before, MIN_EXP_GAIN_PER_TICK, rel_tol=0.0, abs_tol=1e-12
     )
@@ -346,3 +355,205 @@ def test_recipient_modifiers_apply_to_allocated_offsite_share(monkeypatch) -> No
 
     assert gain_x1 > 0.0
     assert math.isclose(gain_x3 / gain_x1, 3.0, rel_tol=1e-9, abs_tol=1e-9)
+
+
+def test_damage_type_blessing_uses_blessing_ids_for_specific_damage_type(
+    monkeypatch,
+) -> None:
+    now = {"value": 220_000.0}
+    monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
+
+    plugins = {
+        "onsite": CharacterPlugin(
+            char_id="onsite",
+            display_name="Onsite",
+            placement="onsite",
+            damage_type_id="fire",
+        )
+    }
+    state = _build_state(
+        plugins=plugins,
+        char_ids=["onsite"],
+        offsite_ids=[],
+        blessings_data={
+            "fire": {"steps": 999, "unlocked": True},
+            "fire_blessing": {"steps": 10, "unlocked": True},
+        },
+    )
+
+    bonus = state._damage_type_blessing_bonus("onsite")
+    assert math.isclose(bonus, 1.001, rel_tol=1e-12, abs_tol=1e-12)
+
+
+def test_damage_type_blessing_generic_sums_unlocked_blessing_ids_only(
+    monkeypatch,
+) -> None:
+    now = {"value": 230_000.0}
+    monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
+
+    plugins = {
+        "onsite": CharacterPlugin(
+            char_id="onsite",
+            display_name="Onsite",
+            placement="onsite",
+            damage_type_id="generic",
+        )
+    }
+    state = _build_state(
+        plugins=plugins,
+        char_ids=["onsite"],
+        offsite_ids=[],
+        blessings_data={
+            "fire": {"steps": 999, "unlocked": True},
+            "ice": {"steps": 999, "unlocked": True},
+            "fire_blessing": {"steps": 4, "unlocked": True},
+            "ice_blessing": {"steps": 6, "unlocked": True},
+            "wind_blessing": {"steps": 100, "unlocked": False},
+        },
+    )
+
+    bonus = state._damage_type_blessing_bonus("onsite")
+    assert math.isclose(bonus, 1.001, rel_tol=1e-12, abs_tol=1e-12)
+
+
+def test_lunar_exp_gain_bonus_applies_to_idle_gain(monkeypatch) -> None:
+    now = {"value": 240_000.0}
+    monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
+
+    steps_per_week = int(LUNAR_WEEK_SECONDS // LUNAR_STEP_SECONDS)
+    baseline = _build_state(offsite_ids=[])
+    lunar_boosted = _build_state(
+        offsite_ids=[],
+        blessings_data={
+            "lunar_blessing": {"steps": steps_per_week, "unlocked": True},
+        },
+    )
+
+    baseline_gain = baseline.get_exp_gain_per_tick("onsite")
+    boosted_gain = lunar_boosted.get_exp_gain_per_tick("onsite")
+
+    assert baseline_gain > 0.0
+    assert math.isclose(
+        boosted_gain / baseline_gain,
+        1.01,
+        rel_tol=1e-9,
+        abs_tol=1e-9,
+    )
+
+
+def test_lunar_exp_reduction_applies_to_next_level_requirement(monkeypatch) -> None:
+    now = {"value": 250_000.0}
+    monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
+
+    steps_per_week = int(LUNAR_WEEK_SECONDS // LUNAR_STEP_SECONDS)
+    starred_plugins = {
+        "onsite": CharacterPlugin(
+            char_id="onsite",
+            display_name="Onsite",
+            placement="onsite",
+            stars=5,
+        )
+    }
+    baseline = _build_state(plugins=starred_plugins, offsite_ids=[])
+    lunar_reduced = _build_state(
+        plugins=starred_plugins,
+        offsite_ids=[],
+        blessings_data={
+            "lunar_blessing": {"steps": steps_per_week, "unlocked": True},
+        },
+    )
+
+    baseline._level_up("onsite")
+    lunar_reduced._level_up("onsite")
+
+    baseline_data = baseline.get_char_data("onsite")
+    reduced_data = lunar_reduced.get_char_data("onsite")
+    assert isinstance(baseline_data, dict)
+    assert isinstance(reduced_data, dict)
+    assert math.isclose(
+        float(reduced_data["next_exp"]) / float(baseline_data["next_exp"]),
+        0.99,
+        rel_tol=1e-9,
+        abs_tol=1e-9,
+    )
+
+
+def test_locked_persistent_blessing_does_not_accrue_or_preaccumulate(
+    monkeypatch,
+) -> None:
+    now = {"value": 260_000.0}
+    monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
+
+    state = _build_state(
+        blessings_data={
+            "fire_blessing": {
+                "steps": 7,
+                "unlocked": False,
+                "step_start_time": now["value"] - 10_000.0,
+            }
+        }
+    )
+
+    state._process_blessing_ticks()
+    fire_data = state.export_blessings()["fire_blessing"]
+    assert int(fire_data["steps"]) == 7
+    assert float(fire_data.get("step_start_time", 0.0)) == 0.0
+
+
+def test_unlocked_persistent_blessing_accrues_normally(monkeypatch) -> None:
+    now = {"value": 270_000.0}
+    monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
+
+    state = _build_state(
+        blessings_data={
+            "fire_blessing": {
+                "steps": 2,
+                "unlocked": True,
+                "step_start_time": now["value"] - 301.0,
+            }
+        }
+    )
+
+    state._process_blessing_ticks()
+    fire_data = state.export_blessings()["fire_blessing"]
+    assert int(fire_data["steps"]) == 3
+    assert float(fire_data["step_start_time"]) == now["value"]
+
+
+def test_unlock_transition_starts_accrual_without_retroactive_catchup(
+    monkeypatch,
+) -> None:
+    now = {"value": 280_000.0}
+    monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
+
+    state = _build_state(
+        blessings_data={
+            "fire_blessing": {
+                "steps": 4,
+                "unlocked": False,
+                "step_start_time": now["value"] - 20_000.0,
+            }
+        }
+    )
+
+    state._process_blessing_ticks()
+    locked_data = state.export_blessings()["fire_blessing"]
+    assert int(locked_data["steps"]) == 4
+    assert float(locked_data.get("step_start_time", 0.0)) == 0.0
+
+    state._blessings_data["fire_blessing"]["unlocked"] = True
+
+    state._process_blessing_ticks()
+    unlocked_data = state.export_blessings()["fire_blessing"]
+    assert int(unlocked_data["steps"]) == 4
+    assert float(unlocked_data["step_start_time"]) == now["value"]
+
+    now["value"] += 299.0
+    state._process_blessing_ticks()
+    before_step_data = state.export_blessings()["fire_blessing"]
+    assert int(before_step_data["steps"]) == 4
+
+    now["value"] += 1.0
+    state._process_blessing_ticks()
+    after_step_data = state.export_blessings()["fire_blessing"]
+    assert int(after_step_data["steps"]) == 5

@@ -185,6 +185,11 @@ class MainMenuWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._idle_screen is not None:
             self._idle_screen.shutdown()
+        else:
+            try:
+                self._save_store.persist(force=True)
+            except OSError:
+                pass
         if self._radio_controller is not None:
             self._radio_controller.shutdown()
         super().closeEvent(event)
@@ -403,7 +408,7 @@ class MainMenuWindow(QMainWindow):
             if self._idle_screen is not None:
                 self._idle_screen.force_persist()
             else:
-                self._save_store.persist()
+                self._save_store.persist(force=True)
         except OSError as exc:
             self._show_save_action_error("Save failed", exc)
             return

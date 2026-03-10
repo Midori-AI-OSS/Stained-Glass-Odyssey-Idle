@@ -1,16 +1,18 @@
 """Lunar's Blessing - A global experience blessing.
 
 Grants +1% exp gain AND -1% exp needed per level per week.
-Progress displays per minute for visual feedback.
+Progress accrues in real 5-minute micro-steps.
 Diminishing returns after 50%: each additional 10% requires 2x time.
 """
 
 from __future__ import annotations
 
+import time
+
 from endless_idler.blessings.plugin import BlessingPlugin
 
 
-LUNAR_STEP_SECONDS = 60.0
+LUNAR_STEP_SECONDS = 300.0
 LUNAR_WEEK_SECONDS = 604800.0
 LUNAR_WEEKS_PER_STEP = 1.0
 LUNAR_DIMINISHING_THRESHOLD = 50.0
@@ -24,7 +26,7 @@ def _lunar_multiplier_formula(steps: int) -> float:
     Also grants -1% exp needed per level per week (handled separately).
 
     Args:
-        steps: The number of minute steps elapsed
+        steps: The number of 5-minute steps elapsed
 
     Returns:
         The cumulative multiplier (1.0 + bonus percentage)
@@ -70,7 +72,7 @@ def get_lunar_progress_per_tick(steps: int) -> dict[str, float]:
     """Get detailed progress information for Lunar's Blessing.
 
     Args:
-        steps: The number of minute steps elapsed
+        steps: The number of 5-minute steps elapsed
 
     Returns:
         Dictionary with exp_gain_pct, exp_reduction_pct, progress_weeks, and display_pct
@@ -87,10 +89,14 @@ def get_lunar_progress_per_tick(steps: int) -> dict[str, float]:
     }
 
 
+def _next_step_bonus_delta_pct(steps: int) -> float:
+    current = get_lunar_progress_per_tick(steps)
+    next_step = get_lunar_progress_per_tick(max(0, steps) + 1)
+    return max(0.0, float(next_step["display_pct"]) - float(current["display_pct"]))
+
+
 def _format_lunar_tooltip(steps: int, context: dict) -> str:
     """Format tooltip for Lunar's Blessing."""
-    import time
-
     save = context.get("save")
     if save is None:
         return "<b>Lunar's Blessing</b><br>Save data unavailable"
@@ -110,9 +116,10 @@ def _format_lunar_tooltip(steps: int, context: dict) -> str:
     exp_reduction = progress_data["exp_reduction_pct"]
     weeks = progress_data["progress_weeks"]
 
-    LUNAR_WEEK_MINUTES = LUNAR_WEEK_SECONDS / 60.0
-    per_minute_gain = (1.0 / LUNAR_WEEK_MINUTES) * 100
-    per_minute_reduction = (1.0 / LUNAR_WEEK_MINUTES) * 100
+    per_step_delta = _next_step_bonus_delta_pct(steps)
+    cadence_line = f"Current 5-minute step: +{per_step_delta:.4f}% gain, -{per_step_delta:.4f}% needed"
+    if exp_gain >= LUNAR_DIMINISHING_THRESHOLD:
+        cadence_line += " (diminishing returns active)"
 
     # Format time as MM:SS
     minutes = seconds_until_next // 60
@@ -123,8 +130,7 @@ def _format_lunar_tooltip(steps: int, context: dict) -> str:
         "<b>Lunar's Blessing</b><br>"
         f"<b>+{exp_gain:.1f}%</b> experience gained<br>"
         f"<b>-{exp_reduction:.1f}%</b> experience needed per level<br>"
-        f"+{per_minute_gain:.4f}% per minute<br>"
-        f"-{per_minute_reduction:.4f}% per minute<br><br>"
+        f"{cadence_line}<br><br>"
         f"Progress: <b>{weeks:.2f}</b> weeks<br>"
         f"Next tick in: <b>{time_str}</b>"
     )
@@ -137,7 +143,7 @@ blessing = BlessingPlugin(
     step_seconds=LUNAR_STEP_SECONDS,
     multiplier_formula=_lunar_multiplier_formula,
     max_steps=None,
-    is_unlocked=False,
+    is_unlocked=True,
     unlock_condition="Reach level 100 with any character",
     is_persistent=True,
     save_schema={

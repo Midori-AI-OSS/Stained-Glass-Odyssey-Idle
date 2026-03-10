@@ -11,6 +11,7 @@ from PySide6.QtCore import Signal
 
 from endless_idler.blessings import discover_blessing_plugins
 from endless_idler.blessings import get_default_blessing
+from endless_idler.blessings.lunar_blessing import get_lunar_progress_per_tick
 from endless_idler.blessings.plugin import BlessingPlugin
 from endless_idler.characters.placement_rules import MISPLACED_EXP_MULTIPLIER
 from endless_idler.characters.placement_rules import MISPLACED_STAT_MULTIPLIER
@@ -123,6 +124,7 @@ class IdleGameState(QObject):
         self._battle_start_time = float(max(0.0, battle_start_time))
         self._idle_session_started_at = float(self._time())
         self._blessings_data = blessings_data if blessings_data else {}
+        self._damage_blessing_id_by_type = self._build_damage_blessing_id_by_type()
 
         self._tick_count = 0
         self._shared_exp_percentage = max(1, min(95, int(shared_exp_percentage)))
@@ -575,7 +577,10 @@ class IdleGameState(QObject):
         data["rebirths"] = max(0, int(data.get("rebirths", 0))) + 1
 
         req_mult = float(data.get("req_multiplier", 1.0))
-        data["next_exp"] = (1 * 30 * req_mult) * self._rng.uniform(0.95, 1.05)
+        lunar_req_mult = self._lunar_exp_requirement_multiplier()
+        data["next_exp"] = (1 * 30 * req_mult * lunar_req_mult) * self._rng.uniform(
+            0.95, 1.05
+        )
         self._apply_offsite_stat_share_to_onsite_hp()
         return True
 
@@ -847,7 +852,34 @@ class IdleGameState(QObject):
         modifier *= float(data.get("passive_modifier", 1.0))
         modifier *= self._exp_multiplier_for_char(char_id)
         modifier *= self._damage_type_blessing_bonus(char_id)
+        modifier *= self._lunar_exp_gain_bonus_multiplier()
         return max(0.0, modifier)
+
+    def _lunar_exp_gain_bonus_multiplier(self) -> float:
+        progress = self._lunar_progress_data()
+        if progress is None:
+            return 1.0
+        gain_pct = max(0.0, float(progress.get("exp_gain_pct", 0.0)))
+        return max(0.0, 1.0 + (gain_pct / 100.0))
+
+    def _lunar_exp_requirement_multiplier(self) -> float:
+        progress = self._lunar_progress_data()
+        if progress is None:
+            return 1.0
+        reduction_pct = max(0.0, float(progress.get("exp_reduction_pct", 0.0)))
+        return max(0.01, 1.0 - (reduction_pct / 100.0))
+
+    def _lunar_progress_data(self) -> dict[str, float] | None:
+        lunar_data = self._blessings_data.get("lunar_blessing", {})
+        if not isinstance(lunar_data, dict):
+            return None
+        if not bool(lunar_data.get("unlocked", True)):
+            return None
+        try:
+            steps = max(0, int(lunar_data.get("steps", 0)))
+        except (TypeError, ValueError):
+            return None
+        return get_lunar_progress_per_tick(steps)
 
     def _damage_type_blessing_bonus(self, char_id: str) -> float:
         plugin = self._plugins_by_id.get(char_id)
@@ -860,20 +892,37 @@ class IdleGameState(QObject):
             return 1.0
         bonus = 1.0
         if damage_type_id == "generic":
-            for dtype in SHARD_ALLOWED_TYPES:
-                blessing_info = self._blessings_data.get(dtype, {})
+            for blessing_id in self._damage_blessing_id_by_type.values():
+                blessing_info = self._blessings_data.get(blessing_id, {})
                 if not isinstance(blessing_info, dict):
                     continue
                 if not blessing_info.get("unlocked", False):
                     continue
                 steps = int(blessing_info.get("steps", 0))
                 bonus += steps * 0.0001
-        elif damage_type_id in SHARD_ALLOWED_TYPES:
-            blessing_info = self._blessings_data.get(damage_type_id, {})
+        else:
+            blessing_id = self._damage_blessing_id_by_type.get(damage_type_id)
+            if not blessing_id:
+                return bonus
+            blessing_info = self._blessings_data.get(blessing_id, {})
             if isinstance(blessing_info, dict) and blessing_info.get("unlocked", False):
                 steps = int(blessing_info.get("steps", 0))
                 bonus += steps * 0.0001
         return bonus
+
+    @staticmethod
+    def _build_damage_blessing_id_by_type() -> dict[str, str]:
+        mapping: dict[str, str] = {}
+        for blessing in discover_blessing_plugins():
+            target_damage_type = getattr(blessing, "target_damage_type", None)
+            if not isinstance(target_damage_type, str):
+                continue
+            damage_type_id = normalize_damage_type_id(target_damage_type)
+            blessing_id = str(getattr(blessing, "blessing_id", "") or "").strip()
+            if not damage_type_id or not blessing_id:
+                continue
+            mapping[damage_type_id] = blessing_id
+        return mapping
 
     def _exp_recipients(
         self,
@@ -1016,7 +1065,10 @@ class IdleGameState(QObject):
             rebirth_power=float(data.get("rebirth_power", 1.0)),
             stars=self._progression_stars_for_char(char_id),
         )
-        data["next_exp"] = (level * 30 * req_mult * tax) * self._rng.uniform(0.95, 1.05)
+        lunar_req_mult = self._lunar_exp_requirement_multiplier()
+        data["next_exp"] = (
+            level * 30 * req_mult * tax * lunar_req_mult
+        ) * self._rng.uniform(0.95, 1.05)
         self._apply_offsite_stat_share_to_onsite_hp()
 
     def _apply_weighted_stat_upgrades(
@@ -1269,7 +1321,7 @@ class IdleGameState(QObject):
         Returns:
             Updated blessings data dict
         """
-        current_time = time.time()
+        current_time = float(self._time())
         updated_blessings: dict[str, dict[str, Any]] = dict(self._blessings_data)
 
         for plugin in discover_blessing_plugins():
@@ -1278,6 +1330,12 @@ class IdleGameState(QObject):
 
             blessing_id = plugin.blessing_id
             blessing_data: dict[str, Any] = dict(updated_blessings.get(blessing_id, {}))
+
+            if not bool(blessing_data.get("unlocked", plugin.is_unlocked)):
+                if float(blessing_data.get("step_start_time", 0.0)) != 0.0:
+                    blessing_data["step_start_time"] = 0.0
+                    updated_blessings[blessing_id] = blessing_data
+                continue
 
             step_start_time = float(blessing_data.get("step_start_time", 0.0))
             if step_start_time <= 0.0:

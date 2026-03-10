@@ -74,7 +74,8 @@ class _FakeSaveStore:
     def current(self) -> RunSave:
         return self._current
 
-    def persist(self) -> None:
+    def persist(self, *, force: bool = False) -> None:
+        del force
         self.persist_calls += 1
 
 
