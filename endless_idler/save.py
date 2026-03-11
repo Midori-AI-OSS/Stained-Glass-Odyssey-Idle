@@ -241,7 +241,7 @@ def _default_save_path() -> Path:
 
     home = Path.home()
     if home.exists():
-        return home / ".midoriai" / "stainedlgassodysseyidle" / "idlesave.json"
+        return home / ".midoriai" / "stainedglassodysseyidle" / "idlesave.json"
 
     base = QStandardPaths.writableLocation(
         QStandardPaths.StandardLocation.AppDataLocation
