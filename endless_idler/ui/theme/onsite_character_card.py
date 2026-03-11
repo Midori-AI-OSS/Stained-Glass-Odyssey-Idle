@@ -2,18 +2,6 @@ from __future__ import annotations
 
 
 STYLESHEET = """
-QFrame#onsiteCharacterCard {
-    border: 1px solid rgba(255, 255, 255, 18);
-    background-color: rgba(255, 255, 255, 10);
-}
-
-QFrame#onsiteCharacterCard[elementId="fire"] { background-color: rgba(255, 90, 40, 60); }
-QFrame#onsiteCharacterCard[elementId="ice"] { background-color: rgba(80, 200, 255, 60); }
-QFrame#onsiteCharacterCard[elementId="lightning"] { background-color: rgba(255, 220, 0, 55); }
-QFrame#onsiteCharacterCard[elementId="wind"] { background-color: rgba(80, 230, 170, 60); }
-QFrame#onsiteCharacterCard[elementId="dark"] { background-color: rgba(75, 45, 100, 60); }
-QFrame#onsiteCharacterCard[elementId="light"] { background-color: rgba(255, 220, 120, 60); }
-
 QLabel#onsitePortrait {
     background-color: rgba(0, 0, 0, 35);
     border: 1px solid rgba(255, 255, 255, 20);
