@@ -40,7 +40,11 @@ class CharacterPlugin:
     placement: str = "both"
     damage_type_id: str = "generic"
     damage_type_random: bool = False
-    base_stats: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_BASE_STATS))
+    is_dual_type: bool = False
+    dual_damage_types: tuple[str, str] = ("", "")
+    base_stats: dict[str, float] = field(
+        default_factory=lambda: dict(DEFAULT_BASE_STATS)
+    )
     base_aggro: float | None = None
     damage_reduction_passes: int | None = None
     passives: list[str] = field(default_factory=list)
@@ -77,7 +81,13 @@ def discover_character_plugins() -> list[CharacterPlugin]:
     plugins: list[CharacterPlugin] = []
     invalid_progression_stars: list[tuple[str, int, str]] = []
     for path in sorted(_CHARACTERS_DIR.glob("*.py")):
-        if path.name in {"__init__.py", "plugins.py", "foe_base.py", "player.py", "slime.py"}:
+        if path.name in {
+            "__init__.py",
+            "plugins.py",
+            "foe_base.py",
+            "player.py",
+            "slime.py",
+        }:
             continue
 
         (
