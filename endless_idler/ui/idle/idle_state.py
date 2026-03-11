@@ -728,6 +728,36 @@ class IdleGameState(QObject):
                     if data["exp"] >= data["next_exp"]:
                         self._level_up(char_id)
 
+            if self._standby_ids:
+                offsite_count = len(self._offsite_ids) if self._offsite_ids else 0
+                if offsite_count > 0:
+                    total_offsite_exp = offsite_count * (
+                        offsite_drip_share + offsite_baseline_bonus
+                    )
+                    total_standby_exp = 0.0001 * total_offsite_exp
+                    standby_count = len(self._standby_ids)
+                    standby_exp_per_char = total_standby_exp / standby_count
+
+                    for char_id in self._standby_ids:
+                        data = self._char_data.get(char_id)
+                        if not data:
+                            continue
+
+                        modifier = self._recipient_exp_modifier_for_char(
+                            char_id=char_id,
+                            data=data,
+                        )
+                        awarded = standby_exp_per_char * modifier
+                        awarded = self._apply_min_exp_gain_floor(awarded)
+                        data["exp"] += awarded
+
+                        regain_stat = float(data["base_stats"].get("regain", 100.0))
+                        regain_amount = regain_stat * 0.0005
+                        data["hp"] = min(data["max_hp"], data["hp"] + regain_amount)
+
+                        if data["exp"] >= data["next_exp"]:
+                            self._level_up(char_id)
+
             if self._advance_run_buffs and dt > 0.0:
                 self._exp_bonus_seconds = max(0.0, self._exp_bonus_seconds - dt)
                 self._exp_penalty_seconds = max(0.0, self._exp_penalty_seconds - dt)
