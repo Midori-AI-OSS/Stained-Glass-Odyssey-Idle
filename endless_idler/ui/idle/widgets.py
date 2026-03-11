@@ -478,21 +478,33 @@ class IdleOffsiteCard(QFrame):
         self._repolish_card()
 
     def _dual_type_visual_data(self, data: dict) -> tuple[bool, tuple[str, str]]:
+        plugin_is_dual = (
+            getattr(self._plugin, "is_dual_type", False) if self._plugin else False
+        )
         data_is_dual = data.get("is_dual_type")
-        if isinstance(data_is_dual, bool):
-            is_dual = data_is_dual
-        else:
-            is_dual = bool(getattr(self._plugin, "is_dual_type", False))
+        is_dual = data_is_dual if isinstance(data_is_dual, bool) else plugin_is_dual
         if not is_dual:
             return False, ("generic", "generic")
 
-        dual_types_raw = data.get("dual_damage_types")
-        if isinstance(dual_types_raw, list | tuple) and len(dual_types_raw) == 2:
-            return True, (str(dual_types_raw[0]), str(dual_types_raw[1]))
+        plugin_types = (
+            getattr(self._plugin, "dual_damage_types", ("", ""))
+            if self._plugin
+            else ("", "")
+        )
+        data_types = data.get("dual_damage_types", ("", ""))
+        if (
+            isinstance(data_types, list | tuple)
+            and len(data_types) == 2
+            and all(data_types)
+        ):
+            return True, (str(data_types[0]), str(data_types[1]))
 
-        plugin_dual_types = getattr(self._plugin, "dual_damage_types", ("", ""))
-        if isinstance(plugin_dual_types, tuple) and len(plugin_dual_types) == 2:
-            return True, (str(plugin_dual_types[0]), str(plugin_dual_types[1]))
+        if (
+            isinstance(plugin_types, tuple)
+            and len(plugin_types) == 2
+            and all(plugin_types)
+        ):
+            return True, (str(plugin_types[0]), str(plugin_types[1]))
         return False, ("generic", "generic")
 
     def paintEvent(self, event: QPaintEvent) -> None:

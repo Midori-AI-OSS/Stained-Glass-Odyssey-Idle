@@ -449,6 +449,9 @@ class BattleOnsiteCharacterCard(OnsiteCharacterCardBase):
 
 
 class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
+    _WAVE_AMPLITUDE_PX = 8.0
+    _WAVE_FREQUENCY = 0.7
+
     def __init__(
         self,
         *,
@@ -467,6 +470,9 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         self._rng = rng
         self._on_rebirth = on_rebirth
         self._on_prestige = on_prestige
+        self._is_dual_type = False
+        self._dual_damage_types = ("generic", "generic")
+        self._wave_phase = 0.0
 
         portrait_path = plugin.random_image_path(rng) if plugin else None
         display_name = getattr(plugin, "display_name", char_id) if plugin else char_id
@@ -505,6 +511,64 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         if not callable(getter):
             return 1.0
         return float(getter(self._char_id))
+
+    def set_dual_damage_types(self, dual_damage_types: tuple[str, str]) -> None:
+        normalized = (
+            normalize_element_id(dual_damage_types[0]),
+            normalize_element_id(dual_damage_types[1]),
+        )
+        if normalized == self._dual_damage_types:
+            return
+        self._dual_damage_types = normalized
+        self.update()
+
+    def set_wave_phase(self, phase: float) -> None:
+        normalized = min(1.0, max(0.0, float(phase)))
+        if math.isclose(normalized, self._wave_phase, rel_tol=0.0, abs_tol=1e-6):
+            return
+        self._wave_phase = normalized
+        self.update()
+
+    def _set_dual_type_enabled(self, enabled: bool) -> None:
+        if self._is_dual_type == enabled:
+            return
+        self._is_dual_type = enabled
+        self.setProperty("isDualType", enabled)
+        style = self.style()
+        if style is not None:
+            style.unpolish(self)
+            style.polish(self)
+        self.update()
+
+    def _dual_type_visual_data(self, data: dict) -> tuple[bool, tuple[str, str]]:
+        plugin_is_dual = (
+            getattr(self._plugin, "is_dual_type", False) if self._plugin else False
+        )
+        data_is_dual = data.get("is_dual_type")
+        is_dual = data_is_dual if isinstance(data_is_dual, bool) else plugin_is_dual
+        if not is_dual:
+            return False, ("generic", "generic")
+
+        plugin_types = (
+            getattr(self._plugin, "dual_damage_types", ("", ""))
+            if self._plugin
+            else ("", "")
+        )
+        data_types = data.get("dual_damage_types", ("", ""))
+        if (
+            isinstance(data_types, list | tuple)
+            and len(data_types) == 2
+            and all(data_types)
+        ):
+            return True, (str(data_types[0]), str(data_types[1]))
+
+        if (
+            isinstance(plugin_types, tuple)
+            and len(plugin_types) == 2
+            and all(plugin_types)
+        ):
+            return True, (str(plugin_types[0]), str(plugin_types[1]))
+        return False, ("generic", "generic")
 
     def snapshot(self) -> tuple[dict, Stats] | None:
         getter = getattr(self._idle_state, "get_char_data", None)
@@ -629,6 +693,33 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         else:
             self._shard_bar.setVisible(False)
 
+        is_dual_type, dual_damage_types = self._dual_type_visual_data(data)
+        self._set_dual_type_enabled(is_dual_type)
+        if is_dual_type:
+            self.set_dual_damage_types(dual_damage_types)
+            animation_phase_getter = getattr(
+                self._idle_state, "get_animation_phase", None
+            )
+            if callable(animation_phase_getter):
+                self.set_wave_phase(float(animation_phase_getter(self._char_id)))
+            if self.property("elementId") != "generic":
+                self.setProperty("elementId", "generic")
+                style = self.style()
+                if style is not None:
+                    style.unpolish(self)
+                    style.polish(self)
+                self.update()
+        else:
+            element_id = str(getattr(stats, "element_id", "generic") or "generic")
+            element_id = element_id.strip().lower().replace(" ", "_").replace("-", "_")
+            if self.property("elementId") != element_id:
+                self.setProperty("elementId", element_id)
+                style = self.style()
+                if style is not None:
+                    style.unpolish(self)
+                    style.polish(self)
+                self.update()
+
         stars = getattr(self._plugin, "stars", None) if self._plugin else None
         display_name = (
             getattr(self._plugin, "display_name", self._char_id)
@@ -647,6 +738,79 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
             mismatch=(stat_multiplier < 1.0 or exp_multiplier < 1.0),
             exp_multiplier_override=(stats.exp_multiplier * exp_multiplier),
         )
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        super().paintEvent(event)
+        if not self._is_dual_type:
+            return
+
+        width = float(self.width())
+        height = float(self.height())
+        if width <= 2.0 or height <= 2.0:
+            return
+
+        inner = QRectF(1.0, 1.0, width - 2.0, height - 2.0)
+        if inner.width() <= 1.0 or inner.height() <= 1.0:
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setClipRect(inner)
+
+        top_color = color_for_damage_type_id(self._dual_damage_types[0])
+        bottom_color = color_for_damage_type_id(self._dual_damage_types[1])
+        top_color.setAlpha(64)
+        bottom_color.setAlpha(64)
+
+        top_path, bottom_path = self._build_wave_paths(inner)
+        painter.fillPath(top_path, top_color)
+        painter.fillPath(bottom_path, bottom_color)
+        painter.end()
+
+    def _build_wave_paths(self, rect: QRectF) -> tuple[QPainterPath, QPainterPath]:
+        left = rect.left()
+        right = rect.right()
+        top = rect.top()
+        bottom = rect.bottom()
+
+        points = self._wave_points(rect)
+
+        top_path = QPainterPath()
+        top_path.moveTo(left, top)
+        top_path.lineTo(points[0])
+        for point in points[1:]:
+            top_path.lineTo(point)
+        top_path.lineTo(right, top)
+        top_path.closeSubpath()
+
+        bottom_path = QPainterPath()
+        bottom_path.moveTo(left, bottom)
+        bottom_path.lineTo(points[0])
+        for point in points[1:]:
+            bottom_path.lineTo(point)
+        bottom_path.lineTo(right, bottom)
+        bottom_path.closeSubpath()
+
+        return top_path, bottom_path
+
+    def _wave_points(self, rect: QRectF) -> list[QPointF]:
+        width = max(1.0, rect.width())
+        samples = max(24, int(width / 6.0))
+        baseline = rect.center().y()
+        amplitude = min(self._WAVE_AMPLITUDE_PX, rect.height() * 0.35)
+        angular_frequency = (2.0 * math.pi * self._WAVE_FREQUENCY) / width
+        phase_offset = self._wave_phase * 2.0 * math.pi
+
+        points: list[QPointF] = []
+        for index in range(samples + 1):
+            offset_x = (width * index) / samples
+            x = rect.left() + offset_x
+            y = baseline + amplitude * math.sin(
+                (offset_x * angular_frequency) + phase_offset
+            )
+            points.append(QPointF(x, y))
+        return points
 
 
 class DualTypeOnsiteCharacterCardBase(OnsiteCharacterCardBase):
