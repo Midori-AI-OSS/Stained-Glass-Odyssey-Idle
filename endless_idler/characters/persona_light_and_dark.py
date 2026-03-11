@@ -10,6 +10,7 @@ from plugins.damage_types._base import DamageTypeBase
 
 placement = "both"
 
+
 @dataclass
 class PersonaLightAndDark(PlayerBase):
     id = "persona_light_and_dark"
@@ -37,6 +38,8 @@ class PersonaLightAndDark(PlayerBase):
     passives: list[str] = field(
         default_factory=lambda: ["persona_light_and_dark_duality", "trinity_synergy"]
     )
+    is_dual_type: bool = True
+    dual_damage_types: tuple[str, str] = ("Light", "Dark")
 
     def __post_init__(self) -> None:
         super().__post_init__()
