@@ -131,6 +131,7 @@ class IdleScreenWidget(QWidget):
 
         onsite = [str(item) for item in self._save.onsite if item]
         offsite = [str(item) for item in self._save.offsite if item]
+        standby = [str(item) for item in self._save.standby if item]
         stacks = dict(self._save.stacks)
         party_level = int(self._save.party_level)
 
@@ -153,6 +154,7 @@ class IdleScreenWidget(QWidget):
         self._idle_state = idle_state or IdleGameState(
             char_ids=onsite,
             offsite_ids=offsite,
+            standby_ids=standby,
             party_level=self._party_level,
             stacks=self._stacks,
             plugins_by_id=plugins_by_id,
