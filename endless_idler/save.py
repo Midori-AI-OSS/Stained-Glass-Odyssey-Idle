@@ -163,6 +163,7 @@ class SaveManager:
             ),
             onsite=as_optional_str_list(data.get("onsite", [])),
             offsite=as_optional_str_list(data.get("offsite", [])),
+            standby=as_optional_str_list(data.get("standby", [])),
             stacks=as_int_dict(data.get("stacks", {})),
             inventory=as_int_dict(data.get("inventory", {})),
             character_progress=as_character_progress_dict(
@@ -210,6 +211,7 @@ class SaveManager:
             "party_hp_last_idle_heal_at": save.party_hp_last_idle_heal_at,
             "onsite": save.onsite,
             "offsite": save.offsite,
+            "standby": save.standby,
             "stacks": save.stacks,
             "inventory": save.inventory,
             "character_progress": save.character_progress,
