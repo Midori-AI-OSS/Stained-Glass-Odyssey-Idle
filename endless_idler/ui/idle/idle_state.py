@@ -72,6 +72,7 @@ class IdleGameState(QObject):
         *,
         char_ids: list[str],
         offsite_ids: list[str] | None = None,
+        standby_ids: list[str] | None = None,
         party_level: int,
         stacks: dict[str, int],
         plugins_by_id: dict[str, object],
@@ -94,6 +95,7 @@ class IdleGameState(QObject):
         self._offsite_ids: list[str] = [
             str(item) for item in (offsite_ids or []) if item
         ]
+        self._standby_ids: list[str] = [str(i) for i in (standby_ids or []) if i]
         self._party_level = party_level
         self._stacks = stacks
         self._plugins_by_id = plugins_by_id
@@ -133,7 +135,9 @@ class IdleGameState(QObject):
         self._risk_reward_level = max(0, min(150, int(risk_reward_level)))
 
         self._char_data: dict[str, dict[str, Any]] = {}
-        for char_id in list(dict.fromkeys([*char_ids, *self._offsite_ids])):
+        for char_id in list(
+            dict.fromkeys([*char_ids, *self._offsite_ids, *self._standby_ids])
+        ):
             plugin = plugins_by_id.get(char_id)
             if not plugin:
                 continue
@@ -682,8 +686,9 @@ class IdleGameState(QObject):
                     roll_ready=roll_ready,
                 )
 
-                regain = 0.1 if self._shared_exp_percentage == 1 else 0.5
-                data["hp"] = min(data["max_hp"], data["hp"] + regain)
+                regain_stat = float(data["base_stats"].get("regain", 100.0))
+                regain_amount = regain_stat * 0.01
+                data["hp"] = min(data["max_hp"], data["hp"] + regain_amount)
 
                 if self._risk_reward_level > 0:
                     char_level = max(1, int(data.get("level", 1)))
@@ -717,7 +722,9 @@ class IdleGameState(QObject):
                         awarded_exp=awarded_gain,
                         roll_ready=roll_ready,
                     )
-                    data["hp"] = min(data["max_hp"], data["hp"] + 0.5)
+                    regain_stat = float(data["base_stats"].get("regain", 100.0))
+                    regain_amount = regain_stat * 0.005
+                    data["hp"] = min(data["max_hp"], data["hp"] + regain_amount)
                     if data["exp"] >= data["next_exp"]:
                         self._level_up(char_id)
 
