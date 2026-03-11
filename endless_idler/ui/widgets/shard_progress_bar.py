@@ -67,7 +67,7 @@ class ShardProgressBar(QWidget):
 
         # Cycle timer for generic types
         self._cycle_timer = QTimer(self)
-        self._cycle_timer.setInterval(100)  # Update every 100ms for smooth transitions
+        self._cycle_timer.setInterval(33)  # ~30Hz update cadence for smooth transitions
         self._cycle_timer.timeout.connect(self._update_cycle_color)
 
         self._update_appearance()

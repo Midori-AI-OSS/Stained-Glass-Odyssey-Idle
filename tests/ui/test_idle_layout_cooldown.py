@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from typing import cast
+
 from PySide6.QtWidgets import QApplication
 
 import endless_idler.ui.idle.screen as screen_module
 
 from endless_idler.save import RunSave
+from endless_idler.run_save_store import RunSaveStore
 from endless_idler.ui.idle.screen import IdleScreenWidget
 
 
@@ -21,8 +24,9 @@ class _FakeIdleState:
         self._shared = 1
         self._rr = 0
 
-    def process_tick(self) -> None:
+    def process_tick(self) -> dict[str, object]:
         self.process_calls += 1
+        return self.export_runtime_snapshot()
 
     def get_idle_blessing_step_count(self) -> int:
         return 0
@@ -64,6 +68,18 @@ class _FakeIdleState:
     def export_run_buff_seconds(self) -> tuple[float, float]:
         return (0.0, 0.0)
 
+    def export_runtime_snapshot(self) -> dict[str, object]:
+        return {
+            "progress": {},
+            "character_stats": {},
+            "initial_stats": {},
+            "blessings": {},
+            "exp_bonus_seconds": 0.0,
+            "exp_penalty_seconds": 0.0,
+            "shared_exp_percentage": self._shared,
+            "risk_reward_level": self._rr,
+        }
+
 
 class _FakeSaveStore:
     def __init__(self, save: RunSave) -> None:
@@ -87,15 +103,17 @@ def test_idle_screen_applies_tick_cooldown_before_processing(monkeypatch) -> Non
     monkeypatch.setattr(screen_module, "discover_character_plugins", lambda: [])
     monkeypatch.setattr(screen_module, "IdleGameState", _FakeIdleState)
 
-    screen = IdleScreenWidget(save_store=_FakeSaveStore(save))
+    screen = IdleScreenWidget(
+        save_store=cast(RunSaveStore, cast(object, _FakeSaveStore(save)))
+    )
     fake_state = screen._idle_state
     assert isinstance(fake_state, _FakeIdleState)
     assert screen._tick_cooldown_seconds > 0.0
 
-    screen._process_idle_tick()
+    screen._produce_tick_payload(1, 0.0)
     assert fake_state.process_calls == 0
 
     screen._tick_cooldown_seconds = 0.0
-    screen._process_idle_tick()
+    screen._produce_tick_payload(2, 0.0)
     assert fake_state.process_calls == 1
     screen.shutdown()

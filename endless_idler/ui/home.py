@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-import time
+import math
+
+from collections.abc import Callable
 from typing import TYPE_CHECKING
+from typing import Any
+from typing import Protocol
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QFrame
@@ -12,22 +16,29 @@ from PySide6.QtWidgets import QWidget
 from endless_idler.blessings import discover_blessing_plugins
 from endless_idler.blessings.lunar_blessing import get_lunar_progress_per_tick
 from endless_idler.blessings.plugin import BlessingPlugin
-from endless_idler.run_save_store import RunSaveStore
 from endless_idler.ui.components.blessing_panel import BlessingPanel
 
 if TYPE_CHECKING:
     from endless_idler.save import RunSave
 
 
+class SaveStoreLike(Protocol):
+    current: "RunSave"
+
+
 class HomePage(QWidget):
     """Decorative home shell inspired by Agents Runner dashboard chrome."""
 
-    def __init__(self, save_store: RunSaveStore, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        save_store: SaveStoreLike,
+        idle_runtime_snapshot_provider: Callable[[], dict[str, object]] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._save_store = save_store
+        self._idle_runtime_snapshot_provider = idle_runtime_snapshot_provider
         self.setObjectName("HomePageRoot")
-
-        self._home_session_started_at = time.time()
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
@@ -55,7 +66,7 @@ class HomePage(QWidget):
         self._panel_layout.addStretch(1)
 
         self._update_timer = QTimer(self)
-        self._update_timer.setInterval(1000)
+        self._update_timer.setInterval(33)
         self._update_timer.timeout.connect(self._update_blessing_display)
         self._update_timer.start()
         self._update_blessing_display()
@@ -84,6 +95,47 @@ class HomePage(QWidget):
         """Check if this is Lunar's Blessing (special dual display)."""
         return plugin.blessing_id == "lunar_blessing"
 
+    def _runtime_snapshot(self) -> dict[str, object]:
+        provider = self._idle_runtime_snapshot_provider
+        if provider is None:
+            return {}
+        snapshot = provider()
+        if not isinstance(snapshot, dict):
+            return {}
+        return snapshot
+
+    def _runtime_blessing(self, blessing_id: str) -> dict[str, object]:
+        snapshot = self._runtime_snapshot()
+        runtime = snapshot.get("blessing_runtime")
+        if not isinstance(runtime, dict):
+            return {}
+        blessing = runtime.get(blessing_id)
+        if not isinstance(blessing, dict):
+            return {}
+        return blessing
+
+    @staticmethod
+    def _runtime_int(runtime: dict[str, object], key: str, default: int = 0) -> int:
+        raw = runtime.get(key)
+        if isinstance(raw, bool):
+            return default
+        if isinstance(raw, int):
+            return raw
+        if isinstance(raw, float):
+            return int(raw)
+        return default
+
+    @staticmethod
+    def _runtime_float(
+        runtime: dict[str, object], key: str, default: float = 0.0
+    ) -> float:
+        raw = runtime.get(key)
+        if isinstance(raw, bool):
+            return default
+        if isinstance(raw, int | float):
+            return float(raw)
+        return default
+
     def _create_blessing_panels(self) -> None:
         """Create blessing panels dynamically from discovered plugins."""
         all_blessings = discover_blessing_plugins()
@@ -102,60 +154,53 @@ class HomePage(QWidget):
 
     def _get_blessing_steps(self, plugin: BlessingPlugin) -> int:
         """Get the current step count for a blessing."""
-        if self._is_session_based(plugin):
-            elapsed = self._elapsed_seconds()
-            return max(0, int(elapsed // plugin.step_seconds))
-        else:
-            save = self._get_save()
-            blessing_data = save.blessings.get(plugin.blessing_id, {})
-            if not isinstance(blessing_data, dict):
-                return 0
-            return blessing_data.get("steps", 0)
+        runtime = self._runtime_blessing(plugin.blessing_id)
+        if runtime:
+            return max(0, self._runtime_int(runtime, "steps", 0))
+        save = self._get_save()
+        blessing_data = save.blessings.get(plugin.blessing_id, {})
+        if not isinstance(blessing_data, dict):
+            return 0
+        raw_steps = blessing_data.get("steps", 0)
+        if isinstance(raw_steps, bool):
+            return 0
+        if isinstance(raw_steps, int):
+            return max(0, raw_steps)
+        if isinstance(raw_steps, float):
+            return max(0, int(raw_steps))
+        return 0
 
     def _get_blessing_progress(self, plugin: BlessingPlugin) -> float:
         """Get the current progress for a blessing (0.0 to 1.0)."""
-        if self._is_session_based(plugin):
-            elapsed = self._elapsed_seconds()
-            phase = elapsed % plugin.step_seconds
-            return max(0.0, min(1.0, phase / plugin.step_seconds))
-        else:
-            save = self._get_save()
-            blessing_data = save.blessings.get(plugin.blessing_id, {})
-            step_start_time = blessing_data.get("step_start_time", 0.0)
-            if step_start_time <= 0.0:
-                return 0.0
-            current_time = time.time()
-            elapsed_in_step = current_time - step_start_time
-            progress = elapsed_in_step / plugin.step_seconds
-            return max(0.0, min(1.0, progress))
+        runtime = self._runtime_blessing(plugin.blessing_id)
+        if not runtime:
+            return 0.0
+        progress = self._runtime_float(runtime, "progress", 0.0)
+        return max(0.0, min(1.0, progress))
 
     def _get_seconds_to_next_step(self, plugin: BlessingPlugin) -> float:
-        if self._is_session_based(plugin):
-            elapsed = self._elapsed_seconds()
-            phase = elapsed % plugin.step_seconds
-            return max(0.0, plugin.step_seconds - phase)
-        else:
-            save = self._get_save()
-            blessing_data = save.blessings.get(plugin.blessing_id, {})
-            step_start_time = blessing_data.get("step_start_time", 0.0)
-            if step_start_time <= 0.0:
-                return plugin.step_seconds
-            current_time = time.time()
-            elapsed_in_step = current_time - step_start_time
-            return max(0.0, plugin.step_seconds - elapsed_in_step)
+        runtime = self._runtime_blessing(plugin.blessing_id)
+        if runtime:
+            return max(
+                0.0,
+                self._runtime_float(runtime, "countdown_seconds", float(plugin.step_seconds)),
+            )
+        return float(plugin.step_seconds)
 
     def _build_tooltip(self, plugin: BlessingPlugin, steps: int) -> str:
         """Build tooltip HTML for a blessing using plugin's formatter."""
-        from typing import Any
-
-        context: dict[str, Any] = {"save": self._get_save()}
-        if self._is_session_based(plugin):
-            context["session_start_time"] = self._home_session_started_at
+        progress = self._get_blessing_progress(plugin)
+        seconds_to_next = self._get_seconds_to_next_step(plugin)
+        context: dict[str, Any] = {
+            "save": self._get_save(),
+            "runtime": {
+                "steps": max(0, int(steps)),
+                "progress": max(0.0, min(1.0, float(progress))),
+                "countdown_seconds": max(0, int(math.ceil(seconds_to_next))),
+                "step_seconds": float(plugin.step_seconds),
+            },
+        }
         return plugin.format_tooltip(steps, context)
-
-    def _elapsed_seconds(self) -> float:
-        now = time.time()
-        return max(0.0, now - self._home_session_started_at)
 
     def _update_blessing_display(self) -> None:
         """Update all blessing panels with current state."""

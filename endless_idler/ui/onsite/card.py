@@ -79,13 +79,16 @@ class OnsiteStatsPopup(QFrame):
         self.layout().addWidget(panel)  # type: ignore[union-attr]
 
     def closeEvent(self, event: object) -> None:
+        close_callback_failed = False
         try:
             self._on_close()
-        except Exception:
-            pass
+        except (RuntimeError, TypeError, ValueError):
+            close_callback_failed = True
         try:
             super().closeEvent(event)  # type: ignore[misc]
-        except Exception:
+        except (RuntimeError, TypeError):
+            return
+        if close_callback_failed:
             return
 
 
@@ -263,7 +266,7 @@ class OnsiteCharacterCardBase(QFrame):
             try:
                 self._action_button.clicked.disconnect(self._action_button_handler)
             except (RuntimeError, TypeError):
-                pass
+                self._action_button_handler = None
             self._action_button_handler = None
         if on_click is not None:
             self._action_button.clicked.connect(on_click)
@@ -335,14 +338,14 @@ class OnsiteCharacterCardBase(QFrame):
             show_stained_tooltip(self, self._tooltip_html, element_id=element_id)
         try:
             super().enterEvent(event)  # type: ignore[misc]
-        except Exception:
+        except (RuntimeError, TypeError):
             return
 
     def leaveEvent(self, event: object) -> None:
         hide_stained_tooltip()
         try:
             super().leaveEvent(event)  # type: ignore[misc]
-        except Exception:
+        except (RuntimeError, TypeError):
             return
 
     def _toggle_stats_popup(self, checked: bool) -> None:
@@ -509,7 +512,7 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         if callable(party_level_getter):
             try:
                 party_level = max(1, int(party_level_getter()))
-            except Exception:
+            except (TypeError, ValueError):
                 party_level = 1
 
         base_stats = data.get("base_stats")
@@ -565,7 +568,7 @@ class IdleOnsiteCharacterCard(OnsiteCharacterCardBase):
         if callable(getter):
             try:
                 gain_per_second = float(getter(self._char_id))
-            except Exception:
+            except (TypeError, ValueError):
                 gain_per_second = 0.0
 
         rate_suffix = format_idle_exp_rate_suffix(gain_per_second)

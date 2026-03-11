@@ -27,6 +27,7 @@ def test_progress_bar_theme_tokens(app):
 def test_progress_bar_shimmer_effect(app):
     bar = AnimatedProgressBar()
     bar.show()
+    assert bar._frame_timer.interval() == 33
 
     # Set shimmer intensity
     bar.set_shimmer(0.5)
@@ -53,3 +54,16 @@ def test_progress_bar_color_thresholds(app):
     bar.set_value(0.25)
     QTest.qWait(100)
     assert bar._color_thresholds[1][0] == 0.3  # Verify internal state
+
+
+def test_progress_bar_shimmer_wraps_offscreen() -> None:
+    fill_left = 10
+    fill_width = 100
+    half_width = max(8, int(round(float(fill_width) * 0.14)))
+    shimmer_travel = float(fill_width + (half_width * 2))
+
+    start_center = (float(fill_left) - float(half_width)) + (0.0 * shimmer_travel)
+    end_center = (float(fill_left) - float(half_width)) + (0.999 * shimmer_travel)
+
+    assert start_center < fill_left
+    assert end_center > (fill_left + fill_width - 1)

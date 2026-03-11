@@ -57,7 +57,7 @@ class IdleBlessingMeterWidget(QWidget):
         self._last_frame_at = 0.0
 
         self._frame_timer = QTimer(self)
-        self._frame_timer.setInterval(16)
+        self._frame_timer.setInterval(33)
         self._frame_timer.timeout.connect(self._on_animation_frame)
 
     def set_visual_state(self, *, progress: float, shimmer: float, reset_active: bool) -> None:
@@ -94,7 +94,7 @@ class IdleBlessingMeterWidget(QWidget):
     def _on_animation_frame(self) -> None:
         now = time.perf_counter()
         if self._last_frame_at <= 0.0:
-            dt = 1.0 / 60.0
+            dt = 1.0 / 30.0
         else:
             dt = max(0.001, min(0.1, now - self._last_frame_at))
         self._last_frame_at = now

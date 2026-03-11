@@ -35,7 +35,7 @@ def normalize_channel(value: object) -> str:
 def clamp_volume(value: object) -> int:
     try:
         parsed = int(str(value).strip())
-    except Exception:
+    except (TypeError, ValueError):
         parsed = VOLUME_DEFAULT
     return max(0, min(100, parsed))
 
@@ -43,7 +43,7 @@ def clamp_volume(value: object) -> int:
 def normalize_loudness_boost_factor(value: object) -> float:
     try:
         parsed = float(str(value).strip())
-    except Exception:
+    except (TypeError, ValueError):
         parsed = LOUDNESS_BOOST_DEFAULT
     parsed = max(LOUDNESS_BOOST_MIN, min(LOUDNESS_BOOST_MAX, parsed))
     step_count = int(round((parsed - LOUDNESS_BOOST_MIN) / LOUDNESS_BOOST_STEP))

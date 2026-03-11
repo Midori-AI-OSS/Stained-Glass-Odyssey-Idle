@@ -246,7 +246,7 @@ class RadioControlWidget(QWidget):
     def _on_reconnect_animation_value_changed(self, value: object) -> None:
         try:
             parsed = float(str(value))
-        except Exception:
+        except (TypeError, ValueError):
             return
         self._reconnect_anim_value = max(0.0, min(1.0, parsed))
         if self._connection_state == "reconnecting":
@@ -335,7 +335,7 @@ class RadioControlWidget(QWidget):
     def _sync_volume_min_width(self, value: object) -> None:
         try:
             width = int(float(str(value)))
-        except Exception:
+        except (TypeError, ValueError):
             return
         self._volume_section.setMinimumWidth(width)
 

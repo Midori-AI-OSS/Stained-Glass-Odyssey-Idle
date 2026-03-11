@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import random
+import threading
 
 from collections.abc import Sequence
 
@@ -28,6 +29,7 @@ from endless_idler.run_save_store import RunSaveStore
 from endless_idler.run_rules import apply_idle_party_heal
 from endless_idler.run_rules import start_idle_heal_timer
 from endless_idler.tick_runtime import SharedTickRuntime
+from endless_idler.tick_runtime import TickSnapshot
 from endless_idler.ui.idle.widgets import IdleArena
 from endless_idler.ui.idle.widgets import IdleOffsiteCard
 from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
@@ -101,6 +103,8 @@ class IdleScreenWidget(QWidget):
         *,
         save_store: RunSaveStore,
         tick_runtime: SharedTickRuntime | None = None,
+        idle_state: IdleGameState | None = None,
+        owns_tick_source: bool = True,
         plugins: Sequence[CharacterPlugin] | None = None,
         parent: QWidget | None = None,
     ) -> None:
@@ -117,11 +121,11 @@ class IdleScreenWidget(QWidget):
         self._shared_exp_slider = QSlider(Qt.Orientation.Horizontal)
         self._rr_label = QLabel()
         self._rr_slider = QSlider(Qt.Orientation.Horizontal)
-        self._tick_runtime = tick_runtime or SharedTickRuntime(
-            interval_seconds=IDLE_TICK_INTERVAL_SECONDS,
-            parent=self,
-        )
+        self._tick_runtime = tick_runtime or SharedTickRuntime(parent=self)
         self._tick_runtime_key = f"idle-screen-{id(self)}"
+        self._owns_tick_source = bool(owns_tick_source)
+        self._tick_cooldown_lock = threading.Lock()
+        self._latest_tick_payload: dict[str, object] = {}
         start_idle_heal_timer(self._save)
         self._save_store.persist()
 
@@ -146,7 +150,7 @@ class IdleScreenWidget(QWidget):
             key: value for key, value in self._plugin_by_id.items()
         }
 
-        self._idle_state = IdleGameState(
+        self._idle_state = idle_state or IdleGameState(
             char_ids=onsite,
             offsite_ids=offsite,
             party_level=self._party_level,
@@ -285,10 +289,14 @@ class IdleScreenWidget(QWidget):
 
         self._update_mods_ui()
 
-        self._idle_state.tick_update.connect(self._on_tick)
+        if self._owns_tick_source:
+            self._tick_runtime.configure_source(
+                key=self._tick_runtime_key,
+                source=self._produce_tick_payload,
+            )
         self._tick_runtime.subscribe(
             key=self._tick_runtime_key,
-            callback=self._process_idle_tick,
+            callback=self._on_tick_snapshot,
         )
 
         self._autosave_timer = QTimer(self)
@@ -302,19 +310,33 @@ class IdleScreenWidget(QWidget):
     ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, int], ...], int]:
         return self._lineup_signature
 
-    def _process_idle_tick(self) -> None:
-        if self._tick_cooldown_seconds > 0.0:
-            self._tick_cooldown_seconds = max(
-                0.0,
-                self._tick_cooldown_seconds - IDLE_TICK_INTERVAL_SECONDS,
-            )
-            self._save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
-            self._update_tick_cooldown_label()
-            return
-        self._idle_state.process_tick()
+    def _produce_tick_payload(
+        self, tick_count: int, monotonic_seconds: float
+    ) -> dict[str, object]:
+        del tick_count
+        del monotonic_seconds
+        with self._tick_cooldown_lock:
+            cooldown_seconds = self._tick_cooldown_seconds
+            if cooldown_seconds > 0.0:
+                cooldown_seconds = max(
+                    0.0,
+                    cooldown_seconds - IDLE_TICK_INTERVAL_SECONDS,
+                )
+                self._tick_cooldown_seconds = cooldown_seconds
+        if cooldown_seconds > 0.0:
+            return {
+                "cooldown_seconds": cooldown_seconds,
+                "idle_state": self._idle_state.export_runtime_snapshot(),
+            }
+        return {
+            "cooldown_seconds": cooldown_seconds,
+            "idle_state": self._idle_state.process_tick(),
+        }
 
     def _update_tick_cooldown_label(self) -> None:
-        remaining_seconds = int(math.ceil(self._tick_cooldown_seconds))
+        with self._tick_cooldown_lock:
+            cooldown_seconds = self._tick_cooldown_seconds
+        remaining_seconds = int(math.ceil(cooldown_seconds))
         if remaining_seconds <= 0:
             self._tick_cooldown_label.setVisible(False)
             self._tick_cooldown_label.setText("")
@@ -462,7 +484,11 @@ class IdleScreenWidget(QWidget):
                 self._idle_state, "get_misplacement_stat_multiplier", None
             )
             if callable(misplacement_getter):
-                misplacement_multiplier = float(misplacement_getter(char_id))
+                raw_multiplier = misplacement_getter(char_id)
+                if isinstance(raw_multiplier, int | float):
+                    misplacement_multiplier = float(raw_multiplier)
+                else:
+                    misplacement_multiplier = 1.0
             else:
                 misplacement_multiplier = 1.0
             apply_base_stat_multiplier(stats=stats, multiplier=misplacement_multiplier)
@@ -482,15 +508,18 @@ class IdleScreenWidget(QWidget):
         for card in self._offsite_cards:
             card.update_display()
 
-    def _on_tick(self, tick_count: int) -> None:
-        del tick_count
+    def _on_tick_snapshot(self, snapshot: TickSnapshot) -> None:
+        payload = dict(snapshot.payload)
+        self._latest_tick_payload = payload
+        with self._tick_cooldown_lock:
+            current_cooldown = self._tick_cooldown_seconds
+        cooldown_raw = payload.get("cooldown_seconds", current_cooldown)
+        cooldown_seconds = self._coerce_float(cooldown_raw, 0.0)
+        with self._tick_cooldown_lock:
+            self._tick_cooldown_seconds = cooldown_seconds
         self._update_tick_cooldown_label()
         self._refresh_character_cards()
-        healed = 0
-        try:
-            healed = apply_idle_party_heal(self._save)
-        except Exception:
-            healed = 0
+        healed = apply_idle_party_heal(self._save)
         if healed > 0:
             self._save_store.persist()
 
@@ -498,29 +527,8 @@ class IdleScreenWidget(QWidget):
         if not self._idle_state.rebirth_character(char_id):
             return
 
-        try:
-            save = self._save
-            progress = dict(save.character_progress)
-            progress.update(self._idle_state.export_progress())
-            save.character_progress = progress
-            stats = dict(save.character_stats)
-            stats.update(self._idle_state.export_character_stats())
-            save.character_stats = stats
-            initial_stats = dict(getattr(save, "character_initial_stats", {}) or {})
-            initial_stats.update(self._idle_state.export_initial_stats())
-            save.character_initial_stats = initial_stats
-            bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
-            save.idle_exp_bonus_seconds = bonus_seconds
-            save.idle_exp_penalty_seconds = penalty_seconds
-            save.idle_shared_exp_percentage = (
-                self._idle_state.get_shared_exp_percentage()
-            )
-            save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
-            save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
-            self._save_store.persist(force=True)
-        except Exception:
-            return
-
+        self._apply_snapshot_to_save(self._idle_state.export_runtime_snapshot())
+        self._save_store.persist(force=True)
         self._refresh_character_cards()
 
     def _prestige_character(self, char_id: str) -> None:
@@ -575,58 +583,91 @@ class IdleScreenWidget(QWidget):
         if not self._idle_state.prestige_character(char_id):
             return
 
-        # Save the game state
-        try:
-            save = self._save
-            progress = dict(save.character_progress)
-            progress.update(self._idle_state.export_progress())
-            save.character_progress = progress
-            stats = dict(save.character_stats)
-            stats.update(self._idle_state.export_character_stats())
-            save.character_stats = stats
-            initial_stats = dict(getattr(save, "character_initial_stats", {}) or {})
-            initial_stats.update(self._idle_state.export_initial_stats())
-            save.character_initial_stats = initial_stats
-            bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
-            save.idle_exp_bonus_seconds = bonus_seconds
-            save.idle_exp_penalty_seconds = penalty_seconds
-            save.idle_shared_exp_percentage = (
-                self._idle_state.get_shared_exp_percentage()
-            )
-            save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
-            save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
-            self._save_store.persist(force=True)
-        except Exception:
-            return
-
+        self._apply_snapshot_to_save(self._idle_state.export_runtime_snapshot())
+        self._save_store.persist(force=True)
         self._refresh_character_cards()
 
     def _autosave(self, *, force: bool = False) -> None:
-        try:
-            save = self._save
-            progress = dict(save.character_progress)
-            progress.update(self._idle_state.export_progress())
-            save.character_progress = progress
-            stats = dict(save.character_stats)
-            stats.update(self._idle_state.export_character_stats())
-            save.character_stats = stats
-            initial_stats = dict(getattr(save, "character_initial_stats", {}) or {})
-            initial_stats.update(self._idle_state.export_initial_stats())
-            save.character_initial_stats = initial_stats
-            bonus_seconds, penalty_seconds = self._idle_state.export_run_buff_seconds()
-            save.idle_exp_bonus_seconds = bonus_seconds
-            save.idle_exp_penalty_seconds = penalty_seconds
-            save.idle_shared_exp_percentage = (
-                self._idle_state.get_shared_exp_percentage()
-            )
-            save.idle_risk_reward_level = self._idle_state.get_risk_reward_level()
-            save.layout_tick_cooldown_seconds = self._tick_cooldown_seconds
-            blessings = dict(getattr(save, "blessings", {}) or {})
-            blessings.update(self._idle_state.export_blessings())
-            save.blessings = blessings
-            self._save_store.persist(force=force)
-        except Exception:
-            pass
+        idle_snapshot_raw = self._latest_tick_payload.get("idle_state")
+        if not isinstance(idle_snapshot_raw, dict):
+            idle_snapshot_raw = self._idle_state.export_runtime_snapshot()
+        self._apply_snapshot_to_save(idle_snapshot_raw)
+        self._save_store.persist(force=force)
+
+    def _apply_snapshot_to_save(self, snapshot: dict[str, object]) -> None:
+        save = self._save
+        progress = snapshot.get("progress")
+        if isinstance(progress, dict):
+            save.character_progress = {
+                str(char_id): dict(data)
+                for char_id, data in progress.items()
+                if isinstance(char_id, str) and isinstance(data, dict)
+            }
+        stats = snapshot.get("character_stats")
+        if isinstance(stats, dict):
+            save.character_stats = {
+                str(char_id): dict(data)
+                for char_id, data in stats.items()
+                if isinstance(char_id, str) and isinstance(data, dict)
+            }
+        initial_stats = snapshot.get("initial_stats")
+        if isinstance(initial_stats, dict):
+            save.character_initial_stats = {
+                str(char_id): dict(data)
+                for char_id, data in initial_stats.items()
+                if isinstance(char_id, str) and isinstance(data, dict)
+            }
+        blessings = snapshot.get("blessings")
+        if isinstance(blessings, dict):
+            save.blessings = {
+                str(blessing_id): dict(data)
+                for blessing_id, data in blessings.items()
+                if isinstance(blessing_id, str) and isinstance(data, dict)
+            }
+        save.idle_exp_bonus_seconds = self._coerce_float(
+            snapshot.get("exp_bonus_seconds", 0.0), 0.0
+        )
+        save.idle_exp_penalty_seconds = self._coerce_float(
+            snapshot.get("exp_penalty_seconds", 0.0), 0.0
+        )
+        save.idle_shared_exp_percentage = max(
+            1,
+            min(95, self._coerce_int(snapshot.get("shared_exp_percentage", 1), 1)),
+        )
+        save.idle_risk_reward_level = max(
+            0,
+            min(150, self._coerce_int(snapshot.get("risk_reward_level", 0), 0)),
+        )
+        with self._tick_cooldown_lock:
+            save.layout_tick_cooldown_seconds = float(self._tick_cooldown_seconds)
+
+    @staticmethod
+    def _coerce_float(value: object, default: float) -> float:
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, int | float):
+            return max(0.0, float(value))
+        if isinstance(value, str):
+            try:
+                return max(0.0, float(value))
+            except ValueError:
+                return default
+        return default
+
+    @staticmethod
+    def _coerce_int(value: object, default: int) -> int:
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            try:
+                return int(value)
+            except ValueError:
+                return default
+        return default
 
     def force_persist(self) -> None:
         self._allow_shutdown_persist = True
@@ -638,6 +679,8 @@ class IdleScreenWidget(QWidget):
 
     def shutdown(self, *, persist: bool = True) -> None:
         self._tick_runtime.unsubscribe(self._tick_runtime_key)
+        if self._owns_tick_source:
+            self._tick_runtime.clear_source(self._tick_runtime_key)
         if self._autosave_timer:
             self._autosave_timer.stop()
         self._allow_shutdown_persist = self._allow_shutdown_persist and persist

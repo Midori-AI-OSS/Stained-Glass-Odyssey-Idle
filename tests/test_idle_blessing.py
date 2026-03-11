@@ -19,6 +19,11 @@ from endless_idler.ui.idle.idle_state import MIN_EXP_GAIN_PER_TICK
 IDLE_BLESSING_STEP_SECONDS = 300.0
 
 
+def _set_elapsed_seconds(state: IdleGameState, seconds: float) -> None:
+    with state._lock:
+        state._elapsed_seconds = max(0.0, float(seconds))
+
+
 def _plugins_by_id(
     *, onsite_placement: str = "onsite", offsite_placement: str = "offsite"
 ) -> dict[str, CharacterPlugin]:
@@ -70,21 +75,19 @@ def _build_state(
 
 
 def test_blessing_multiplier_compounds_to_target_after_30_minutes(monkeypatch) -> None:
-    now = {"value": 10_000.0}
-    monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
-
+    del monkeypatch
     state = _build_state()
     assert math.isclose(
         state.get_idle_blessing_multiplier(), 1.0, rel_tol=0.0, abs_tol=1e-12
     )
 
-    now["value"] += 299.9
+    _set_elapsed_seconds(state, 299.9)
     assert state.get_idle_blessing_step_count() == 0
 
-    now["value"] += 0.1
+    _set_elapsed_seconds(state, 300.0)
     assert state.get_idle_blessing_step_count() == 1
 
-    now["value"] += 1500.0
+    _set_elapsed_seconds(state, 1800.0)
     assert state.get_idle_blessing_step_count() == 6
     assert math.isclose(
         state.get_idle_blessing_multiplier(), 1.025, rel_tol=1e-9, abs_tol=1e-9
@@ -92,11 +95,9 @@ def test_blessing_multiplier_compounds_to_target_after_30_minutes(monkeypatch) -
 
 
 def test_blessing_resets_with_new_idle_session(monkeypatch) -> None:
-    now = {"value": 50_000.0}
-    monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
-
+    del monkeypatch
     first_state = _build_state()
-    now["value"] += 600.0
+    _set_elapsed_seconds(first_state, 600.0)
     assert first_state.get_idle_blessing_multiplier() > 1.0
 
     second_state = _build_state()
@@ -107,16 +108,14 @@ def test_blessing_resets_with_new_idle_session(monkeypatch) -> None:
 
 
 def test_onsite_blessing_applies_to_offsite_indirectly(monkeypatch) -> None:
-    now = {"value": 90_000.0}
-    monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
-
+    del monkeypatch
     state = _build_state()
     onsite_base = state.get_exp_gain_per_tick("onsite")
     offsite_base = state.get_exp_gain_per_tick("offsite")
     assert onsite_base > 0.0
     assert offsite_base > 0.0
 
-    now["value"] += 300.0
+    _set_elapsed_seconds(state, 300.0)
     onsite_blessed = state.get_exp_gain_per_tick("onsite")
     offsite_blessed = state.get_exp_gain_per_tick("offsite")
 
@@ -137,21 +136,19 @@ def test_onsite_blessing_applies_to_offsite_indirectly(monkeypatch) -> None:
 
 
 def test_blessing_countdown_wraps_every_five_minutes(monkeypatch) -> None:
-    now = {"value": 120_000.0}
-    monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
-
+    del monkeypatch
     state = _build_state()
     assert state.get_idle_blessing_seconds_to_next_step() == int(
         IDLE_BLESSING_STEP_SECONDS
     )
 
-    now["value"] += 271.0
+    _set_elapsed_seconds(state, 271.0)
     assert state.get_idle_blessing_seconds_to_next_step() == 29
 
-    now["value"] += 24.0
+    _set_elapsed_seconds(state, 295.0)
     assert state.get_idle_blessing_seconds_to_next_step() == 5
 
-    now["value"] += 5.0
+    _set_elapsed_seconds(state, 300.0)
     assert state.get_idle_blessing_seconds_to_next_step() == int(
         IDLE_BLESSING_STEP_SECONDS
     )
@@ -317,14 +314,11 @@ def test_recipient_modifiers_apply_to_allocated_onsite_share(monkeypatch) -> Non
         offsite_ids=[],
     )
 
-    data_a = state.get_char_data("onsite_a")
-    data_b = state.get_char_data("onsite_b")
-    assert isinstance(data_a, dict)
-    assert isinstance(data_b, dict)
-    data_a["exp_multiplier"] = 1.0
-    data_b["exp_multiplier"] = 2.0
-    data_a["passive_modifier"] = 1.0
-    data_b["passive_modifier"] = 1.0
+    with state._lock:
+        state._char_data["onsite_a"]["exp_multiplier"] = 1.0
+        state._char_data["onsite_b"]["exp_multiplier"] = 2.0
+        state._char_data["onsite_a"]["passive_modifier"] = 1.0
+        state._char_data["onsite_b"]["passive_modifier"] = 1.0
 
     gain_a = state.get_exp_gain_per_tick("onsite_a")
     gain_b = state.get_exp_gain_per_tick("onsite_b")
@@ -344,13 +338,13 @@ def test_recipient_modifiers_apply_to_allocated_offsite_share(monkeypatch) -> No
         offsite_ids=["offsite_a"],
     )
 
-    offsite_data = state.get_char_data("offsite_a")
-    assert isinstance(offsite_data, dict)
-    offsite_data["exp_multiplier"] = 1.0
-    offsite_data["passive_modifier"] = 1.0
+    with state._lock:
+        state._char_data["offsite_a"]["exp_multiplier"] = 1.0
+        state._char_data["offsite_a"]["passive_modifier"] = 1.0
     gain_x1 = state.get_exp_gain_per_tick("offsite_a")
 
-    offsite_data["exp_multiplier"] = 3.0
+    with state._lock:
+        state._char_data["offsite_a"]["exp_multiplier"] = 3.0
     gain_x3 = state.get_exp_gain_per_tick("offsite_a")
 
     assert gain_x1 > 0.0
@@ -489,15 +483,15 @@ def test_locked_persistent_blessing_does_not_accrue_or_preaccumulate(
             "fire_blessing": {
                 "steps": 7,
                 "unlocked": False,
-                "step_start_time": now["value"] - 10_000.0,
+                "tick_elapsed_seconds": 299.0,
             }
         }
     )
 
-    state._process_blessing_ticks()
+    state._process_blessing_ticks(delta_seconds=5.0)
     fire_data = state.export_blessings()["fire_blessing"]
     assert int(fire_data["steps"]) == 7
-    assert float(fire_data.get("step_start_time", 0.0)) == 0.0
+    assert "tick_elapsed_seconds" not in fire_data
 
 
 def test_unlocked_persistent_blessing_accrues_normally(monkeypatch) -> None:
@@ -509,15 +503,15 @@ def test_unlocked_persistent_blessing_accrues_normally(monkeypatch) -> None:
             "fire_blessing": {
                 "steps": 2,
                 "unlocked": True,
-                "step_start_time": now["value"] - 301.0,
+                "tick_elapsed_seconds": 299.0,
             }
         }
     )
 
-    state._process_blessing_ticks()
+    state._process_blessing_ticks(delta_seconds=2.0)
     fire_data = state.export_blessings()["fire_blessing"]
     assert int(fire_data["steps"]) == 3
-    assert float(fire_data["step_start_time"]) == now["value"]
+    assert "tick_elapsed_seconds" not in fire_data
 
 
 def test_unlock_transition_starts_accrual_without_retroactive_catchup(
@@ -531,29 +525,75 @@ def test_unlock_transition_starts_accrual_without_retroactive_catchup(
             "fire_blessing": {
                 "steps": 4,
                 "unlocked": False,
-                "step_start_time": now["value"] - 20_000.0,
+                "tick_elapsed_seconds": 299.0,
             }
         }
     )
 
-    state._process_blessing_ticks()
+    state._process_blessing_ticks(delta_seconds=0.0)
     locked_data = state.export_blessings()["fire_blessing"]
     assert int(locked_data["steps"]) == 4
-    assert float(locked_data.get("step_start_time", 0.0)) == 0.0
+    assert "tick_elapsed_seconds" not in locked_data
 
     state._blessings_data["fire_blessing"]["unlocked"] = True
 
-    state._process_blessing_ticks()
+    state._process_blessing_ticks(delta_seconds=1.0)
     unlocked_data = state.export_blessings()["fire_blessing"]
     assert int(unlocked_data["steps"]) == 4
-    assert float(unlocked_data["step_start_time"]) == now["value"]
 
-    now["value"] += 299.0
-    state._process_blessing_ticks()
+    state._process_blessing_ticks(delta_seconds=298.0)
     before_step_data = state.export_blessings()["fire_blessing"]
     assert int(before_step_data["steps"]) == 4
 
-    now["value"] += 1.0
-    state._process_blessing_ticks()
+    state._process_blessing_ticks(delta_seconds=1.0)
     after_step_data = state.export_blessings()["fire_blessing"]
     assert int(after_step_data["steps"]) == 5
+
+
+def test_runtime_snapshot_exposes_blessing_phase_without_persisting_elapsed(
+    monkeypatch,
+) -> None:
+    now = {"value": 290_000.0}
+    monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
+
+    state = _build_state(
+        blessings_data={
+            "fire_blessing": {
+                "steps": 2,
+                "unlocked": True,
+                "tick_elapsed_seconds": 123.4,
+            }
+        }
+    )
+    snapshot = state.export_runtime_snapshot()
+    runtime = snapshot.get("blessing_runtime")
+    assert isinstance(runtime, dict)
+    fire_runtime = runtime.get("fire_blessing")
+    assert isinstance(fire_runtime, dict)
+    assert int(fire_runtime["steps"]) == 2
+    assert math.isclose(float(fire_runtime["progress"]), 123.4 / 300.0, rel_tol=1e-9)
+    assert int(fire_runtime["countdown_seconds"]) == 177
+
+    blessings = snapshot.get("blessings")
+    assert isinstance(blessings, dict)
+    fire_save = blessings.get("fire_blessing")
+    assert isinstance(fire_save, dict)
+    assert "tick_elapsed_seconds" not in fire_save
+
+
+def test_runtime_snapshot_tracks_odyssey_step_progress_from_tick_elapsed(
+    monkeypatch,
+) -> None:
+    now = {"value": 300_000.0}
+    monkeypatch.setattr(idle_state_module.time, "time", lambda: now["value"])
+
+    state = _build_state()
+    _ = state.process_tick()
+    snapshot = state.export_runtime_snapshot()
+    runtime = snapshot.get("blessing_runtime")
+    assert isinstance(runtime, dict)
+    odyssey = runtime.get("odyssey_blessing")
+    assert isinstance(odyssey, dict)
+    assert int(odyssey["steps"]) == 0
+    assert math.isclose(float(odyssey["progress"]), 1.0 / 9000.0, rel_tol=1e-9)
+    assert int(odyssey["countdown_seconds"]) == 300

@@ -4,10 +4,11 @@ import json
 
 from pathlib import Path
 
+import pytest
+
 from endless_idler.save import BAR_SLOTS
 from endless_idler.save import DEFAULT_FIGHT_NUMBER
 from endless_idler.save import DEFAULT_RUN_TOKENS
-from endless_idler.save import SAVE_VERSION
 from endless_idler.save import RunSave
 from endless_idler.save import SaveManager
 
@@ -106,41 +107,31 @@ def test_load_ignores_removed_idle_timer_legacy_fields(
     assert loaded.idle_exp_penalty_seconds == 0.0
 
 
-def test_legacy_lunar_progress_is_reset_on_load(monkeypatch, tmp_path: Path) -> None:
+def test_load_rejects_noncanonical_blessing_payload(monkeypatch, tmp_path: Path) -> None:
     save_path = tmp_path / "save.json"
     monkeypatch.setenv("ENDLESS_IDLER_SAVE_PATH", str(save_path))
+
+    canonical = RunSave().blessings
+    lunar = dict(canonical["lunar_blessing"])
+    lunar["step_start_time"] = 321.0
+    canonical["lunar_blessing"] = lunar
 
     save_path.write_text(
         json.dumps(
             {
-                "version": SAVE_VERSION - 1,
+                "version": 12,
                 "party_level": 1,
-                "blessings": {
-                    "lunar_blessing": {
-                        "steps": 123,
-                        "total_minutes": 456,
-                        "last_tick_time": 789.0,
-                        "step_start_time": 321.0,
-                        "unlocked": False,
-                    }
-                },
+                "blessings": canonical,
             }
         ),
         encoding="utf-8",
     )
 
-    loaded = SaveManager().load()
-    assert loaded is not None
-
-    lunar = loaded.blessings["lunar_blessing"]
-    assert lunar["steps"] == 0
-    assert lunar["total_minutes"] == 0
-    assert lunar["last_tick_time"] == 0.0
-    assert lunar["step_start_time"] == 0.0
-    assert lunar["unlocked"] is False
+    with pytest.raises(ValueError, match="non-canonical fields"):
+        _ = SaveManager().load()
 
 
-def test_current_version_lunar_progress_is_not_migrated(
+def test_current_version_loads_canonical_lunar_blessing(
     monkeypatch, tmp_path: Path
 ) -> None:
     save_path = tmp_path / "save.json"
@@ -149,9 +140,6 @@ def test_current_version_lunar_progress_is_not_migrated(
     save = RunSave()
     save.blessings["lunar_blessing"] = {
         "steps": 8,
-        "total_minutes": 40,
-        "last_tick_time": 100.0,
-        "step_start_time": 50.0,
         "unlocked": True,
     }
     SaveManager().save(save)
@@ -161,7 +149,4 @@ def test_current_version_lunar_progress_is_not_migrated(
 
     lunar = loaded.blessings["lunar_blessing"]
     assert lunar["steps"] == 8
-    assert lunar["total_minutes"] == 40
-    assert lunar["last_tick_time"] == 100.0
-    assert lunar["step_start_time"] == 50.0
     assert lunar["unlocked"] is True

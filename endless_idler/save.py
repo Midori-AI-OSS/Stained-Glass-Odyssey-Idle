@@ -25,7 +25,6 @@ from endless_idler.save_codec import as_optional_str_list
 from endless_idler.save_codec import normalized_blessings
 from endless_idler.save_codec import normalized_character_progress
 from endless_idler.save_codec import normalized_character_stats
-from endless_idler.save_migrations import apply_migrations
 
 
 SAVE_VERSION = 12
@@ -198,7 +197,6 @@ class SaveManager:
                 data.get("layout_owned_ordering", DEFAULT_LAYOUT_OWNED_ORDERING)
             ),
         )
-        apply_migrations(save)
         return _normalized_save(save)
 
     def save(self, save: RunSave) -> None:

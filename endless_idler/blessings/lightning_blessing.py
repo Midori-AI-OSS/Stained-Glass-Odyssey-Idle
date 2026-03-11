@@ -44,6 +44,5 @@ blessing = BlessingPlugin(
     save_schema={
         "steps": int,
         "unlocked": bool,
-        "step_start_time": float,
     },
 )

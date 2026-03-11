@@ -38,7 +38,14 @@ def load_blessing_module(path: Path) -> BlessingPlugin | None:
         if isinstance(blessing, BlessingPlugin):
             return blessing
 
-    except Exception:
+    except (
+        AttributeError,
+        FileNotFoundError,
+        ImportError,
+        OSError,
+        SyntaxError,
+        ValueError,
+    ):
         return None
 
     return None

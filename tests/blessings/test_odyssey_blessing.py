@@ -7,6 +7,7 @@ import math
 from endless_idler.blessings import get_default_blessing
 from endless_idler.blessings.odyssey_blessing import ODYSSEY_STEP_SECONDS
 from endless_idler.blessings.odyssey_blessing import _odyssey_multiplier_formula
+from endless_idler.blessings.odyssey_blessing import blessing as odyssey_blessing
 from endless_idler.blessings.registry import clear_registry
 
 
@@ -157,3 +158,21 @@ def _seconds_to_next(elapsed: float) -> int:
     if remaining <= 1e-9:
         remaining = ODYSSEY_STEP_SECONDS
     return max(0, int(math.ceil(remaining)))
+
+
+def test_odyssey_tooltip_short_contract() -> None:
+    tooltip = odyssey_blessing.format_tooltip(
+        3,
+        {
+            "runtime": {
+                "steps": 3,
+                "progress": 0.5,
+                "countdown_seconds": 120,
+            }
+        },
+    )
+    assert "EXP gain:" in tooltip
+    assert "Progress:" in tooltip
+    assert "Step:" not in tooltip
+    assert "Countdown:" not in tooltip
+    assert "every 5 minutes" not in tooltip

@@ -250,39 +250,77 @@ def _default_blessings() -> dict[str, dict[str, Any]]:
 
 
 def as_blessings_dict(value: object) -> dict[str, dict[str, Any]]:
-    """Normalize blessings data using plugin schemas."""
+    """Validate and normalize canonical blessings data using plugin schemas."""
     from endless_idler.blessings.registry import discover_blessing_plugins
 
     if not isinstance(value, dict):
+        raise ValueError("Blessings payload must be a dictionary.")
+    if not value:
         return _default_blessings()
 
     result: dict[str, dict[str, Any]] = {}
+    persistent_plugins = [
+        plugin for plugin in discover_blessing_plugins() if plugin.is_persistent
+    ]
+    plugin_by_id = {plugin.blessing_id: plugin for plugin in persistent_plugins}
+    unknown_ids = sorted(
+        blessing_id
+        for blessing_id in value
+        if isinstance(blessing_id, str) and blessing_id not in plugin_by_id
+    )
+    if unknown_ids:
+        raise ValueError(f"Unknown blessing ids in payload: {unknown_ids}")
 
-    for plugin in discover_blessing_plugins():
-        if not plugin.is_persistent:
-            continue
-
-        raw_blessing = value.get(plugin.blessing_id, {})
+    for plugin in persistent_plugins:
+        if plugin.blessing_id not in value:
+            raise ValueError(
+                f"Missing blessing payload for persistent blessing '{plugin.blessing_id}'."
+            )
+        raw_blessing = value.get(plugin.blessing_id)
         if not isinstance(raw_blessing, dict):
-            raw_blessing = {}
+            raise ValueError(
+                f"Blessing '{plugin.blessing_id}' payload must be a dictionary."
+            )
 
         normalized: dict[str, Any] = {}
+        expected_fields = set(plugin.save_schema)
+        actual_fields = {key for key in raw_blessing if isinstance(key, str)}
+        extra_fields = sorted(actual_fields - expected_fields)
+        missing_fields = sorted(expected_fields - actual_fields)
+        if extra_fields or missing_fields:
+            raise ValueError(
+                f"Blessing '{plugin.blessing_id}' has non-canonical fields. "
+                f"missing={missing_fields}, extra={extra_fields}"
+            )
         for field_name, field_type in plugin.save_schema.items():
-            raw_value = raw_blessing.get(field_name)
+            raw_value = raw_blessing[field_name]
 
             if field_type is int:
-                normalized[field_name] = max(0, as_int(raw_value, default=0))
+                if isinstance(raw_value, bool) or not isinstance(raw_value, int):
+                    raise ValueError(
+                        f"Blessing '{plugin.blessing_id}.{field_name}' must be int."
+                    )
+                if raw_value < 0:
+                    raise ValueError(
+                        f"Blessing '{plugin.blessing_id}.{field_name}' must be >= 0."
+                    )
+                normalized[field_name] = raw_value
             elif field_type is float:
-                normalized[field_name] = max(0.0, as_float(raw_value, default=0.0))
+                if isinstance(raw_value, bool) or not isinstance(raw_value, int | float):
+                    raise ValueError(
+                        f"Blessing '{plugin.blessing_id}.{field_name}' must be float."
+                    )
+                if float(raw_value) < 0.0:
+                    raise ValueError(
+                        f"Blessing '{plugin.blessing_id}.{field_name}' must be >= 0.0."
+                    )
+                normalized[field_name] = float(raw_value)
             elif field_type is bool:
-                if field_name == "unlocked":
-                    normalized[field_name] = (
-                        bool(raw_value) if raw_value is not None else plugin.is_unlocked
+                if not isinstance(raw_value, bool):
+                    raise ValueError(
+                        f"Blessing '{plugin.blessing_id}.{field_name}' must be bool."
                     )
-                else:
-                    normalized[field_name] = (
-                        bool(raw_value) if raw_value is not None else False
-                    )
+                normalized[field_name] = raw_value
 
         result[plugin.blessing_id] = normalized
 

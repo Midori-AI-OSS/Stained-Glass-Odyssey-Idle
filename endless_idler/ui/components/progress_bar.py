@@ -112,15 +112,18 @@ class AnimatedProgressBar(QWidget):
         # Color transition configuration
         self._color_thresholds: list[tuple[float, tuple[int, int, int, int]]] = []
         self._gradient_enabled = True
+        self._start_color = DEFAULT_AURORA_START_RGBA
+        self._mid_color = DEFAULT_AURORA_MID_RGBA
+        self._end_color = DEFAULT_AURORA_END_RGBA
 
         # Animation parameters
         self._smoothing_rate = 22.0
         self._shimmer_speed = 0.20
         self._shimmer_amplifier = 0.48
 
-        # Timer for 60 FPS animation
+        # Timer for ~30 FPS animation cadence
         self._frame_timer = QTimer(self)
-        self._frame_timer.setInterval(16)
+        self._frame_timer.setInterval(33)
         self._frame_timer.timeout.connect(self._on_animation_frame)
 
     def set_value(self, progress: float) -> None:
@@ -232,7 +235,7 @@ class AnimatedProgressBar(QWidget):
         """Handle animation frame updates."""
         now = time.perf_counter()
         if self._last_frame_at <= 0.0:
-            dt = 1.0 / 60.0
+            dt = 1.0 / 30.0
         else:
             dt = max(0.001, min(0.1, now - self._last_frame_at))
         self._last_frame_at = now
@@ -340,13 +343,12 @@ class AnimatedProgressBar(QWidget):
 
             # Draw shimmer effect
             if self._display_shimmer > 0.0:
-                center_x = int(
-                    round(
-                        fill_rect.left()
-                        + (float(fill_rect.width()) * self._shimmer_phase)
-                    )
-                )
                 half_width = max(8, int(round(float(fill_rect.width()) * 0.14)))
+                shimmer_travel = float(fill_rect.width() + (half_width * 2))
+                shimmer_center = (
+                    float(fill_rect.left()) - float(half_width)
+                ) + (self._shimmer_phase * shimmer_travel)
+                center_x = int(round(shimmer_center))
                 shimmer_rect = QRect(
                     center_x - half_width,
                     fill_rect.top(),
