@@ -86,8 +86,9 @@ class RunSaveStore:
         copy2(source, backup_path)
         return backup_path
 
-    def shutdown(self) -> None:
-        self.persist(force=True)
+    def shutdown(self, *, persist: bool = True) -> None:
+        if persist:
+            self.persist(force=True)
         self._save_queue.shutdown()
 
     def delete_active_save(self) -> None:

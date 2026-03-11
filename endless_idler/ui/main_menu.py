@@ -63,11 +63,16 @@ class MainMenuWindow(QMainWindow):
         self._idle_rng = random.Random()
         self._idle_state = self._build_idle_state_from_save(self._save_store.current)
         self._idle_state_lineup_signature = self._idle_lineup_signature()
+        self._reset_exit_requested = False
         self._tick_cooldown_lock = threading.Lock()
         self._tick_cooldown_seconds = float(
             max(
                 0.0,
-                float(getattr(self._save_store.current, "layout_tick_cooldown_seconds", 0.0)),
+                float(
+                    getattr(
+                        self._save_store.current, "layout_tick_cooldown_seconds", 0.0
+                    )
+                ),
             )
         )
         self._latest_idle_tick_payload: dict[str, object] = {}
@@ -208,7 +213,7 @@ class MainMenuWindow(QMainWindow):
         self._tick_runtime.unsubscribe(self._tick_runtime_subscriber_key)
         self._tick_runtime.clear_source(self._tick_runtime_source_key)
         self._tick_runtime.stop()
-        self._save_store.shutdown()
+        self._save_store.shutdown(persist=not self._reset_exit_requested)
         if self._radio_controller is not None:
             self._radio_controller.shutdown()
         super().closeEvent(event)
@@ -346,7 +351,9 @@ class MainMenuWindow(QMainWindow):
             plugins_by_id=plugins_by_id,
             progress_by_id=dict(getattr(save, "character_progress", {})),
             stats_by_id=dict(getattr(save, "character_stats", {})),
-            initial_stats_by_id=dict(getattr(save, "character_initial_stats", {}) or {}),
+            initial_stats_by_id=dict(
+                getattr(save, "character_initial_stats", {}) or {}
+            ),
             inventory=dict(getattr(save, "inventory", {})),
             exp_bonus_seconds=float(getattr(save, "idle_exp_bonus_seconds", 0.0)),
             exp_penalty_seconds=float(getattr(save, "idle_exp_penalty_seconds", 0.0)),
@@ -587,6 +594,7 @@ class MainMenuWindow(QMainWindow):
         except OSError as exc:
             self._show_save_action_error("Reset failed", exc)
             return
+        self._reset_exit_requested = True
         QCoreApplication.quit()
 
     def _persist_shared_save(self) -> None:

@@ -77,13 +77,14 @@ def test_run_save_store_startup_load_exception_creates_crash_backup_and_resets(
 
     backed_up_payload = json.loads(crash_backups[0].read_text(encoding="utf-8"))
     assert backed_up_payload["party_level"] == 99
-    assert (
-        backed_up_payload["blessings"]["lunar_blessing"]["step_start_time"] == 321.0
-    )
+    assert backed_up_payload["blessings"]["lunar_blessing"]["step_start_time"] == 321.0
 
     rewritten_payload = json.loads(save_path.read_text(encoding="utf-8"))
     assert rewritten_payload["party_level"] == 1
-    assert set(rewritten_payload["blessings"]["lunar_blessing"]) == {"steps", "unlocked"}
+    assert set(rewritten_payload["blessings"]["lunar_blessing"]) == {
+        "steps",
+        "unlocked",
+    }
     assert save.party_level == 1
     store.shutdown()
 
@@ -162,6 +163,25 @@ def test_run_save_store_delete_active_save_removes_file(tmp_path: Path) -> None:
     store.delete_active_save()
     assert not save_path.exists()
     store.shutdown()
+
+
+def test_run_save_store_shutdown_without_persist_keeps_deleted_save_absent(
+    tmp_path: Path,
+) -> None:
+    save_path = tmp_path / "save.json"
+    store = RunSaveStore(
+        plugins=_trinity_plugins(),
+        save_manager=SaveManager(path=save_path),
+    )
+    _ = store.load_or_create()
+
+    assert save_path.exists()
+    store.delete_active_save()
+    assert not save_path.exists()
+
+    store.shutdown(persist=False)
+
+    assert not save_path.exists()
 
 
 def test_run_save_store_persist_uses_async_queue_until_flushed(tmp_path: Path) -> None:
