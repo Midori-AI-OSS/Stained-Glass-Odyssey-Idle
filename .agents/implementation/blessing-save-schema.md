@@ -10,8 +10,10 @@ Blessings are serialized under `RunSave.blessings` in `save.py`:
 
 - `steps` (`int`): Completed blessing steps
 - `unlocked` (`bool`): Blessing unlock state
-- `tick_elapsed_seconds` (`float`): Fractional progress toward the next step
 - Plugin-specific persisted fields from each blessing `save_schema`
+
+`tick_elapsed_seconds` is runtime-only and is intentionally excluded from the
+canonical save payload.
 
 ## Runtime Progression Model
 
@@ -26,7 +28,9 @@ For each persistent blessing:
 1. Skip if not unlocked
 2. Add tick delta to `tick_elapsed_seconds`
 3. While elapsed >= `plugin.step_seconds`, increment `steps` and subtract one step window
-4. Save the new `steps` + `tick_elapsed_seconds`
+4. Persist canonical `steps` only; runtime elapsed stays in-memory
+
+Lunar blessing cadence uses `LUNAR_STEP_SECONDS = 60.0` (1-minute micro-steps).
 
 ## UI Derivations
 
@@ -37,4 +41,5 @@ The idle blessing UI reads from the same deterministic runtime state:
 - `get_idle_blessing_cycle_progress()`
 - `get_idle_blessing_seconds_to_next_step()`
 
-These calculations now derive from accumulated tick time instead of `time.time()` session windows.
+These calculations now derive from accumulated tick time instead of
+`time.time()` session windows.

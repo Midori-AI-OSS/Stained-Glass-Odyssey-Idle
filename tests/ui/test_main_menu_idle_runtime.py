@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import endless_idler.ui.main_menu as main_menu_module
@@ -15,12 +16,23 @@ class _FakeSignal:
 class _FakeIdleScreen:
     created: list["_FakeIdleScreen"] = []
 
-    def __init__(self, *, save_store, tick_runtime=None, plugins=None, parent=None) -> None:  # noqa: ANN001, ANN204
+    def __init__(  # noqa: ANN001, ANN204
+        self,
+        *,
+        save_store,
+        tick_runtime=None,
+        idle_state=None,
+        owns_tick_source=True,
+        plugins=None,
+        parent=None,
+    ) -> None:
         del tick_runtime
         del plugins
         del parent
         self.finished = _FakeSignal()
         self.lineup_signature = self.build_lineup_signature(save_store.current)
+        self.received_idle_state = idle_state
+        self.received_owns_tick_source = owns_tick_source
         self.shutdown_calls: list[bool] = []
         self.deleted = False
         _FakeIdleScreen.created.append(self)
@@ -89,10 +101,13 @@ def _make_menu_like(*, save: object, idle_screen: object | None, placeholder: ob
         _idle_placeholder=placeholder,
         _stack=stack,
         _tick_runtime=object(),
+        _idle_runtime_lock=nullcontext(),
+        _idle_state=object(),
         _plugins=[],
         _PAGE_IDLE="idle",
         _set_active_nav=lambda key: nav_calls.append(str(key)),
         _show_home=lambda: None,
+        _refresh_shared_idle_runtime=lambda: None,
     )
     holder._idle_lineup_signature = lambda: MainMenuWindow._idle_lineup_signature(holder)
     holder._dispose_idle_runtime = lambda *, persist: MainMenuWindow._dispose_idle_runtime(holder, persist=persist)
@@ -118,6 +133,8 @@ def test_show_idle_rebuilds_runtime_when_lineup_signature_changes(monkeypatch) -
     assert old_idle.deleted is True
     assert menu_like._idle_screen is not old_idle
     assert isinstance(menu_like._idle_screen, _FakeIdleScreen)
+    assert menu_like._idle_screen.received_idle_state is menu_like._idle_state
+    assert menu_like._idle_screen.received_owns_tick_source is False
     assert menu_like._stack.set_current[-1] is menu_like._idle_screen
     assert menu_like._nav_calls == ["idle"]
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import random
+import threading
 
 from collections.abc import Callable
 
@@ -24,8 +26,11 @@ from endless_idler.settings import AppSettingsManager
 from endless_idler.settings import clamp_volume
 from endless_idler.settings import normalize_channel
 from endless_idler.tick_runtime import SharedTickRuntime
+from endless_idler.tick_runtime import TickSnapshot
 from endless_idler.ui.home import HomePage
 from endless_idler.ui.idle import IdleScreenWidget
+from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
+from endless_idler.ui.idle.idle_state import IdleGameState
 from endless_idler.ui.layout import LayoutScreenWidget
 from endless_idler.ui.lucide_icons import lucide_icon
 from endless_idler.ui.radio import RadioController
@@ -52,6 +57,20 @@ class MainMenuWindow(QMainWindow):
 
         self._idle_screen: IdleScreenWidget | None = None
         self._tick_runtime = SharedTickRuntime(parent=self)
+        self._tick_runtime_source_key = "main-menu-idle-source"
+        self._tick_runtime_subscriber_key = "main-menu-idle-save-sync"
+        self._idle_runtime_lock = threading.Lock()
+        self._idle_rng = random.Random()
+        self._idle_state = self._build_idle_state_from_save(self._save_store.current)
+        self._idle_state_lineup_signature = self._idle_lineup_signature()
+        self._tick_cooldown_lock = threading.Lock()
+        self._tick_cooldown_seconds = float(
+            max(
+                0.0,
+                float(getattr(self._save_store.current, "layout_tick_cooldown_seconds", 0.0)),
+            )
+        )
+        self._latest_idle_tick_payload: dict[str, object] = {}
         self._nav_buttons: dict[str, QToolButton] = {}
 
         self.setWindowTitle(self.APP_TITLE)
@@ -143,7 +162,11 @@ class MainMenuWindow(QMainWindow):
         self._stack = QStackedWidget(shell)
         shell_layout.addWidget(self._stack, 1)
 
-        self._home_screen = HomePage(save_store=self._save_store, parent=self)
+        self._home_screen = HomePage(
+            save_store=self._save_store,
+            idle_runtime_snapshot_provider=self._latest_idle_snapshot,
+            parent=self,
+        )
         self._layout_screen = LayoutScreenWidget(
             save_store=self._save_store, parent=self
         )
@@ -174,6 +197,7 @@ class MainMenuWindow(QMainWindow):
 
         self._set_active_nav(self._PAGE_HOME)
         self._stack.setCurrentWidget(self._home_screen)
+        self._configure_shared_idle_runtime()
         self._sync_radio_controller_from_settings(user_initiated=False)
         self._on_radio_state_changed(self._radio_state_snapshot())
         self._settings_screen.set_save_path(str(self._save_store.path))
@@ -181,6 +205,8 @@ class MainMenuWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._idle_screen is not None:
             self._idle_screen.shutdown()
+        self._tick_runtime.unsubscribe(self._tick_runtime_subscriber_key)
+        self._tick_runtime.clear_source(self._tick_runtime_source_key)
         self._tick_runtime.stop()
         self._save_store.shutdown()
         if self._radio_controller is not None:
@@ -281,6 +307,7 @@ class MainMenuWindow(QMainWindow):
         idle.deleteLater()
 
     def _ensure_idle_runtime(self) -> None:
+        self._refresh_shared_idle_runtime()
         current_signature = self._idle_lineup_signature()
         if (
             self._idle_screen is not None
@@ -290,9 +317,13 @@ class MainMenuWindow(QMainWindow):
         if self._idle_screen is not None:
             self._dispose_idle_runtime(persist=True)
 
+        with self._idle_runtime_lock:
+            idle_state = self._idle_state
         idle = IdleScreenWidget(
             save_store=self._save_store,
             tick_runtime=self._tick_runtime,
+            idle_state=idle_state,
+            owns_tick_source=False,
             plugins=self._plugins,
             parent=self,
         )
@@ -302,6 +333,169 @@ class MainMenuWindow(QMainWindow):
 
         if self._stack.currentWidget() is self._idle_placeholder:
             self._stack.setCurrentWidget(idle)
+
+    def _build_idle_state_from_save(self, save: object) -> IdleGameState:
+        plugins_by_id: dict[str, object] = {
+            plugin.char_id: plugin for plugin in self._plugins
+        }
+        return IdleGameState(
+            char_ids=[str(item) for item in getattr(save, "onsite", []) if item],
+            offsite_ids=[str(item) for item in getattr(save, "offsite", []) if item],
+            party_level=max(1, int(getattr(save, "party_level", 1))),
+            stacks=dict(getattr(save, "stacks", {})),
+            plugins_by_id=plugins_by_id,
+            progress_by_id=dict(getattr(save, "character_progress", {})),
+            stats_by_id=dict(getattr(save, "character_stats", {})),
+            initial_stats_by_id=dict(getattr(save, "character_initial_stats", {}) or {}),
+            inventory=dict(getattr(save, "inventory", {})),
+            exp_bonus_seconds=float(getattr(save, "idle_exp_bonus_seconds", 0.0)),
+            exp_penalty_seconds=float(getattr(save, "idle_exp_penalty_seconds", 0.0)),
+            shared_exp_percentage=int(getattr(save, "idle_shared_exp_percentage", 1)),
+            risk_reward_level=int(getattr(save, "idle_risk_reward_level", 0)),
+            battle_start_time=float(getattr(save, "battle_start_time", 0.0)),
+            blessings_data=dict(getattr(save, "blessings", {}) or {}),
+            rng=self._idle_rng,
+        )
+
+    def _refresh_shared_idle_runtime(self) -> None:
+        current_signature = self._idle_lineup_signature()
+        if current_signature == self._idle_state_lineup_signature:
+            return
+        save = self._save_store.current
+        with self._idle_runtime_lock:
+            self._idle_state = self._build_idle_state_from_save(save)
+            self._idle_state_lineup_signature = current_signature
+        with self._tick_cooldown_lock:
+            self._tick_cooldown_seconds = float(
+                max(0.0, float(getattr(save, "layout_tick_cooldown_seconds", 0.0)))
+            )
+
+    def _configure_shared_idle_runtime(self) -> None:
+        self._tick_runtime.configure_source(
+            key=self._tick_runtime_source_key,
+            source=self._produce_idle_tick_payload,
+        )
+        self._tick_runtime.subscribe(
+            key=self._tick_runtime_subscriber_key,
+            callback=self._on_idle_tick_snapshot,
+        )
+
+    def _produce_idle_tick_payload(
+        self, tick_count: int, monotonic_seconds: float
+    ) -> dict[str, object]:
+        del tick_count
+        del monotonic_seconds
+        with self._idle_runtime_lock:
+            idle_state = self._idle_state
+            with self._tick_cooldown_lock:
+                cooldown_seconds = self._tick_cooldown_seconds
+                if cooldown_seconds > 0.0:
+                    cooldown_seconds = max(
+                        0.0,
+                        cooldown_seconds - IDLE_TICK_INTERVAL_SECONDS,
+                    )
+                    self._tick_cooldown_seconds = cooldown_seconds
+            if cooldown_seconds > 0.0:
+                return {
+                    "cooldown_seconds": cooldown_seconds,
+                    "idle_state": idle_state.export_runtime_snapshot(),
+                }
+            return {
+                "cooldown_seconds": cooldown_seconds,
+                "idle_state": idle_state.process_tick(),
+            }
+
+    def _on_idle_tick_snapshot(self, snapshot: TickSnapshot) -> None:
+        payload = snapshot.payload
+        if not isinstance(payload, dict):
+            return
+        clean_payload = dict(payload)
+        self._latest_idle_tick_payload = clean_payload
+        idle_snapshot = clean_payload.get("idle_state")
+        if isinstance(idle_snapshot, dict):
+            self._apply_idle_snapshot_to_save(idle_snapshot)
+        with self._tick_cooldown_lock:
+            self._save_store.current.layout_tick_cooldown_seconds = float(
+                self._tick_cooldown_seconds
+            )
+
+    def _latest_idle_snapshot(self) -> dict[str, object]:
+        payload = self._latest_idle_tick_payload
+        idle_snapshot = payload.get("idle_state")
+        if isinstance(idle_snapshot, dict):
+            return dict(idle_snapshot)
+        with self._idle_runtime_lock:
+            return self._idle_state.export_runtime_snapshot()
+
+    def _apply_idle_snapshot_to_save(self, snapshot: dict[str, object]) -> None:
+        save = self._save_store.current
+        progress = snapshot.get("progress")
+        if isinstance(progress, dict):
+            save.character_progress = {
+                str(char_id): dict(data)
+                for char_id, data in progress.items()
+                if isinstance(char_id, str) and isinstance(data, dict)
+            }
+        stats = snapshot.get("character_stats")
+        if isinstance(stats, dict):
+            save.character_stats = {
+                str(char_id): dict(data)
+                for char_id, data in stats.items()
+                if isinstance(char_id, str) and isinstance(data, dict)
+            }
+        initial_stats = snapshot.get("initial_stats")
+        if isinstance(initial_stats, dict):
+            save.character_initial_stats = {
+                str(char_id): dict(data)
+                for char_id, data in initial_stats.items()
+                if isinstance(char_id, str) and isinstance(data, dict)
+            }
+        blessings = snapshot.get("blessings")
+        if isinstance(blessings, dict):
+            save.blessings = {
+                str(blessing_id): dict(data)
+                for blessing_id, data in blessings.items()
+                if isinstance(blessing_id, str) and isinstance(data, dict)
+            }
+        exp_bonus_seconds = snapshot.get("exp_bonus_seconds", 0.0)
+        if isinstance(exp_bonus_seconds, bool):
+            exp_bonus = 0.0
+        elif isinstance(exp_bonus_seconds, int | float):
+            exp_bonus = float(exp_bonus_seconds)
+        else:
+            exp_bonus = 0.0
+        save.idle_exp_bonus_seconds = max(0.0, exp_bonus)
+
+        exp_penalty_seconds = snapshot.get("exp_penalty_seconds", 0.0)
+        if isinstance(exp_penalty_seconds, bool):
+            exp_penalty = 0.0
+        elif isinstance(exp_penalty_seconds, int | float):
+            exp_penalty = float(exp_penalty_seconds)
+        else:
+            exp_penalty = 0.0
+        save.idle_exp_penalty_seconds = max(0.0, exp_penalty)
+
+        shared_exp_percentage = snapshot.get("shared_exp_percentage", 1)
+        if isinstance(shared_exp_percentage, bool):
+            shared_exp = 1
+        elif isinstance(shared_exp_percentage, int):
+            shared_exp = shared_exp_percentage
+        elif isinstance(shared_exp_percentage, float):
+            shared_exp = int(shared_exp_percentage)
+        else:
+            shared_exp = 1
+        save.idle_shared_exp_percentage = max(1, min(95, shared_exp))
+
+        risk_reward_level = snapshot.get("risk_reward_level", 0)
+        if isinstance(risk_reward_level, bool):
+            risk_level = 0
+        elif isinstance(risk_reward_level, int):
+            risk_level = risk_reward_level
+        elif isinstance(risk_reward_level, float):
+            risk_level = int(risk_reward_level)
+        else:
+            risk_level = 0
+        save.idle_risk_reward_level = max(0, min(150, risk_level))
 
     def _ensure_radio_controller(self) -> RadioController | None:
         if self._radio_controller is not None:

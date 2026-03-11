@@ -1294,13 +1294,34 @@ class IdleGameState(QObject):
 
     def _export_blessings_unlocked(self) -> dict[str, dict[str, Any]]:
         payload: dict[str, dict[str, Any]] = {}
+        persistent_plugins = {
+            plugin.blessing_id: plugin
+            for plugin in discover_blessing_plugins()
+            if plugin.is_persistent
+        }
         for blessing_id, raw in self._blessings_data.items():
             if not isinstance(blessing_id, str):
                 continue
             clean_id = blessing_id.strip()
             if not clean_id or not isinstance(raw, dict):
                 continue
-            payload[clean_id] = dict(raw)
+            plugin = persistent_plugins.get(clean_id)
+            if plugin is None:
+                continue
+            normalized: dict[str, Any] = {}
+            for field_name, field_type in plugin.save_schema.items():
+                if field_name in raw:
+                    normalized[field_name] = raw[field_name]
+                    continue
+                if field_type is int:
+                    normalized[field_name] = 0
+                elif field_type is float:
+                    normalized[field_name] = 0.0
+                elif field_type is bool:
+                    normalized[field_name] = (
+                        plugin.is_unlocked if field_name == "unlocked" else False
+                    )
+            payload[clean_id] = normalized
         return payload
 
     def export_runtime_snapshot(self) -> dict[str, Any]:
@@ -1320,6 +1341,7 @@ class IdleGameState(QObject):
                 "character_stats": self._export_character_stats_unlocked(),
                 "initial_stats": self._export_initial_stats_unlocked(),
                 "blessings": self._export_blessings_unlocked(),
+                "blessing_runtime": self._export_blessing_runtime_unlocked(),
                 "exp_bonus_seconds": float(max(0.0, self._exp_bonus_seconds)),
                 "exp_penalty_seconds": float(max(0.0, self._exp_penalty_seconds)),
                 "inventory": {
@@ -1327,6 +1349,52 @@ class IdleGameState(QObject):
                     for item_id, count in self._inventory.items()
                 },
             }
+
+    def _export_blessing_runtime_unlocked(self) -> dict[str, dict[str, float | int | bool]]:
+        runtime: dict[str, dict[str, float | int | bool]] = {}
+        elapsed_total = max(0.0, float(self._elapsed_seconds))
+        for plugin in discover_blessing_plugins():
+            step_seconds = max(1e-9, float(plugin.step_seconds))
+            blessing_id = plugin.blessing_id
+            if plugin.is_persistent:
+                blessing_data = self._blessings_data.get(blessing_id, {})
+                if not isinstance(blessing_data, dict):
+                    blessing_data = {}
+                unlocked = bool(blessing_data.get("unlocked", plugin.is_unlocked))
+                try:
+                    steps = max(0, int(blessing_data.get("steps", 0)))
+                except (TypeError, ValueError):
+                    steps = 0
+                if unlocked:
+                    try:
+                        elapsed = max(
+                            0.0, float(blessing_data.get("tick_elapsed_seconds", 0.0))
+                        )
+                    except (TypeError, ValueError):
+                        elapsed = 0.0
+                else:
+                    elapsed = 0.0
+            else:
+                unlocked = bool(plugin.is_unlocked)
+                if unlocked:
+                    steps = max(0, int(elapsed_total // step_seconds))
+                    elapsed = elapsed_total % step_seconds
+                else:
+                    steps = 0
+                    elapsed = 0.0
+
+            progress = max(0.0, min(1.0, elapsed / step_seconds))
+            remaining = step_seconds - elapsed
+            if remaining <= 1e-9:
+                remaining = step_seconds
+            runtime[blessing_id] = {
+                "unlocked": unlocked,
+                "steps": steps,
+                "elapsed_seconds": elapsed,
+                "progress": progress,
+                "countdown_seconds": max(0, int(math.ceil(remaining))),
+            }
+        return runtime
 
     def get_misplacement_stat_multiplier(self, char_id: str) -> float:
         clean_id = str(char_id or "").strip()
@@ -1369,6 +1437,8 @@ class IdleGameState(QObject):
             blessing_data: dict[str, Any] = dict(updated_blessings.get(blessing_id, {}))
 
             if not bool(blessing_data.get("unlocked", plugin.is_unlocked)):
+                blessing_data["tick_elapsed_seconds"] = 0.0
+                updated_blessings[blessing_id] = blessing_data
                 continue
 
             elapsed = max(0.0, float(blessing_data.get("tick_elapsed_seconds", 0.0)))

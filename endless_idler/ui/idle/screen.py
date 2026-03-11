@@ -103,6 +103,8 @@ class IdleScreenWidget(QWidget):
         *,
         save_store: RunSaveStore,
         tick_runtime: SharedTickRuntime | None = None,
+        idle_state: IdleGameState | None = None,
+        owns_tick_source: bool = True,
         plugins: Sequence[CharacterPlugin] | None = None,
         parent: QWidget | None = None,
     ) -> None:
@@ -121,6 +123,7 @@ class IdleScreenWidget(QWidget):
         self._rr_slider = QSlider(Qt.Orientation.Horizontal)
         self._tick_runtime = tick_runtime or SharedTickRuntime(parent=self)
         self._tick_runtime_key = f"idle-screen-{id(self)}"
+        self._owns_tick_source = bool(owns_tick_source)
         self._tick_cooldown_lock = threading.Lock()
         self._latest_tick_payload: dict[str, object] = {}
         start_idle_heal_timer(self._save)
@@ -147,7 +150,7 @@ class IdleScreenWidget(QWidget):
             key: value for key, value in self._plugin_by_id.items()
         }
 
-        self._idle_state = IdleGameState(
+        self._idle_state = idle_state or IdleGameState(
             char_ids=onsite,
             offsite_ids=offsite,
             party_level=self._party_level,
@@ -286,10 +289,11 @@ class IdleScreenWidget(QWidget):
 
         self._update_mods_ui()
 
-        self._tick_runtime.configure_source(
-            key=self._tick_runtime_key,
-            source=self._produce_tick_payload,
-        )
+        if self._owns_tick_source:
+            self._tick_runtime.configure_source(
+                key=self._tick_runtime_key,
+                source=self._produce_tick_payload,
+            )
         self._tick_runtime.subscribe(
             key=self._tick_runtime_key,
             callback=self._on_tick_snapshot,
@@ -319,7 +323,6 @@ class IdleScreenWidget(QWidget):
                     cooldown_seconds - IDLE_TICK_INTERVAL_SECONDS,
                 )
                 self._tick_cooldown_seconds = cooldown_seconds
-                self._save.layout_tick_cooldown_seconds = cooldown_seconds
         if cooldown_seconds > 0.0:
             return {
                 "cooldown_seconds": cooldown_seconds,
@@ -676,7 +679,8 @@ class IdleScreenWidget(QWidget):
 
     def shutdown(self, *, persist: bool = True) -> None:
         self._tick_runtime.unsubscribe(self._tick_runtime_key)
-        self._tick_runtime.clear_source(self._tick_runtime_key)
+        if self._owns_tick_source:
+            self._tick_runtime.clear_source(self._tick_runtime_key)
         if self._autosave_timer:
             self._autosave_timer.stop()
         self._allow_shutdown_persist = self._allow_shutdown_persist and persist

@@ -35,4 +35,6 @@ Last updated: 2026-03-10
 ## Blessing Runtime
 
 - Persistent blessing data is stored in `RunSave.blessings`.
-- Blessing progression advances deterministically from 30Hz tick deltas (`tick_elapsed_seconds`), not wall-clock timestamps.
+- Save payload remains canonical (`steps`/`unlocked` + schema fields only).
+- Blessing progression advances deterministically from 30Hz tick deltas, not wall-clock timestamps.
+- Runtime blessing phase (`progress`/`countdown`) is exported in idle tick snapshots for UI tooltips.
