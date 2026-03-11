@@ -9,25 +9,32 @@ Last updated: 2026-03-11
 
 ## Planned Mechanics (Target Design)
 
-### Mech 3: Rebirth Shard Drops
+### Mech 3: Rebirth Shard Drops ✅ COMPLETE
+
+Completed: 2026-03-11
 
 Planned intent:
 - Rebirths are an additional shard source alongside shard bars.
 
-Locked decisions:
+Implemented:
+- Shard bar tick cycle ✅
+- Shard rewards on rebirth ✅
+- Standby EXP gain ✅
+  - Standby characters (not in Onsite/Offsite) gain 0.01% of total offsite EXP
+  - processed at 50% tick rate (every other tick, effectively 0.005% per actual tick)
+
+Locked decisions (implemented):
 - Keep both shard sources:
   - shard bars
   - rebirth drops
 - Rebirth drop starting concept is 1 in 6, then modified by progression factors.
 - Generic (Luna) rebirth shard outcome is random elemental.
 - HP drain was removed from this plan.
-- Standby EXP gain model:
-  - Standby characters (not in Onsite/Offsite) gain 0.01% of total offsite EXP
-  - processed at 50% tick rate (every other tick, effectively 0.005% per actual tick)
+- Energy System was removed (2026-03-10 session).
 
-Pending:
-- Exact rebirth-drop modifier formula (blessings, stars, rebirths, prestige, crit_mod).
-- Exact outcome handling across all type contexts.
+Resolved:
+- Rebirth-drop modifier formula implemented with blessings, stars, rebirths, prestige, crit_mod factors.
+- Outcome handling implemented for all type contexts.
 
 ### Mech 4: Warp Banner System
 
