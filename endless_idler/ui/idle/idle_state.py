@@ -915,11 +915,18 @@ class IdleGameState(QObject):
         plugin = self._plugins_by_id.get(char_id)
         if plugin is None:
             return 1.0
+        if getattr(plugin, "is_dual_type", False):
+            dual_types = getattr(plugin, "dual_damage_types", ("", ""))
+            if isinstance(dual_types, tuple) and len(dual_types) == 2:
+                return self._dual_type_blessing_bonus(dual_types)
         damage_type_id = normalize_damage_type_id(
             str(getattr(plugin, "damage_type_id", "generic") or "generic")
         )
         if not damage_type_id:
             return 1.0
+        return self._single_type_blessing_bonus(damage_type_id)
+
+    def _single_type_blessing_bonus(self, damage_type_id: str) -> float:
         bonus = 1.0
         if damage_type_id == "generic":
             for blessing_id in self._damage_blessing_id_by_type.values():
@@ -938,6 +945,38 @@ class IdleGameState(QObject):
             if isinstance(blessing_info, dict) and blessing_info.get("unlocked", False):
                 steps = int(blessing_info.get("steps", 0))
                 bonus += steps * 0.0001
+        return bonus
+
+    def _dual_type_blessing_bonus(self, dual_types: tuple[str, str]) -> float:
+        bonus = 1.0
+        applied_blessings: set[str] = set()
+        for raw_type in dual_types:
+            damage_type_id = normalize_damage_type_id(str(raw_type or "generic"))
+            if not damage_type_id:
+                continue
+            if damage_type_id == "generic":
+                for blessing_id in self._damage_blessing_id_by_type.values():
+                    if blessing_id in applied_blessings:
+                        continue
+                    blessing_info = self._blessings_data.get(blessing_id, {})
+                    if not isinstance(blessing_info, dict):
+                        continue
+                    if not blessing_info.get("unlocked", False):
+                        continue
+                    steps = int(blessing_info.get("steps", 0))
+                    bonus += steps * 0.0001
+                    applied_blessings.add(blessing_id)
+            else:
+                blessing_id = self._damage_blessing_id_by_type.get(damage_type_id)
+                if not blessing_id or blessing_id in applied_blessings:
+                    continue
+                blessing_info = self._blessings_data.get(blessing_id, {})
+                if isinstance(blessing_info, dict) and blessing_info.get(
+                    "unlocked", False
+                ):
+                    steps = int(blessing_info.get("steps", 0))
+                    bonus += steps * 0.0001
+                    applied_blessings.add(blessing_id)
         return bonus
 
     @staticmethod
