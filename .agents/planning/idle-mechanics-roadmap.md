@@ -9,34 +9,7 @@ Last updated: 2026-03-11
 
 ## Planned Mechanics (Target Design)
 
-### Mech 3: Rebirth Shard Drops ✅ COMPLETE
-
-Completed: 2026-03-11
-
-Planned intent:
-- Rebirths are an additional shard source alongside shard bars.
-
-Implemented:
-- Shard bar tick cycle ✅
-- Shard rewards on rebirth ✅
-- Standby EXP gain ✅
-  - Standby characters (not in Onsite/Offsite) gain 0.01% of total offsite EXP
-  - processed at 50% tick rate (every other tick, effectively 0.005% per actual tick)
-
-Locked decisions (implemented):
-- Keep both shard sources:
-  - shard bars
-  - rebirth drops
-- Rebirth drop starting concept is 1 in 6, then modified by progression factors.
-- Generic (Luna) rebirth shard outcome is random elemental.
-- HP drain was removed from this plan.
-- Energy System was removed (2026-03-10 session).
-
-Resolved:
-- Rebirth-drop modifier formula implemented with blessings, stars, rebirths, prestige, crit_mod factors.
-- Outcome handling implemented for all type contexts.
-
-### Mech 4: Warp Banner System
+### Mech 3: Warp Banner System
 
 Planned intent:
 - Build Warp into a banner-based progression/gacha system.
@@ -87,7 +60,7 @@ Pending:
 - Exact extra-stone formula and deterministic rounding behavior.
 - Exact diminishing-returns algorithm for repeated extras in one rebirth.
 
-### Mech 5: Weapon Parts, Types, and Salvage Crafting
+### Mech 4: Weapon Parts, Types, and Salvage Crafting
 
 Planned intent:
 - Build a long-term weapon progression layer that is independent from character rarity tiers.
@@ -135,7 +108,7 @@ Pending:
 - Final overflow craft-bonus math ordering and payout details.
 - Final weapon-type stat/progression impact model.
 
-Note: Blessing Channeling was removed from Mech 3. Future "upgrade blessings" with weapon parts/shards planned separately.
+Note: Future "upgrade blessings" with weapon parts/shards planned separately.
 
 ### Future: Drop Table System
 
