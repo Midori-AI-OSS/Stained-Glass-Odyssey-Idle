@@ -281,6 +281,8 @@ class IdleGameState(QObject):
                 "shard_bar_ticks": shard_bar_ticks % SHARD_BAR_CYCLE_TICKS,
                 "shard_exp_s_ema": 0.0,
                 "shard_reward_types": reward_types,
+                "is_dual_type": getattr(plugin, "is_dual_type", False),
+                "dual_damage_types": getattr(plugin, "dual_damage_types", ("", "")),
             }
 
             if isinstance(saved, dict):
