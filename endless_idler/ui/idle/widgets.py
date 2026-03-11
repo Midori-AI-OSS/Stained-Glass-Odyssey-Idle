@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import math
 import random
 
 from collections.abc import Callable
 
 from PySide6.QtCore import QEvent
+from PySide6.QtCore import QPointF
+from PySide6.QtCore import QRectF
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPaintEvent
+from PySide6.QtGui import QPainter
+from PySide6.QtGui import QPainterPath
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QHBoxLayout
@@ -21,6 +27,8 @@ from endless_idler.ui.party_builder_common import build_character_stats_tooltip
 from endless_idler.ui.party_builder_common import format_idle_exp_rate_suffix
 from endless_idler.ui.tooltip import hide_stained_tooltip
 from endless_idler.ui.tooltip import show_stained_tooltip
+from endless_idler.ui.theme.colors import color_for_damage_type_id
+from endless_idler.ui.theme.colors import normalize_element_id
 from endless_idler.ui.widgets.shard_progress_bar import ShardProgressBar
 from endless_idler.utils import normalize_progress
 
@@ -38,6 +46,9 @@ class IdleArena(QFrame):
 
 
 class IdleOffsiteCard(QFrame):
+    _WAVE_AMPLITUDE_PX = 8.0
+    _WAVE_FREQUENCY = 0.7
+
     def __init__(
         self,
         *,
@@ -52,6 +63,7 @@ class IdleOffsiteCard(QFrame):
         super().__init__()
         self.setObjectName("idleOffsiteCard")
         self.setProperty("elementId", "generic")
+        self.setProperty("isDualType", False)
         self._char_id = char_id
         self._plugin = plugin
         self._idle_state = idle_state
@@ -61,6 +73,9 @@ class IdleOffsiteCard(QFrame):
         self._on_prestige = on_prestige
         self._portrait_placeholder = ""
         self._portrait_source_pixmap: QPixmap | None = None
+        self._is_dual_type = False
+        self._dual_damage_types = ("generic", "generic")
+        self._wave_phase = 0.0
 
         self.setFixedSize(280, 96)
 
@@ -268,6 +283,23 @@ class IdleOffsiteCard(QFrame):
         if self.underMouse():
             self._show_tooltip()
 
+    def set_dual_damage_types(self, dual_damage_types: tuple[str, str]) -> None:
+        normalized = (
+            normalize_element_id(dual_damage_types[0]),
+            normalize_element_id(dual_damage_types[1]),
+        )
+        if normalized == self._dual_damage_types:
+            return
+        self._dual_damage_types = normalized
+        self.update()
+
+    def set_wave_phase(self, phase: float) -> None:
+        normalized = min(1.0, max(0.0, float(phase)))
+        if math.isclose(normalized, self._wave_phase, rel_tol=0.0, abs_tol=1e-6):
+            return
+        self._wave_phase = normalized
+        self.update()
+
     def eventFilter(self, watched: object, event: object) -> bool:  # noqa: ANN001
         if hasattr(event, "type") and event.type() == QEvent.Type.Enter:
             self._show_tooltip()
@@ -370,6 +402,20 @@ class IdleOffsiteCard(QFrame):
         if not data or not isinstance(data, dict):
             return
 
+        is_dual_type, dual_damage_types = self._dual_type_visual_data(data)
+        self._set_dual_type_enabled(is_dual_type)
+        if is_dual_type:
+            self.set_dual_damage_types(dual_damage_types)
+            animation_phase_getter = getattr(
+                self._idle_state, "get_animation_phase", None
+            )
+            if callable(animation_phase_getter):
+                self.set_wave_phase(float(animation_phase_getter(self._char_id)))
+            if self.property("elementId") != "generic":
+                self.setProperty("elementId", "generic")
+                self._repolish_card()
+            return
+
         base_stats = data.get("base_stats")
         saved_base_stats = dict(base_stats) if isinstance(base_stats, dict) else {}
 
@@ -415,11 +461,111 @@ class IdleOffsiteCard(QFrame):
         if self.property("elementId") == element_id:
             return
         self.setProperty("elementId", element_id)
+        self._repolish_card()
+
+    def _repolish_card(self) -> None:
         style = self.style()
         if style is not None:
             style.unpolish(self)
             style.polish(self)
         self.update()
+
+    def _set_dual_type_enabled(self, enabled: bool) -> None:
+        if self._is_dual_type == enabled:
+            return
+        self._is_dual_type = enabled
+        self.setProperty("isDualType", enabled)
+        self._repolish_card()
+
+    def _dual_type_visual_data(self, data: dict) -> tuple[bool, tuple[str, str]]:
+        data_is_dual = data.get("is_dual_type")
+        if isinstance(data_is_dual, bool):
+            is_dual = data_is_dual
+        else:
+            is_dual = bool(getattr(self._plugin, "is_dual_type", False))
+        if not is_dual:
+            return False, ("generic", "generic")
+
+        dual_types_raw = data.get("dual_damage_types")
+        if isinstance(dual_types_raw, list | tuple) and len(dual_types_raw) == 2:
+            return True, (str(dual_types_raw[0]), str(dual_types_raw[1]))
+
+        plugin_dual_types = getattr(self._plugin, "dual_damage_types", ("", ""))
+        if isinstance(plugin_dual_types, tuple) and len(plugin_dual_types) == 2:
+            return True, (str(plugin_dual_types[0]), str(plugin_dual_types[1]))
+        return False, ("generic", "generic")
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        super().paintEvent(event)
+        if not self._is_dual_type:
+            return
+
+        width = float(self.width())
+        height = float(self.height())
+        if width <= 2.0 or height <= 2.0:
+            return
+
+        inner = QRectF(1.0, 1.0, width - 2.0, height - 2.0)
+        if inner.width() <= 1.0 or inner.height() <= 1.0:
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setClipRect(inner)
+
+        top_color = color_for_damage_type_id(self._dual_damage_types[0])
+        bottom_color = color_for_damage_type_id(self._dual_damage_types[1])
+        top_color.setAlpha(64)
+        bottom_color.setAlpha(64)
+
+        top_path, bottom_path = self._build_wave_paths(inner)
+        painter.fillPath(top_path, top_color)
+        painter.fillPath(bottom_path, bottom_color)
+        painter.end()
+
+    def _build_wave_paths(self, rect: QRectF) -> tuple[QPainterPath, QPainterPath]:
+        left = rect.left()
+        right = rect.right()
+        top = rect.top()
+        bottom = rect.bottom()
+        points = self._wave_points(rect)
+
+        top_path = QPainterPath()
+        top_path.moveTo(left, top)
+        top_path.lineTo(points[0])
+        for point in points[1:]:
+            top_path.lineTo(point)
+        top_path.lineTo(right, top)
+        top_path.closeSubpath()
+
+        bottom_path = QPainterPath()
+        bottom_path.moveTo(left, bottom)
+        bottom_path.lineTo(points[0])
+        for point in points[1:]:
+            bottom_path.lineTo(point)
+        bottom_path.lineTo(right, bottom)
+        bottom_path.closeSubpath()
+
+        return top_path, bottom_path
+
+    def _wave_points(self, rect: QRectF) -> list[QPointF]:
+        width = max(1.0, rect.width())
+        samples = max(24, int(width / 6.0))
+        baseline = rect.center().y()
+        amplitude = min(self._WAVE_AMPLITUDE_PX, rect.height() * 0.35)
+        angular_frequency = (2.0 * math.pi * self._WAVE_FREQUENCY) / width
+        phase_offset = self._wave_phase * 2.0 * math.pi
+
+        points: list[QPointF] = []
+        for index in range(samples + 1):
+            offset_x = (width * index) / samples
+            x = rect.left() + offset_x
+            y = baseline + amplitude * math.sin(
+                (offset_x * angular_frequency) + phase_offset
+            )
+            points.append(QPointF(x, y))
+        return points
 
     def _request_rebirth(self) -> None:
         if self._on_rebirth is None:
