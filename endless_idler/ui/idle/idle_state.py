@@ -43,6 +43,7 @@ MIN_EXP_GAIN_PER_TICK = 0.0001
 IDLE_BLESSING_STEP_MULTIPLIER = 1.025 ** (1.0 / 6.0)
 SHARD_ROLL_INTERVAL_TICKS = 30
 SHARD_BAR_CYCLE_TICKS = 300
+ANIMATION_CYCLE_TICKS = 45 * 60 * 30
 SHARD_BASE_CHANCE_PERCENT = 0.0001
 SHARD_EXP_SMOOTHING_SECONDS = 60.0
 SHARD_DAMPENER_START_EXP_PER_SECOND = 1000.0
@@ -133,6 +134,7 @@ class IdleGameState(QObject):
         self._tick_count = 0
         self._shared_exp_percentage = max(1, min(95, int(shared_exp_percentage)))
         self._risk_reward_level = max(0, min(150, int(risk_reward_level)))
+        self.animation_cycles: dict[str, int] = {char_id: 0 for char_id in char_ids}
 
         self._char_data: dict[str, dict[str, Any]] = {}
         for char_id in list(
@@ -653,6 +655,10 @@ class IdleGameState(QObject):
         with self._lock:
             self._tick_count += 1
             tick_count = self._tick_count
+            for char_id in self.animation_cycles:
+                self.animation_cycles[char_id] = (
+                    self.animation_cycles[char_id] + 1
+                ) % ANIMATION_CYCLE_TICKS
             dt = float(max(0.0, IDLE_TICK_INTERVAL_SECONDS))
             self._elapsed_seconds += dt
             self._process_blessing_ticks(delta_seconds=dt)
@@ -1100,6 +1106,12 @@ class IdleGameState(QObject):
             if remaining <= 1e-9:
                 remaining = blessing.step_seconds
             return max(0, int(math.ceil(remaining)))
+
+    def get_animation_phase(self, char_id: str) -> float:
+        with self._lock:
+            ticks = max(0, int(self.animation_cycles.get(char_id, 0)))
+            cycle_position = ticks % ANIMATION_CYCLE_TICKS
+            return float(cycle_position) / float(ANIMATION_CYCLE_TICKS)
 
     def export_run_buff_seconds(self) -> tuple[float, float]:
         with self._lock:
