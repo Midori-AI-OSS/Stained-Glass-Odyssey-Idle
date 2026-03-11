@@ -638,6 +638,13 @@ class IdleScreenWidget(QWidget):
             0,
             min(150, self._coerce_int(snapshot.get("risk_reward_level", 0), 0)),
         )
+        inventory = snapshot.get("inventory")
+        if isinstance(inventory, dict):
+            save.inventory = {
+                str(item_id): max(0, int(count))
+                for item_id, count in inventory.items()
+                if isinstance(item_id, str)
+            }
         with self._tick_cooldown_lock:
             save.layout_tick_cooldown_seconds = float(self._tick_cooldown_seconds)
 

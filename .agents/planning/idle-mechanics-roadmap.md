@@ -5,15 +5,14 @@
 This planning doc tracks forward-looking mechanics and unresolved design decisions.
 
 Date captured: 2026-03-05
-Last updated: 2026-03-07
+Last updated: 2026-03-11
 
 ## Planned Mechanics (Target Design)
 
-### Mech 3: Rebirth Shard Drops and Blessing Channeling
+### Mech 3: Rebirth Shard Drops
 
 Planned intent:
 - Rebirths are an additional shard source alongside shard bars.
-- Blessings are activated via character channeling outside normal party assignment.
 
 Locked decisions:
 - Keep both shard sources:
@@ -21,19 +20,12 @@ Locked decisions:
   - rebirth drops
 - Rebirth drop starting concept is 1 in 6, then modified by progression factors.
 - Generic (Luna) rebirth shard outcome is random elemental.
-- Blessing management occurs via Home menu assignment flow.
-- Assigned channeling characters are removed from party assignment while channeling.
 - HP drain was removed from this plan.
-- Channeling now uses Energy drain.
-- Lower Energy means lower background EXP gain.
-- Background gain model:
-  - background characters gain 0.01% of total offsite EXP
-  - processed at 50% tick rate (every other tick)
-- Energy-to-EXP scaling direction is linear from 0 to 100 Energy.
+- Standby EXP gain model:
+  - Standby characters (not in Onsite/Offsite) gain 0.01% of total offsite EXP
+  - processed at 50% tick rate (every other tick, effectively 0.005% per actual tick)
 
 Pending:
-- Exact energy stat schema and persistence.
-- Exact energy drain formula and cadence.
 - Exact rebirth-drop modifier formula (blessings, stars, rebirths, prestige, crit_mod).
 - Exact outcome handling across all type contexts.
 
@@ -130,12 +122,24 @@ Pending:
 - Final star-to-weapon-power mapping for 1-4 weapon parts.
 - Exact shard odds unit conversions and tick-to-time expectations.
 - Exact rebirth drop formula and caps/floors policy.
-- Final energy model details (drain, regen, minimums, persistence fields).
 - Warp implementation sequencing and simulation verification for locked rarity math.
 - Final Upgrade Stone extra-reward math.
 - Final 3-4 star Salvage Dust costs.
 - Final overflow craft-bonus math ordering and payout details.
 - Final weapon-type stat/progression impact model.
+
+Note: Blessing Channeling was removed from Mech 3. Future "upgrade blessings" with weapon parts/shards planned separately.
+
+### Future: Drop Table System
+
+Planned intent:
+- JSON loadable drop tables for rolling loot drops.
+- Easy to update and modify without code changes.
+
+Pending:
+- JSON schema design
+- Table loading infrastructure
+- Integration points with existing systems
 
 ## Notes
 

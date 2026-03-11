@@ -577,11 +577,15 @@ class IdleGameState(QObject):
 
             data["rebirths"] = max(0, int(data.get("rebirths", 0))) + 1
 
+            # Award shard and increment tick counter on rebirth
+            data["shard_bar_ticks"] = data.get("shard_bar_ticks", 0) + 1
+            self._award_shard(data=data)
+
             req_mult = float(data.get("req_multiplier", 1.0))
             lunar_req_mult = self._lunar_exp_requirement_multiplier()
-            data["next_exp"] = (
-                1 * 30 * req_mult * lunar_req_mult
-            ) * self._rng.uniform(0.95, 1.05)
+            data["next_exp"] = (1 * 30 * req_mult * lunar_req_mult) * self._rng.uniform(
+                0.95, 1.05
+            )
             self._apply_offsite_stat_share_to_onsite_hp()
             return True
 
@@ -1292,6 +1296,14 @@ class IdleGameState(QObject):
         with self._lock:
             return self._export_blessings_unlocked()
 
+    def export_inventory(self) -> dict[str, int]:
+        """Return current inventory state for save serialization."""
+        with self._lock:
+            return {
+                str(item_id): max(0, int(count))
+                for item_id, count in self._inventory.items()
+            }
+
     def _export_blessings_unlocked(self) -> dict[str, dict[str, Any]]:
         payload: dict[str, dict[str, Any]] = {}
         persistent_plugins = {
@@ -1350,7 +1362,9 @@ class IdleGameState(QObject):
                 },
             }
 
-    def _export_blessing_runtime_unlocked(self) -> dict[str, dict[str, float | int | bool]]:
+    def _export_blessing_runtime_unlocked(
+        self,
+    ) -> dict[str, dict[str, float | int | bool]]:
         runtime: dict[str, dict[str, float | int | bool]] = {}
         elapsed_total = max(0.0, float(self._elapsed_seconds))
         for plugin in discover_blessing_plugins():
@@ -1426,7 +1440,9 @@ class IdleGameState(QObject):
         with self._lock:
             return self._risk_reward_level
 
-    def _process_blessing_ticks(self, *, delta_seconds: float) -> dict[str, dict[str, Any]]:
+    def _process_blessing_ticks(
+        self, *, delta_seconds: float
+    ) -> dict[str, dict[str, Any]]:
         updated_blessings: dict[str, dict[str, Any]] = dict(self._blessings_data)
 
         for plugin in discover_blessing_plugins():
