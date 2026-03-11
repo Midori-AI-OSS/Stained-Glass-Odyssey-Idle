@@ -27,31 +27,32 @@ def _odyssey_multiplier_formula(steps: int) -> float:
     return 1.025 ** (steps / 6.0)
 
 
-def _format_odyssey_tooltip(steps: int, context: dict) -> str:
+def _format_odyssey_multiplier(multiplier: float) -> str:
+    if abs(multiplier - 1.0) < 0.01:
+        return f"x{multiplier:.6f}"
+    return f"x{multiplier:.4f}"
+
+
+def _format_odyssey_tooltip(steps: int, context: dict[str, object]) -> str:
     """Format tooltip for Odyssey's Blessing."""
-    import time
-
-    session_start = context.get("session_start_time")
-    if session_start is None:
-        return "<b>Odyssey's Blessing</b><br>Session data unavailable"
-
-    elapsed = time.time() - session_start
-    current_steps = int(elapsed // ODYSSEY_STEP_SECONDS)
+    runtime = context.get("runtime", {}) if isinstance(context, dict) else {}
+    if not isinstance(runtime, dict):
+        runtime = {}
+    try:
+        current_steps = max(0, int(runtime.get("steps", steps)))
+    except (TypeError, ValueError):
+        current_steps = max(0, int(steps))
+    try:
+        progress = max(0.0, min(1.0, float(runtime.get("progress", 0.0))))
+    except (TypeError, ValueError):
+        progress = 0.0
     multiplier = _odyssey_multiplier_formula(current_steps)
-    phase = elapsed % ODYSSEY_STEP_SECONDS
-    seconds_to_next = int(ODYSSEY_STEP_SECONDS - phase)
-
-    # Format seconds as MM:SS
-    minutes = seconds_to_next // 60
-    seconds = seconds_to_next % 60
-    time_str = f"{minutes:02d}:{seconds:02d}"
+    bonus_value = _format_odyssey_multiplier(multiplier)
 
     return (
         "<b>Odyssey's Blessing</b><br>"
-        "Grows stronger the longer you play<br><br>"
-        f"Current: <b>x{multiplier:.4f}</b><br>"
-        f"Next blessing in: <b>{time_str}</b><br><br>"
-        f"+{(1.025 ** (1.0 / 6.0) - 1.0) * 100.0:.3f}% every 5 minutes."
+        f"EXP gain: <b>{bonus_value}</b><br>"
+        f"Progress: <b>{progress * 100.0:.1f}%</b>"
     )
 
 

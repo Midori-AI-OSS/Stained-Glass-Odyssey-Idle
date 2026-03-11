@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from dataclasses import field
+from typing import Any
 
 
 def _default_shimmer_formula(seconds_to_next: float) -> float:
@@ -48,7 +49,7 @@ class BlessingPlugin:
     unlock_condition: str | None = None
     is_persistent: bool = True
     save_schema: dict[str, type] = field(default_factory=dict)
-    tooltip_formatter: Callable[[int, dict], str] | None = None
+    tooltip_formatter: Callable[[int, dict[str, Any]], str] | None = None
     shimmer_formula: Callable[[float], float] | None = None
 
     def get_multiplier(self, steps: int) -> float:
@@ -64,33 +65,41 @@ class BlessingPlugin:
             steps = min(steps, self.max_steps)
         return float(self.multiplier_formula(steps))
 
-    def format_tooltip(self, steps: int, context: dict) -> str:
+    def format_tooltip(self, steps: int, context: dict[str, Any]) -> str:
         """Generate tooltip HTML for this blessing.
 
         Args:
             steps: Current step count
             context: Dictionary containing:
                 - save: RunSave instance (for persistent blessings)
-                - session_start_time: float (for session-based blessings)
+                - runtime: {"steps", "progress", "countdown_seconds", "step_seconds"}
 
         Returns:
             HTML string for tooltip display
         """
         if self.tooltip_formatter is not None:
             return self.tooltip_formatter(steps, context)
-        return self._default_tooltip(steps)
+        return self._default_tooltip(steps, context)
 
-    def _default_tooltip(self, steps: int) -> str:
+    def _default_tooltip(self, steps: int, context: dict[str, Any]) -> str:
         """Default tooltip for damage-type blessings."""
-        bonus_pct = (steps * 0.0001) * 100
-        time_to_next = int(self.step_seconds)
-        minutes = time_to_next // 60
-        seconds = time_to_next % 60
-        time_str = f"{minutes:02d}:{seconds:02d}"
+        runtime = context.get("runtime", {}) if isinstance(context, dict) else {}
+        if not isinstance(runtime, dict):
+            runtime = {}
+        try:
+            progress = float(runtime.get("progress", 0.0))
+        except (TypeError, ValueError):
+            progress = 0.0
+        progress = max(0.0, min(1.0, progress))
+        try:
+            current_step = max(0, int(runtime.get("steps", steps)))
+        except (TypeError, ValueError):
+            current_step = max(0, int(steps))
+        bonus_pct = (current_step * 0.0001) * 100
         return (
             f"<b>{self.display_name}</b><br>"
-            f"Current Bonus: <b>+{bonus_pct:.2f}%</b><br>"
-            f"Time to next step: <b>{time_str}</b>"
+            f"EXP gain: <b>+{bonus_pct:.2f}%</b><br>"
+            f"Progress: <b>{progress * 100.0:.1f}%</b>"
         )
 
     def get_shimmer_intensity(self, seconds_to_next: float) -> float:
