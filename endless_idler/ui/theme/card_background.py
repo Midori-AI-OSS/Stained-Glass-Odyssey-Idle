@@ -49,24 +49,25 @@ def _single_type_rules() -> list[str]:
     return rules
 
 
+_KNOWN_DUAL_TYPE_PAIRS = (
+    ("fire", "ice"),
+    ("light", "dark"),
+    ("wind", "lightning"),
+)
+
+
 def _dual_type_rules() -> list[str]:
     rules: list[str] = []
-    dual_ids = tuple(
-        element_id for element_id in _SOLID_BACKGROUNDS if element_id != "generic"
-    )
-    for first in dual_ids:
-        for second in dual_ids:
-            if first == second:
-                continue
-            selectors = _selector_list(f'[dualElementIds="{first},{second}"]')
-            gradient = (
-                "qlineargradient("
-                "x1: 0, y1: 0, x2: 1, y2: 1, "
-                f"stop: 0 {_SOLID_BACKGROUNDS[first]}, "
-                f"stop: 1 {_SOLID_BACKGROUNDS[second]}"
-                ")"
-            )
-            rules.append(f"{selectors} {{ background-color: {gradient}; }}")
+    for first, second in _KNOWN_DUAL_TYPE_PAIRS:
+        selectors = _selector_list(f'[dualElementIds="{first},{second}"]')
+        gradient = (
+            "qlineargradient("
+            "x1: 0, y1: 0, x2: 1, y2: 1, "
+            f"stop: 0 {_SOLID_BACKGROUNDS[first]}, "
+            f"stop: 1 {_SOLID_BACKGROUNDS[second]}"
+            ")"
+        )
+        rules.append(f"{selectors} {{ background-color: {gradient}; }}")
     return rules
 
 
