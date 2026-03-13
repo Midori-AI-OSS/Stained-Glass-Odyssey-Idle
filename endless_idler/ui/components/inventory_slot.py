@@ -2,15 +2,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QEvent
+from PySide6.QtCore import QObject
+from PySide6.QtCore import QSize
+from PySide6.QtCore import QTimer
 from PySide6.QtCore import Qt
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtGui import QPixmap
 from PySide6.QtGui import QResizeEvent
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QSizePolicy
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
@@ -42,6 +48,7 @@ class InventorySlot(QFrame):
         self._quantity = max(1, int(quantity))
         self._icon_path = icon_path
         self._source_pixmap: QPixmap | None = None
+        self._pending_icon_refresh = False
 
         self.setObjectName("InventorySlot")
         self.setProperty("rarityStars", 1)
@@ -77,8 +84,14 @@ class InventorySlot(QFrame):
         self._icon = QLabel(self._art)
         self._icon.setObjectName("InventorySlotIcon")
         self._icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._icon.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Ignored,
+        )
         art_layout.addWidget(self._icon, 1)
         root.addWidget(self._art, 1)
+        self._icon.installEventFilter(self)
+        self._art.installEventFilter(self)
 
         self._name = QLabel(self)
         self._name.setObjectName("InventorySlotName")
@@ -165,13 +178,26 @@ class InventorySlot(QFrame):
         if pixmap.isNull():
             raise ValueError(f"Failed to load inventory icon at {icon_path}.")
         self._source_pixmap = pixmap
-        self._refresh_icon_pixmap()
+        self._schedule_icon_refresh()
         self._count.setText(f"x{self._quantity}")
         self.set_filled(True)
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
-        self._refresh_icon_pixmap()
+        self._schedule_icon_refresh()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        self._schedule_icon_refresh()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched in (self._icon, self._art) and event.type() in (
+            QEvent.Type.Resize,
+            QEvent.Type.Show,
+            QEvent.Type.LayoutRequest,
+        ):
+            self._schedule_icon_refresh()
+        return False
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
@@ -204,11 +230,15 @@ class InventorySlot(QFrame):
             self._icon.clear()
             return
 
-        target = self._icon.contentsRect().size()
-        if target.width() <= 0 or target.height() <= 0:
-            target = self._art.contentsRect().size()
-        if target.width() <= 0 or target.height() <= 0:
+        available = self._icon.contentsRect().size()
+        if available.width() <= 0 or available.height() <= 0:
+            available = self._art.contentsRect().size()
+
+        side = min(available.width(), available.height())
+        if side <= 0:
             return
+
+        target = QSize(side, side)
 
         self._icon.setPixmap(
             self._source_pixmap.scaled(
@@ -217,6 +247,16 @@ class InventorySlot(QFrame):
                 Qt.TransformationMode.SmoothTransformation,
             )
         )
+
+    def _schedule_icon_refresh(self) -> None:
+        if self._pending_icon_refresh:
+            return
+        self._pending_icon_refresh = True
+        QTimer.singleShot(0, self._apply_scheduled_icon_refresh)
+
+    def _apply_scheduled_icon_refresh(self) -> None:
+        self._pending_icon_refresh = False
+        self._refresh_icon_pixmap()
 
 
 def _repolish(widget: QWidget) -> None:

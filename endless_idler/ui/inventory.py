@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from PySide6.QtCore import QEvent
+from PySide6.QtCore import QObject
+from PySide6.QtCore import QTimer
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtGui import QResizeEvent
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QScrollArea
+from PySide6.QtWidgets import QSizePolicy
 from PySide6.QtWidgets import QStackedWidget
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
@@ -117,10 +122,17 @@ class InventoryPage(QWidget):
         detail_icon_col = QVBoxLayout(detail_icon_frame)
         detail_icon_col.setContentsMargins(8, 8, 8, 8)
         detail_icon_col.setSpacing(0)
+        self._detail_icon_frame = detail_icon_frame
         self._detail_icon = QLabel(detail_icon_frame)
         self._detail_icon.setObjectName("InventoryDetailIcon")
         self._detail_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._detail_icon.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Ignored,
+        )
         detail_icon_col.addWidget(self._detail_icon, 1)
+        self._detail_icon.installEventFilter(self)
+        self._detail_icon_frame.installEventFilter(self)
         detail_col.addWidget(detail_icon_frame, 0)
 
         self._detail_hint = QLabel("Select a card to view its lore entry.", detail)
@@ -132,6 +144,7 @@ class InventoryPage(QWidget):
         self._slots: list[InventorySlot] = []
         self._selected_slot: InventorySlot | None = None
         self._detail_source_pixmap: QPixmap | None = None
+        self._pending_detail_refresh = False
 
         self.refresh_from_save()
 
@@ -198,12 +211,25 @@ class InventoryPage(QWidget):
         if pixmap.isNull():
             raise ValueError(f"Failed to load inventory icon at {slot.icon_path}.")
         self._detail_source_pixmap = pixmap
-        self._refresh_detail_icon_pixmap()
+        self._schedule_detail_icon_refresh()
         self._detail_hint.setText(slot.flavor_text)
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
-        self._refresh_detail_icon_pixmap()
+        self._schedule_detail_icon_refresh()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        self._schedule_detail_icon_refresh()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched in (self._detail_icon, self._detail_icon_frame) and event.type() in (
+            QEvent.Type.Resize,
+            QEvent.Type.Show,
+            QEvent.Type.LayoutRequest,
+        ):
+            self._schedule_detail_icon_refresh()
+        return False
 
     def _refresh_detail_icon_pixmap(self) -> None:
         if self._detail_source_pixmap is None:
@@ -211,6 +237,8 @@ class InventoryPage(QWidget):
             return
 
         target = self._detail_icon.contentsRect().size()
+        if target.width() <= 0 or target.height() <= 0:
+            target = self._detail_icon_frame.contentsRect().size()
         if target.width() <= 0 or target.height() <= 0:
             return
 
@@ -221,3 +249,13 @@ class InventoryPage(QWidget):
                 Qt.TransformationMode.SmoothTransformation,
             )
         )
+
+    def _schedule_detail_icon_refresh(self) -> None:
+        if self._pending_detail_refresh:
+            return
+        self._pending_detail_refresh = True
+        QTimer.singleShot(0, self._apply_scheduled_detail_refresh)
+
+    def _apply_scheduled_detail_refresh(self) -> None:
+        self._pending_detail_refresh = False
+        self._refresh_detail_icon_pixmap()
