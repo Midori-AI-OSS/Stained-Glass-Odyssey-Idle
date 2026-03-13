@@ -17,7 +17,9 @@ class IceShard(Item):
 
     id: str = "ice_shard"
     name: str = "Ice Shard"
-    description: str = "A crystalline shard that condenses concentrated ice-aligned energy."
+    description: str = (
+        "A crystalline shard that condenses concentrated ice-aligned energy."
+    )
     category: ItemCategory = ItemCategory.MATERIAL
-    rarity: Rarity = Rarity.UNCOMMON
+    rarity: Rarity = Rarity.EPIC
     image_pool: str = "ice"

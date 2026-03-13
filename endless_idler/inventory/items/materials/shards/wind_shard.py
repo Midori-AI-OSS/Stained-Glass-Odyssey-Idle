@@ -17,7 +17,9 @@ class WindShard(Item):
 
     id: str = "wind_shard"
     name: str = "Wind Shard"
-    description: str = "A feather-light shard carrying concentrated wind-aligned energy."
+    description: str = (
+        "A feather-light shard carrying concentrated wind-aligned energy."
+    )
     category: ItemCategory = ItemCategory.MATERIAL
-    rarity: Rarity = Rarity.UNCOMMON
+    rarity: Rarity = Rarity.EPIC
     image_pool: str = "wind"
