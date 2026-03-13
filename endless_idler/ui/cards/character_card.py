@@ -585,7 +585,7 @@ class IdleCharacterCard(QFrame):
     def eventFilter(self, watched: object, event: object) -> bool:
         if hasattr(event, "type") and event.type() == QEvent.Type.Enter:
             self._show_tooltip()
-        return super().eventFilter(event)
+        return super().eventFilter(watched, event)
 
     def _show_tooltip(self) -> None:
         if not self._tooltip_html:
