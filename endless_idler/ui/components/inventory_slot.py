@@ -98,7 +98,7 @@ class InventorySlot(QFrame):
         footer = QWidget(self)
         footer.setObjectName("InventorySlotFooter")
         footer_row = QHBoxLayout(footer)
-        footer_row.setContentsMargins(0, 0, 0, 0)
+        footer_row.setContentsMargins(0, 14, 0, 0)
         footer_row.setSpacing(6)
 
         pip_row = QWidget(footer)
