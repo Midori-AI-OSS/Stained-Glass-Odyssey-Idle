@@ -30,12 +30,11 @@ from endless_idler.run_rules import apply_idle_party_heal
 from endless_idler.run_rules import start_idle_heal_timer
 from endless_idler.tick_runtime import SharedTickRuntime
 from endless_idler.tick_runtime import TickSnapshot
+from endless_idler.ui.cards import IdleCharacterCard
+from endless_idler.ui.cards import compute_stat_maxima
 from endless_idler.ui.idle.widgets import IdleArena
-from endless_idler.ui.idle.widgets import IdleOffsiteCard
 from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
 from endless_idler.ui.idle.idle_state import IdleGameState
-from endless_idler.ui.onsite import IdleOnsiteCharacterCard
-from endless_idler.ui.onsite import compute_stat_maxima
 
 
 def build_prestige_confirmation_html(
@@ -175,8 +174,8 @@ class IdleScreenWidget(QWidget):
             blessings_data=dict(getattr(self._save, "blessings", {}) or {}),
         )
 
-        self._onsite_cards: list[IdleOnsiteCharacterCard] = []
-        self._offsite_cards: list[IdleOffsiteCard] = []
+        self._onsite_cards: list[IdleCharacterCard] = []
+        self._offsite_cards: list[IdleCharacterCard] = []
         self._allow_shutdown_persist = True
 
         root = QVBoxLayout()
@@ -222,7 +221,8 @@ class IdleScreenWidget(QWidget):
                 continue
 
             stack_count = int(self._stacks.get(char_id, 1))
-            card = IdleOnsiteCharacterCard(
+            card = IdleCharacterCard(
+                context="onsite",
                 char_id=char_id,
                 plugin=plugin,
                 idle_state=self._idle_state,
@@ -249,7 +249,8 @@ class IdleScreenWidget(QWidget):
                 continue
 
             stack_count = int(self._stacks.get(char_id, 1))
-            card = IdleOffsiteCard(
+            card = IdleCharacterCard(
+                context="offsite",
                 char_id=char_id,
                 plugin=plugin,
                 idle_state=self._idle_state,
@@ -423,9 +424,7 @@ class IdleScreenWidget(QWidget):
         self._rr_slider.setValue(rr_level)
 
     def _refresh_character_cards(self) -> None:
-        snapshots: list[
-            tuple[IdleOnsiteCharacterCard, dict[str, object], Stats, float]
-        ] = []
+        snapshots: list[tuple[IdleCharacterCard, dict[str, object], Stats, float]] = []
         party_stats: list[Stats] = []
         for card in self._onsite_cards:
             snapshot = card.snapshot()

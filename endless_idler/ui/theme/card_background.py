@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 
-_CARD_SELECTORS = (
-    "QFrame#onsiteCharacterCard",
-    "QFrame#idleOffsiteCard",
-)
+_CARD_SELECTORS = ("QFrame#idleCharacterCard",)
 
 _SOLID_BACKGROUNDS: dict[str, str] = {
     "generic": "rgba(255, 255, 255, 10)",
