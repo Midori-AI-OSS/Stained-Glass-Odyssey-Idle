@@ -21,6 +21,9 @@ from endless_idler.ui.theme.idle_character_card import (
 from endless_idler.ui.theme.idle_screen_widget import (
     STYLESHEET as IDLE_SCREEN_WIDGET_STYLESHEET,
 )
+from endless_idler.ui.theme.inventory_widget import (
+    STYLESHEET as INVENTORY_WIDGET_STYLESHEET,
+)
 from endless_idler.ui.theme.layout_screen_widget import (
     STYLESHEET as LAYOUT_SCREEN_WIDGET_STYLESHEET,
 )
@@ -51,6 +54,7 @@ def build_stained_glass_stylesheet() -> str:
         IDLE_CHARACTER_CARD_STYLESHEET,
         IDLE_SCREEN_WIDGET_STYLESHEET,
         IDLE_BLESSING_METER_WIDGET_STYLESHEET,
+        INVENTORY_WIDGET_STYLESHEET,
         LAYOUT_SCREEN_WIDGET_STYLESHEET,
         PARTY_HP_HEADER_STYLESHEET,
         PROGRESS_BAR_STYLESHEET,

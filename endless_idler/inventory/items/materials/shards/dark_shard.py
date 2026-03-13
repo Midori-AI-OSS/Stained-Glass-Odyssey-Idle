@@ -19,5 +19,5 @@ class DarkShard(Item):
     name: str = "Dark Shard"
     description: str = "A shadowed shard that binds dense dark-aligned energy."
     category: ItemCategory = ItemCategory.MATERIAL
-    rarity: Rarity = Rarity.UNCOMMON
+    rarity: Rarity = Rarity.EPIC
     image_pool: str = "dark"

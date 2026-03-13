@@ -19,5 +19,5 @@ class LightShard(Item):
     name: str = "Light Shard"
     description: str = "A radiant shard that stores focused light-aligned energy."
     category: ItemCategory = ItemCategory.MATERIAL
-    rarity: Rarity = Rarity.UNCOMMON
+    rarity: Rarity = Rarity.EPIC
     image_pool: str = "light"

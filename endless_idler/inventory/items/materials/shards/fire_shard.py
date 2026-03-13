@@ -19,5 +19,5 @@ class FireShard(Item):
     name: str = "Fire Shard"
     description: str = "A refined shard that channels volatile fire-aligned energy."
     category: ItemCategory = ItemCategory.MATERIAL
-    rarity: Rarity = Rarity.UNCOMMON
+    rarity: Rarity = Rarity.EPIC
     image_pool: str = "fire"

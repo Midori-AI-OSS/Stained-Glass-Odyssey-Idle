@@ -31,6 +31,7 @@ from endless_idler.ui.home import HomePage
 from endless_idler.ui.idle import IdleScreenWidget
 from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
 from endless_idler.ui.idle.idle_state import IdleGameState
+from endless_idler.ui.inventory import InventoryPage
 from endless_idler.ui.layout import LayoutScreenWidget
 from endless_idler.ui.lucide_icons import lucide_icon
 from endless_idler.ui.radio import RadioController
@@ -42,6 +43,7 @@ class MainMenuWindow(QMainWindow):
     APP_TITLE = "Stained Glass Odyssey Idle"
     _PAGE_HOME = "home"
     _PAGE_IDLE = "idle"
+    _PAGE_INVENTORY = "inventory"
     _PAGE_LAYOUT = "layout"
     _PAGE_SETTINGS = "settings"
 
@@ -127,10 +129,11 @@ class MainMenuWindow(QMainWindow):
             )
         )
         topbar_layout.addWidget(
-            self._make_stub_button(
+            self._make_nav_button(
                 label="Inventory",
                 icon_name="backpack",
-                on_click=self._stub_inventory,
+                page_key=self._PAGE_INVENTORY,
+                on_click=self._show_inventory,
             )
         )
         topbar_layout.addWidget(
@@ -175,6 +178,7 @@ class MainMenuWindow(QMainWindow):
         self._layout_screen = LayoutScreenWidget(
             save_store=self._save_store, parent=self
         )
+        self._inventory_screen = InventoryPage(save_store=self._save_store)
         self._settings_screen = SettingsPage(self)
         self._settings_screen.settings_changed.connect(self._on_settings_changed)
         self._settings_screen.save_now_requested.connect(self._on_save_now_requested)
@@ -188,6 +192,7 @@ class MainMenuWindow(QMainWindow):
 
         self._stack.addWidget(self._home_screen)
         self._stack.addWidget(self._layout_screen)
+        self._stack.addWidget(self._inventory_screen)
         self._stack.addWidget(self._idle_placeholder)
         self._stack.addWidget(self._settings_screen)
 
@@ -286,6 +291,11 @@ class MainMenuWindow(QMainWindow):
     def _show_layout(self) -> None:
         self._stack.setCurrentWidget(self._layout_screen)
         self._set_active_nav(self._PAGE_LAYOUT)
+
+    def _show_inventory(self) -> None:
+        self._inventory_screen.refresh_from_save()
+        self._stack.setCurrentWidget(self._inventory_screen)
+        self._set_active_nav(self._PAGE_INVENTORY)
 
     def _show_settings(self) -> None:
         _ = self._ensure_radio_controller()
@@ -799,9 +809,6 @@ class MainMenuWindow(QMainWindow):
 
     def _stub_warp(self) -> None:
         self._show_not_implemented("Warp")
-
-    def _stub_inventory(self) -> None:
-        self._show_not_implemented("Inventory")
 
     def _stub_guidebook(self) -> None:
         self._show_not_implemented("Guidebook")

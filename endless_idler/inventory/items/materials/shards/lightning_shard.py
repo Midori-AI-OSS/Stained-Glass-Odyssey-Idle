@@ -19,5 +19,5 @@ class LightningShard(Item):
     name: str = "Lightning Shard"
     description: str = "A charged shard crackling with lightning-aligned energy."
     category: ItemCategory = ItemCategory.MATERIAL
-    rarity: Rarity = Rarity.UNCOMMON
+    rarity: Rarity = Rarity.EPIC
     image_pool: str = "lightning"
