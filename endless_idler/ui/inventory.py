@@ -212,10 +212,12 @@ class InventoryPage(QWidget):
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
+        self._sync_detail_art_square()
         self._schedule_detail_icon_refresh()
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
+        self._sync_detail_art_square()
         self._schedule_detail_icon_refresh()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
@@ -224,6 +226,7 @@ class InventoryPage(QWidget):
             QEvent.Type.Show,
             QEvent.Type.LayoutRequest,
         ):
+            self._sync_detail_art_square()
             self._schedule_detail_icon_refresh()
         return False
 
@@ -247,6 +250,15 @@ class InventoryPage(QWidget):
                 Qt.TransformationMode.SmoothTransformation,
             )
         )
+
+    def _sync_detail_art_square(self) -> None:
+        if not isValid(self._detail_icon_frame):
+            return
+        side = self._detail_icon_frame.width()
+        if side <= 0:
+            return
+        if self._detail_icon_frame.minimumHeight() != side:
+            self._detail_icon_frame.setMinimumHeight(side)
 
     def _schedule_detail_icon_refresh(self) -> None:
         if self._pending_detail_refresh:
