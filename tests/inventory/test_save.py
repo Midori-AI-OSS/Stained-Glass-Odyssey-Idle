@@ -7,6 +7,7 @@ from typing import cast
 
 from endless_idler.save import RunSave
 from endless_idler.save import SaveManager
+from endless_idler.save import STANDBY_SLOTS
 from endless_idler.save import sanitize_save_characters
 
 
@@ -83,3 +84,22 @@ def test_sanitize_save_characters_preserves_only_allowed_items() -> None:
     sanitized = sanitize_save_characters(save=save, allowed_char_ids={"ally"})
 
     assert sanitized.inventory == {"health_potion": 5}
+
+
+def test_sanitize_reserved_standby_slot_does_not_prune_character_data() -> None:
+    standby: list[str | None] = [None] * STANDBY_SLOTS
+    standby[0] = "ally"
+    save = RunSave(
+        standby=standby,
+        character_progress={"ally": {"level": 7, "exp": 56.0, "next_exp": 90.0}},
+        character_stats={"ally": {"attack": 42.0}},
+        character_initial_stats={"ally": {"attack": 21.0}},
+        character_deaths={"ally": 3},
+    )
+
+    sanitized = sanitize_save_characters(save=save, allowed_char_ids={"someone_else"})
+
+    assert "ally" in sanitized.character_progress
+    assert "ally" in sanitized.character_stats
+    assert "ally" in sanitized.character_initial_stats
+    assert sanitized.character_deaths.get("ally") == 3

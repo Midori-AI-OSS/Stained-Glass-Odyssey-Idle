@@ -44,6 +44,7 @@ from endless_idler.combat.party_stats import apply_base_stat_multiplier
 from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.save import OFFSITE_SLOTS
 from endless_idler.save import ONSITE_SLOTS
+from endless_idler.save import STANDBY_RESERVED_INDICES
 from endless_idler.save import STANDBY_SLOTS
 from endless_idler.run_save_store import RunSaveStore
 from endless_idler.ui.party_builder_common import build_character_stats_tooltip
@@ -783,6 +784,10 @@ class LayoutScreenWidget(QWidget):
             return self._save.offsite
         raise ValueError(f"Unsupported lane: {lane}")
 
+    @staticmethod
+    def _is_reserved_standby_index(index: int) -> bool:
+        return index in STANDBY_RESERVED_INDICES
+
     def _standby_ids(self) -> list[str]:
         ids: list[str] = []
         for index in range(1, max(1, STANDBY_SLOTS - 1)):
@@ -1077,6 +1082,13 @@ class LayoutScreenWidget(QWidget):
         except (TypeError, ValueError):
             return
 
+        if target_lane == "standby":
+            if self._is_reserved_standby_index(target_index):
+                self._set_status("Standby edge slots are reserved.")
+            return
+        if target_lane not in {"onsite", "offsite"}:
+            return
+
         changed = False
         if drag_data.source_lane == "unassigned":
             changed = self._move_from_unassigned_to_slot(
@@ -1120,6 +1132,10 @@ class LayoutScreenWidget(QWidget):
         target_lane: str,
         target_index: int,
     ) -> bool:
+        if source_lane not in {"onsite", "offsite"}:
+            return False
+        if target_lane not in {"onsite", "offsite"}:
+            return False
         source_list = self._lane_list(source_lane)
         target_list = self._lane_list(target_lane)
         if source_index < 0 or source_index >= len(source_list):
@@ -1145,6 +1161,8 @@ class LayoutScreenWidget(QWidget):
         target_lane: str,
         target_index: int,
     ) -> bool:
+        if target_lane not in {"onsite", "offsite"}:
+            return False
         target_list = self._lane_list(target_lane)
         if target_index < 0 or target_index >= len(target_list):
             return False

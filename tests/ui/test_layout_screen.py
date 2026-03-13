@@ -68,7 +68,7 @@ def _plugin(
 
 def _save_with_unassigned(*char_ids: str) -> RunSave:
     save = RunSave(layout_owned_ordering="rarity_desc")
-    standby = [None] * STANDBY_SLOTS
+    standby: list[str | None] = [None] * STANDBY_SLOTS
     for offset, char_id in enumerate(char_ids, start=1):
         if offset >= STANDBY_SLOTS - 1:
             break
@@ -131,6 +131,77 @@ def test_layout_screen_move_and_autosave_sets_tick_cooldown(monkeypatch) -> None
         == layout_module.LAYOUT_TICK_COOLDOWN_SECONDS
     )
     assert fake_store.persist_calls >= 1
+    screen.deleteLater()
+
+
+def test_layout_standby_round_trip_preserves_character_progress_and_stats(
+    monkeypatch,
+) -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    save = RunSave()
+    save.onsite[0] = "lady_darkness"
+    save.character_progress["lady_darkness"] = {
+        "level": 8,
+        "exp": 120.0,
+        "next_exp": 180.0,
+    }
+    save.character_stats["lady_darkness"] = {"attack": 44.0}
+    fake_store = _FakeSaveStore(save)
+    monkeypatch.setattr(
+        layout_module,
+        "discover_character_plugins",
+        lambda: [
+            _plugin("lady_darkness", "onsite", 5),
+        ],
+    )
+
+    screen = LayoutScreenWidget(save_store=fake_store)
+    assert screen._move_slot_to_unassigned(source_lane="onsite", source_index=0)
+    assert screen._move_from_unassigned_to_slot(
+        char_id="lady_darkness",
+        target_lane="offsite",
+        target_index=0,
+    )
+
+    assert screen._save.offsite[0] == "lady_darkness"
+    assert screen._save.character_progress["lady_darkness"]["level"] == 8
+    assert screen._save.character_stats["lady_darkness"]["attack"] == 44.0
+    screen.deleteLater()
+
+
+def test_layout_rejects_drop_into_reserved_standby_index(monkeypatch) -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    fake_store = _FakeSaveStore(_save_with_unassigned("lady_darkness"))
+    monkeypatch.setattr(
+        layout_module,
+        "discover_character_plugins",
+        lambda: [
+            _plugin("lady_darkness", "onsite", 5),
+        ],
+    )
+
+    screen = LayoutScreenWidget(save_store=fake_store)
+    before_onsite = list(screen._save.onsite)
+    before_offsite = list(screen._save.offsite)
+    before_standby = list(screen._save.standby)
+
+    screen._on_slot_drop(
+        {
+            "target_lane": "standby",
+            "target_index": 0,
+            "drag_data": layout_module._DragData(
+                char_id="lady_darkness",
+                source_lane="unassigned",
+                source_index=0,
+            ),
+        }
+    )
+
+    assert screen._save.onsite == before_onsite
+    assert screen._save.offsite == before_offsite
+    assert screen._save.standby == before_standby
     screen.deleteLater()
 
 

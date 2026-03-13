@@ -42,6 +42,7 @@ DEFAULT_LAYOUT_OWNED_ORDERING = "save_order"
 ONSITE_SLOTS = 4
 OFFSITE_SLOTS = 6
 STANDBY_SLOTS = 10
+STANDBY_RESERVED_INDICES = frozenset({0, max(0, STANDBY_SLOTS - 1)})
 BAR_SLOTS = 6
 _LAYOUT_OWNED_ORDERING_VALUES = frozenset(
     {
@@ -440,6 +441,17 @@ def sanitize_save_characters(*, save: RunSave, allowed_char_ids: set[str]) -> Ru
     allowed = {
         str(char_id).strip() for char_id in allowed_char_ids if str(char_id).strip()
     }
+
+    reserved_standby_ids = {
+        cleaned
+        for index, item in enumerate(list(save.standby[:STANDBY_SLOTS]))
+        if index in STANDBY_RESERVED_INDICES
+        for cleaned in [str(item).strip() if item else ""]
+        if cleaned
+    }
+
+    allowed_or_reserved = allowed | reserved_standby_ids
+
     if not allowed:
         return _normalized_save(save)
 
@@ -464,25 +476,33 @@ def sanitize_save_characters(*, save: RunSave, allowed_char_ids: set[str]) -> Ru
 
     save.standby = sanitize_slots(list(save.standby))
 
-    save.stacks = {key: value for key, value in save.stacks.items() if key in allowed}
+    save.stacks = {
+        key: value for key, value in save.stacks.items() if key in allowed_or_reserved
+    }
     save.inventory = {
         key: value
         for key, value in save.inventory.items()
         if key in get_item_ids() and value > 0
     }
     save.character_progress = {
-        key: value for key, value in save.character_progress.items() if key in allowed
+        key: value
+        for key, value in save.character_progress.items()
+        if key in allowed_or_reserved
     }
     save.character_stats = {
-        key: value for key, value in save.character_stats.items() if key in allowed
+        key: value
+        for key, value in save.character_stats.items()
+        if key in allowed_or_reserved
     }
     save.character_initial_stats = {
         key: value
         for key, value in save.character_initial_stats.items()
-        if key in allowed
+        if key in allowed_or_reserved
     }
     save.character_deaths = {
-        key: value for key, value in save.character_deaths.items() if key in allowed
+        key: value
+        for key, value in save.character_deaths.items()
+        if key in allowed_or_reserved
     }
 
     return _normalized_save(save)
