@@ -131,12 +131,18 @@ QLabel#InventorySlotIcon {
     background: transparent;
 }
 
+QFrame#InventorySlotNameContainer {
+    background-color: rgba(255, 255, 255, 12);
+    border: 1px solid rgba(255, 255, 255, 22);
+    border-radius: 0px;
+}
+
 QLabel#InventorySlotName {
     background: transparent;
     color: rgba(245, 247, 252, 235);
     font-size: 12px;
     font-weight: 670;
-    min-height: 30px;
+    min-height: 0px;
 }
 
 QFrame#InventoryStarPip {

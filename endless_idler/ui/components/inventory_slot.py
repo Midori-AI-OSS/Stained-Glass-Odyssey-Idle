@@ -14,6 +14,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import QFrame
+from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QVBoxLayout
@@ -56,11 +57,11 @@ class InventorySlot(QFrame):
         self.setProperty("slotFilled", True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedSize(156, 202)
+        self.setFixedSize(156, 214)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(6)
+        root.setSpacing(0)
 
         header = QWidget(self)
         header.setObjectName("InventorySlotHeader")
@@ -68,50 +69,51 @@ class InventorySlot(QFrame):
         header_row.setContentsMargins(0, 0, 0, 0)
         header_row.setSpacing(6)
 
+        pip_row = QWidget(header)
+        self._pip_layout = QHBoxLayout(pip_row)
+        self._pip_layout.setContentsMargins(0, 0, 0, 0)
+        self._pip_layout.setSpacing(3)
+        header_row.addWidget(pip_row, 0)
+
         header_row.addStretch(1)
 
         self._category_badge = QLabel(header)
         self._category_badge.setObjectName("InventorySlotCategoryBadge")
         header_row.addWidget(self._category_badge, 0)
         root.addWidget(header, 0)
+        root.addSpacing(4)
 
         self._art = QFrame(self)
         self._art.setObjectName("InventorySlotArt")
-        art_layout = QVBoxLayout(self._art)
+        art_layout = QGridLayout(self._art)
         art_layout.setContentsMargins(6, 6, 6, 6)
         art_layout.setSpacing(0)
+
+        self._count = QLabel(self._art)
+        self._count.setObjectName("InventorySlotCount")
+        self._count.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._icon = QLabel(self._art)
         self._icon.setObjectName("InventorySlotIcon")
         self._icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        art_layout.addWidget(self._icon, 1)
+        art_layout.addWidget(self._icon, 0, 0)
         root.addWidget(self._art, 1)
         self._icon.installEventFilter(self)
         self._art.installEventFilter(self)
+        root.addSpacing(12)
 
-        self._name = QLabel(self)
+        self._name_container = QFrame(self)
+        self._name_container.setObjectName("InventorySlotNameContainer")
+        name_layout = QHBoxLayout(self._name_container)
+        name_layout.setContentsMargins(6, 2, 6, 2)
+        name_layout.setSpacing(0)
+
+        self._name = QLabel(self._name_container)
         self._name.setObjectName("InventorySlotName")
-        self._name.setWordWrap(True)
+        self._name.setWordWrap(False)
         self._name.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        root.addWidget(self._name, 0)
-
-        footer = QWidget(self)
-        footer.setObjectName("InventorySlotFooter")
-        footer_row = QHBoxLayout(footer)
-        footer_row.setContentsMargins(0, 14, 0, 0)
-        footer_row.setSpacing(6)
-
-        pip_row = QWidget(footer)
-        self._pip_layout = QHBoxLayout(pip_row)
-        self._pip_layout.setContentsMargins(0, 0, 0, 0)
-        self._pip_layout.setSpacing(3)
-        footer_row.addWidget(pip_row, 1)
-
-        self._count = QLabel(footer)
-        self._count.setObjectName("InventorySlotCount")
-        self._count.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        footer_row.addWidget(self._count, 0)
-        root.addWidget(footer, 0)
+        name_layout.addWidget(self._name, 1)
+        root.addWidget(self._name_container, 0)
 
         self.set_rarity_stars(rarity_stars)
         self._name.setText(item_name)
@@ -176,6 +178,7 @@ class InventorySlot(QFrame):
         self._source_pixmap = pixmap
         self._schedule_icon_refresh()
         self._count.setText(f"x{self._quantity}")
+        self._position_count_badge()
         self.set_filled(True)
 
     def resizeEvent(self, event: QResizeEvent) -> None:
@@ -248,6 +251,20 @@ class InventorySlot(QFrame):
                 Qt.TransformationMode.SmoothTransformation,
             )
         )
+        self._position_count_badge()
+
+    def _position_count_badge(self) -> None:
+        if not isValid(self._count) or not isValid(self._art):
+            return
+        hint = self._count.sizeHint()
+        if hint.width() <= 0 or hint.height() <= 0:
+            return
+        self._count.resize(hint)
+        rect = self._art.contentsRect()
+        x = rect.x() + rect.width() - hint.width() - 8
+        y = rect.y() + 8
+        self._count.move(x, y)
+        self._count.raise_()
 
     def _sync_art_square(self) -> None:
         if not isValid(self._art):
@@ -255,8 +272,9 @@ class InventorySlot(QFrame):
         side = self._art.width()
         if side <= 0:
             return
-        if self._art.minimumHeight() != side:
+        if self._art.minimumHeight() != side or self._art.maximumHeight() != side:
             self._art.setMinimumHeight(side)
+            self._art.setMaximumHeight(side)
 
     def _schedule_icon_refresh(self) -> None:
         if self._pending_icon_refresh:
