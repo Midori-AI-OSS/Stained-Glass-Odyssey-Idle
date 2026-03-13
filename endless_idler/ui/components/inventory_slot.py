@@ -16,9 +16,9 @@ from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QSizePolicy
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
+from shiboken6 import isValid
 
 
 class InventorySlot(QFrame):
@@ -84,10 +84,6 @@ class InventorySlot(QFrame):
         self._icon = QLabel(self._art)
         self._icon.setObjectName("InventorySlotIcon")
         self._icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._icon.setSizePolicy(
-            QSizePolicy.Policy.Ignored,
-            QSizePolicy.Policy.Ignored,
-        )
         art_layout.addWidget(self._icon, 1)
         root.addWidget(self._art, 1)
         self._icon.installEventFilter(self)
@@ -226,6 +222,8 @@ class InventorySlot(QFrame):
         self._pip_layout.addStretch(1)
 
     def _refresh_icon_pixmap(self) -> None:
+        if not isValid(self._icon) or not isValid(self._art):
+            return
         if self._source_pixmap is None:
             self._icon.clear()
             return
@@ -256,6 +254,8 @@ class InventorySlot(QFrame):
 
     def _apply_scheduled_icon_refresh(self) -> None:
         self._pending_icon_refresh = False
+        if not isValid(self):
+            return
         self._refresh_icon_pixmap()
 
 

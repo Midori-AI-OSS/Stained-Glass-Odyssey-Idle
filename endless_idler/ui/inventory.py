@@ -12,10 +12,10 @@ from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QScrollArea
-from PySide6.QtWidgets import QSizePolicy
 from PySide6.QtWidgets import QStackedWidget
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
+from shiboken6 import isValid
 
 from endless_idler.inventory.presentation import build_owned_inventory_items
 from endless_idler.run_save_store import RunSaveStore
@@ -126,10 +126,6 @@ class InventoryPage(QWidget):
         self._detail_icon = QLabel(detail_icon_frame)
         self._detail_icon.setObjectName("InventoryDetailIcon")
         self._detail_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._detail_icon.setSizePolicy(
-            QSizePolicy.Policy.Ignored,
-            QSizePolicy.Policy.Ignored,
-        )
         detail_icon_col.addWidget(self._detail_icon, 1)
         self._detail_icon.installEventFilter(self)
         self._detail_icon_frame.installEventFilter(self)
@@ -232,6 +228,8 @@ class InventoryPage(QWidget):
         return False
 
     def _refresh_detail_icon_pixmap(self) -> None:
+        if not isValid(self._detail_icon) or not isValid(self._detail_icon_frame):
+            return
         if self._detail_source_pixmap is None:
             self._detail_icon.clear()
             return
@@ -258,4 +256,6 @@ class InventoryPage(QWidget):
 
     def _apply_scheduled_detail_refresh(self) -> None:
         self._pending_detail_refresh = False
+        if not isValid(self):
+            return
         self._refresh_detail_icon_pixmap()
