@@ -30,12 +30,11 @@ from endless_idler.run_rules import apply_idle_party_heal
 from endless_idler.run_rules import start_idle_heal_timer
 from endless_idler.tick_runtime import SharedTickRuntime
 from endless_idler.tick_runtime import TickSnapshot
+from endless_idler.ui.cards import IdleCharacterCard
+from endless_idler.ui.cards import compute_stat_maxima
 from endless_idler.ui.idle.widgets import IdleArena
-from endless_idler.ui.idle.widgets import IdleOffsiteCard
 from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
 from endless_idler.ui.idle.idle_state import IdleGameState
-from endless_idler.ui.onsite import IdleOnsiteCharacterCard
-from endless_idler.ui.onsite import compute_stat_maxima
 
 
 def build_prestige_confirmation_html(
@@ -131,6 +130,7 @@ class IdleScreenWidget(QWidget):
 
         onsite = [str(item) for item in self._save.onsite if item]
         offsite = [str(item) for item in self._save.offsite if item]
+        standby = [str(item) for item in self._save.standby if item]
         stacks = dict(self._save.stacks)
         party_level = int(self._save.party_level)
 
@@ -153,6 +153,7 @@ class IdleScreenWidget(QWidget):
         self._idle_state = idle_state or IdleGameState(
             char_ids=onsite,
             offsite_ids=offsite,
+            standby_ids=standby,
             party_level=self._party_level,
             stacks=self._stacks,
             plugins_by_id=plugins_by_id,
@@ -173,8 +174,8 @@ class IdleScreenWidget(QWidget):
             blessings_data=dict(getattr(self._save, "blessings", {}) or {}),
         )
 
-        self._onsite_cards: list[IdleOnsiteCharacterCard] = []
-        self._offsite_cards: list[IdleOffsiteCard] = []
+        self._onsite_cards: list[IdleCharacterCard] = []
+        self._offsite_cards: list[IdleCharacterCard] = []
         self._allow_shutdown_persist = True
 
         root = QVBoxLayout()
@@ -220,7 +221,8 @@ class IdleScreenWidget(QWidget):
                 continue
 
             stack_count = int(self._stacks.get(char_id, 1))
-            card = IdleOnsiteCharacterCard(
+            card = IdleCharacterCard(
+                context="onsite",
                 char_id=char_id,
                 plugin=plugin,
                 idle_state=self._idle_state,
@@ -247,7 +249,8 @@ class IdleScreenWidget(QWidget):
                 continue
 
             stack_count = int(self._stacks.get(char_id, 1))
-            card = IdleOffsiteCard(
+            card = IdleCharacterCard(
+                context="offsite",
                 char_id=char_id,
                 plugin=plugin,
                 idle_state=self._idle_state,
@@ -421,9 +424,7 @@ class IdleScreenWidget(QWidget):
         self._rr_slider.setValue(rr_level)
 
     def _refresh_character_cards(self) -> None:
-        snapshots: list[
-            tuple[IdleOnsiteCharacterCard, dict[str, object], Stats, float]
-        ] = []
+        snapshots: list[tuple[IdleCharacterCard, dict[str, object], Stats, float]] = []
         party_stats: list[Stats] = []
         for card in self._onsite_cards:
             snapshot = card.snapshot()
@@ -638,6 +639,13 @@ class IdleScreenWidget(QWidget):
             0,
             min(150, self._coerce_int(snapshot.get("risk_reward_level", 0), 0)),
         )
+        inventory = snapshot.get("inventory")
+        if isinstance(inventory, dict):
+            save.inventory = {
+                str(item_id): max(0, int(count))
+                for item_id, count in inventory.items()
+                if isinstance(item_id, str)
+            }
         with self._tick_cooldown_lock:
             save.layout_tick_cooldown_seconds = float(self._tick_cooldown_seconds)
 

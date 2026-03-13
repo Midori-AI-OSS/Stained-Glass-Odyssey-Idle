@@ -46,7 +46,7 @@ State management for idle/offsite characters:
 
 ## Test Coverage
 
-- **tests/test_mech2_shards.py**: Core shard save/load tests
+- **tests/test_shard_bars.py**: Core shard bar save/load tests
   - Line 37, 55, 73: Tests progress initialization with `shard_bar_ticks`
   - Line 47, 84: Verifies default value of 0
   - Lines 89-104: Tests export progress and character progress dict handling

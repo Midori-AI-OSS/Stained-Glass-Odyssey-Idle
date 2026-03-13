@@ -43,6 +43,7 @@ MIN_EXP_GAIN_PER_TICK = 0.0001
 IDLE_BLESSING_STEP_MULTIPLIER = 1.025 ** (1.0 / 6.0)
 SHARD_ROLL_INTERVAL_TICKS = 30
 SHARD_BAR_CYCLE_TICKS = 300
+ANIMATION_CYCLE_TICKS = 45 * 60 * 30
 SHARD_BASE_CHANCE_PERCENT = 0.0001
 SHARD_EXP_SMOOTHING_SECONDS = 60.0
 SHARD_DAMPENER_START_EXP_PER_SECOND = 1000.0
@@ -72,6 +73,7 @@ class IdleGameState(QObject):
         *,
         char_ids: list[str],
         offsite_ids: list[str] | None = None,
+        standby_ids: list[str] | None = None,
         party_level: int,
         stacks: dict[str, int],
         plugins_by_id: dict[str, object],
@@ -94,6 +96,7 @@ class IdleGameState(QObject):
         self._offsite_ids: list[str] = [
             str(item) for item in (offsite_ids or []) if item
         ]
+        self._standby_ids: list[str] = [str(i) for i in (standby_ids or []) if i]
         self._party_level = party_level
         self._stacks = stacks
         self._plugins_by_id = plugins_by_id
@@ -131,9 +134,12 @@ class IdleGameState(QObject):
         self._tick_count = 0
         self._shared_exp_percentage = max(1, min(95, int(shared_exp_percentage)))
         self._risk_reward_level = max(0, min(150, int(risk_reward_level)))
+        self.animation_cycles: dict[str, int] = {char_id: 0 for char_id in char_ids}
 
         self._char_data: dict[str, dict[str, Any]] = {}
-        for char_id in list(dict.fromkeys([*char_ids, *self._offsite_ids])):
+        for char_id in list(
+            dict.fromkeys([*char_ids, *self._offsite_ids, *self._standby_ids])
+        ):
             plugin = plugins_by_id.get(char_id)
             if not plugin:
                 continue
@@ -275,6 +281,8 @@ class IdleGameState(QObject):
                 "shard_bar_ticks": shard_bar_ticks % SHARD_BAR_CYCLE_TICKS,
                 "shard_exp_s_ema": 0.0,
                 "shard_reward_types": reward_types,
+                "is_dual_type": getattr(plugin, "is_dual_type", False),
+                "dual_damage_types": getattr(plugin, "dual_damage_types", ("", "")),
             }
 
             if isinstance(saved, dict):
@@ -577,11 +585,15 @@ class IdleGameState(QObject):
 
             data["rebirths"] = max(0, int(data.get("rebirths", 0))) + 1
 
+            # Award shard and increment tick counter on rebirth
+            data["shard_bar_ticks"] = data.get("shard_bar_ticks", 0) + 1
+            self._award_shard(data=data)
+
             req_mult = float(data.get("req_multiplier", 1.0))
             lunar_req_mult = self._lunar_exp_requirement_multiplier()
-            data["next_exp"] = (
-                1 * 30 * req_mult * lunar_req_mult
-            ) * self._rng.uniform(0.95, 1.05)
+            data["next_exp"] = (1 * 30 * req_mult * lunar_req_mult) * self._rng.uniform(
+                0.95, 1.05
+            )
             self._apply_offsite_stat_share_to_onsite_hp()
             return True
 
@@ -645,6 +657,10 @@ class IdleGameState(QObject):
         with self._lock:
             self._tick_count += 1
             tick_count = self._tick_count
+            for char_id in self.animation_cycles:
+                self.animation_cycles[char_id] = (
+                    self.animation_cycles[char_id] + 1
+                ) % ANIMATION_CYCLE_TICKS
             dt = float(max(0.0, IDLE_TICK_INTERVAL_SECONDS))
             self._elapsed_seconds += dt
             self._process_blessing_ticks(delta_seconds=dt)
@@ -678,8 +694,9 @@ class IdleGameState(QObject):
                     roll_ready=roll_ready,
                 )
 
-                regain = 0.1 if self._shared_exp_percentage == 1 else 0.5
-                data["hp"] = min(data["max_hp"], data["hp"] + regain)
+                regain_stat = float(data["base_stats"].get("regain", 100.0))
+                regain_amount = regain_stat * 0.01
+                data["hp"] = min(data["max_hp"], data["hp"] + regain_amount)
 
                 if self._risk_reward_level > 0:
                     char_level = max(1, int(data.get("level", 1)))
@@ -713,9 +730,41 @@ class IdleGameState(QObject):
                         awarded_exp=awarded_gain,
                         roll_ready=roll_ready,
                     )
-                    data["hp"] = min(data["max_hp"], data["hp"] + 0.5)
+                    regain_stat = float(data["base_stats"].get("regain", 100.0))
+                    regain_amount = regain_stat * 0.005
+                    data["hp"] = min(data["max_hp"], data["hp"] + regain_amount)
                     if data["exp"] >= data["next_exp"]:
                         self._level_up(char_id)
+
+            if self._standby_ids:
+                offsite_count = len(self._offsite_ids) if self._offsite_ids else 0
+                if offsite_count > 0:
+                    total_offsite_exp = offsite_count * (
+                        offsite_drip_share + offsite_baseline_bonus
+                    )
+                    total_standby_exp = 0.0001 * total_offsite_exp
+                    standby_count = len(self._standby_ids)
+                    standby_exp_per_char = total_standby_exp / standby_count
+
+                    for char_id in self._standby_ids:
+                        data = self._char_data.get(char_id)
+                        if not data:
+                            continue
+
+                        modifier = self._recipient_exp_modifier_for_char(
+                            char_id=char_id,
+                            data=data,
+                        )
+                        awarded = standby_exp_per_char * modifier
+                        awarded = self._apply_min_exp_gain_floor(awarded)
+                        data["exp"] += awarded
+
+                        regain_stat = float(data["base_stats"].get("regain", 100.0))
+                        regain_amount = regain_stat * 0.0005
+                        data["hp"] = min(data["max_hp"], data["hp"] + regain_amount)
+
+                        if data["exp"] >= data["next_exp"]:
+                            self._level_up(char_id)
 
             if self._advance_run_buffs and dt > 0.0:
                 self._exp_bonus_seconds = max(0.0, self._exp_bonus_seconds - dt)
@@ -874,11 +923,18 @@ class IdleGameState(QObject):
         plugin = self._plugins_by_id.get(char_id)
         if plugin is None:
             return 1.0
+        if getattr(plugin, "is_dual_type", False):
+            dual_types = getattr(plugin, "dual_damage_types", ("", ""))
+            if isinstance(dual_types, tuple) and len(dual_types) == 2:
+                return self._dual_type_blessing_bonus(dual_types)
         damage_type_id = normalize_damage_type_id(
             str(getattr(plugin, "damage_type_id", "generic") or "generic")
         )
         if not damage_type_id:
             return 1.0
+        return self._single_type_blessing_bonus(damage_type_id)
+
+    def _single_type_blessing_bonus(self, damage_type_id: str) -> float:
         bonus = 1.0
         if damage_type_id == "generic":
             for blessing_id in self._damage_blessing_id_by_type.values():
@@ -897,6 +953,38 @@ class IdleGameState(QObject):
             if isinstance(blessing_info, dict) and blessing_info.get("unlocked", False):
                 steps = int(blessing_info.get("steps", 0))
                 bonus += steps * 0.0001
+        return bonus
+
+    def _dual_type_blessing_bonus(self, dual_types: tuple[str, str]) -> float:
+        bonus = 1.0
+        applied_blessings: set[str] = set()
+        for raw_type in dual_types:
+            damage_type_id = normalize_damage_type_id(str(raw_type or "generic"))
+            if not damage_type_id:
+                continue
+            if damage_type_id == "generic":
+                for blessing_id in self._damage_blessing_id_by_type.values():
+                    if blessing_id in applied_blessings:
+                        continue
+                    blessing_info = self._blessings_data.get(blessing_id, {})
+                    if not isinstance(blessing_info, dict):
+                        continue
+                    if not blessing_info.get("unlocked", False):
+                        continue
+                    steps = int(blessing_info.get("steps", 0))
+                    bonus += steps * 0.0001
+                    applied_blessings.add(blessing_id)
+            else:
+                blessing_id = self._damage_blessing_id_by_type.get(damage_type_id)
+                if not blessing_id or blessing_id in applied_blessings:
+                    continue
+                blessing_info = self._blessings_data.get(blessing_id, {})
+                if isinstance(blessing_info, dict) and blessing_info.get(
+                    "unlocked", False
+                ):
+                    steps = int(blessing_info.get("steps", 0))
+                    bonus += steps * 0.0001
+                    applied_blessings.add(blessing_id)
         return bonus
 
     @staticmethod
@@ -1020,6 +1108,12 @@ class IdleGameState(QObject):
             if remaining <= 1e-9:
                 remaining = blessing.step_seconds
             return max(0, int(math.ceil(remaining)))
+
+    def get_animation_phase(self, char_id: str) -> float:
+        with self._lock:
+            ticks = max(0, int(self.animation_cycles.get(char_id, 0)))
+            cycle_position = ticks % ANIMATION_CYCLE_TICKS
+            return float(cycle_position) / float(ANIMATION_CYCLE_TICKS)
 
     def export_run_buff_seconds(self) -> tuple[float, float]:
         with self._lock:
@@ -1292,6 +1386,14 @@ class IdleGameState(QObject):
         with self._lock:
             return self._export_blessings_unlocked()
 
+    def export_inventory(self) -> dict[str, int]:
+        """Return current inventory state for save serialization."""
+        with self._lock:
+            return {
+                str(item_id): max(0, int(count))
+                for item_id, count in self._inventory.items()
+            }
+
     def _export_blessings_unlocked(self) -> dict[str, dict[str, Any]]:
         payload: dict[str, dict[str, Any]] = {}
         persistent_plugins = {
@@ -1350,7 +1452,9 @@ class IdleGameState(QObject):
                 },
             }
 
-    def _export_blessing_runtime_unlocked(self) -> dict[str, dict[str, float | int | bool]]:
+    def _export_blessing_runtime_unlocked(
+        self,
+    ) -> dict[str, dict[str, float | int | bool]]:
         runtime: dict[str, dict[str, float | int | bool]] = {}
         elapsed_total = max(0.0, float(self._elapsed_seconds))
         for plugin in discover_blessing_plugins():
@@ -1426,7 +1530,9 @@ class IdleGameState(QObject):
         with self._lock:
             return self._risk_reward_level
 
-    def _process_blessing_ticks(self, *, delta_seconds: float) -> dict[str, dict[str, Any]]:
+    def _process_blessing_ticks(
+        self, *, delta_seconds: float
+    ) -> dict[str, dict[str, Any]]:
         updated_blessings: dict[str, dict[str, Any]] = dict(self._blessings_data)
 
         for plugin in discover_blessing_plugins():

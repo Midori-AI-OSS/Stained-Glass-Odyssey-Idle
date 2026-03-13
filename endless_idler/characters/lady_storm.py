@@ -10,6 +10,7 @@ from plugins.damage_types._base import DamageTypeBase
 
 placement = "both"
 
+
 @dataclass
 class LadyStorm(PlayerBase):
     id = "lady_storm"
@@ -38,3 +39,5 @@ class LadyStorm(PlayerBase):
         default_factory=lambda: load_damage_type(choice(["Wind", "Lightning"]))
     )
     passives: list[str] = field(default_factory=lambda: ["lady_storm_supercell"])
+    is_dual_type: bool = True
+    dual_damage_types: tuple[str, str] = ("Wind", "Lightning")
