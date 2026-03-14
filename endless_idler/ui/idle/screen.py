@@ -75,17 +75,25 @@ class IdleScreenWidget(QWidget):
     @staticmethod
     def build_lineup_signature(
         save: object,
-    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, int], ...], int]:
+    ) -> tuple[
+        tuple[str, ...],
+        tuple[str, ...],
+        tuple[str, ...],
+        tuple[tuple[str, int], ...],
+        int,
+    ]:
         onsite_raw = getattr(save, "onsite", [])
         offsite_raw = getattr(save, "offsite", [])
+        standby_raw = getattr(save, "standby", [])
         stacks_raw = getattr(save, "stacks", {})
         party_level_raw = getattr(save, "party_level", 1)
 
         onsite = tuple(str(item) for item in onsite_raw if item)
         offsite = tuple(str(item) for item in offsite_raw if item)
+        standby = tuple(str(item) for item in standby_raw if item)
 
         stack_pairs: list[tuple[str, int]] = []
-        for char_id in [*onsite, *offsite]:
+        for char_id in [*onsite, *offsite, *standby]:
             raw = stacks_raw.get(char_id, 1) if isinstance(stacks_raw, dict) else 1
             stack_pairs.append((char_id, max(1, int(raw))))
         stack_pairs.sort()
@@ -93,6 +101,7 @@ class IdleScreenWidget(QWidget):
         return (
             onsite,
             offsite,
+            standby,
             tuple(stack_pairs),
             max(1, int(party_level_raw)),
         )
@@ -310,7 +319,13 @@ class IdleScreenWidget(QWidget):
     @property
     def lineup_signature(
         self,
-    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, int], ...], int]:
+    ) -> tuple[
+        tuple[str, ...],
+        tuple[str, ...],
+        tuple[str, ...],
+        tuple[tuple[str, int], ...],
+        int,
+    ]:
         return self._lineup_signature
 
     def _produce_tick_payload(
