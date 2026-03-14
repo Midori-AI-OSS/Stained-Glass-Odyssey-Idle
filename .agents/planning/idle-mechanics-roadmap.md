@@ -18,8 +18,7 @@ Locked decisions:
 - Banner set is 7 total:
   - 6 elemental banners
   - 1 YOLO banner
-- Failed pulls on all banners grant item rewards for non-character progression systems
-  (city, housing, gear, or equivalent development paths).
+- Normal non-character pulls award only Prismatic Shards; characters remain rare outcomes.
 - Pity is per-banner, with a single pity track per banner.
 - 5 star odds follow the Endless linear pity curve:
   - `p5(pity) = 0.00001 + pity * ((0.05 - 0.00001) / 159)`
@@ -36,29 +35,29 @@ Locked decisions:
   - on elemental banners, if same-element eligibility fails, no 7 star can occur on that pull
 - Pity resets on any 5 star, 6 star, or 7 star outcome.
 - YOLO banner applies 50x to raw rates (including 7 star), then normalizes to a valid distribution.
+- Elemental banners consume 160 matching damage-type shards per pull.
+- Non-elemental banners consume 160 total damage-type shards paid from up to three damage types chosen by the player.
 
 Pending:
 - Translate the locked formulas into Warp runtime constants/helpers during implementation.
 - Add validation fixtures/simulations for pity progression and 6/7 star probability sanity checks.
 
-### Rebirth Currency for Warp: Upgrade Stones
+### Damage-Type Shard Warp Payments
 
 Planned intent:
-- Rebirth should always feed Warp currency.
+- Keep Warp progression funded by the elemental shard system that is live today and ensure rebirth/progression rewards target that pool.
+- Make damage-type shards the primary conduit for paying for Warp pulls while keeping the experience grounded in existing elemental damage types.
 
 Locked decisions:
-- Every rebirth grants 1 guaranteed Upgrade Stone.
-- Rebirth can grant additional stones.
-- Extra-stone behavior should become harder for each additional extra in the same rebirth event.
-- Extra-stone logic is tied to progression factors, including:
-  - crit_mod
-  - rebirth count
-  - town level
-  - character level
+- Damage-type shards match the elemental shard types currently live (Fire, Ice, Wind, Lightning, Light, Dark) and serve as the exclusive Warp currency.
+- Rebirth and related progression channels must guarantee a minimum damage-type shard inflow so players can cover the 160-shard pull costs locked above.
+- Warp payment logic uses these damage-type shards, which means elemental banners require matching-shard payments and non-elemental banners can draw from up to three player-selected damage types.
+- This damage-type shard pool directly drives Warp progression, superseding the prior Upgrade Stone framing.
 
 Pending:
-- Exact extra-stone formula and deterministic rounding behavior.
-- Exact diminishing-returns algorithm for repeated extras in one rebirth.
+- Exact per-rebirth shard payout schedule (base drops, extras, and rounding behavior).
+- How salvage/crafting/other long-term sources funnel into damage-type shard income for Warp.
+- Interaction rules between shard income and long-running progression modifiers or buffs.
 
 ### Prismatic Shards, Prism Archetypes, and Prismatic Dust Crafting
 
@@ -95,7 +94,9 @@ Pending:
 - Exact implementation order for deterministic payouts and 0.5x post-award decay.
 - Exact distribution weights for "match-or-lower" extra-shard star outcomes.
 - Exact `prism_archetype_id` list and naming for the ~20-type catalog.
+- Initial prism archetype planning still needs a roster-grounded planning pass before the catalog is finalized.
 - Exact stat/progression lanes impacted by prism-archetype/prismatic-shard power.
+- Damage-type shards can be crafted into a really high amount of Prismatic Dust over a really long time; exact values, rates, and durations are still pending.
 
 ## Open High-Impact Decisions
 
