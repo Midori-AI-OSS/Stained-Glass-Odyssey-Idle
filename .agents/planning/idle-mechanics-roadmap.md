@@ -9,7 +9,7 @@ Last updated: 2026-03-11
 
 ## Planned Mechanics (Target Design)
 
-### 3: Warp Banner System
+### Warp Banner System
 
 Planned intent:
 - Build Warp into a banner-based progression/gacha system.
@@ -60,7 +60,7 @@ Pending:
 - Exact extra-stone formula and deterministic rounding behavior.
 - Exact diminishing-returns algorithm for repeated extras in one rebirth.
 
-### 4: Prismatic Shards, Prism Archetypes, and Prismatic Dust Crafting
+### Prismatic Shards, Prism Archetypes, and Prismatic Dust Crafting
 
 Planned intent:
 - Build a long-term prismatic progression layer that is independent from character rarity tiers.
