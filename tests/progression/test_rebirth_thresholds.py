@@ -21,7 +21,7 @@ from endless_idler.ui.idle.idle_state import IdleGameState
 from endless_idler.ui.idle.screen import build_prestige_confirmation_html
 
 
-def _plugin(*, char_id: str = "hero", stars: int = 6) -> CharacterPlugin:
+def _plugin(*, char_id: str = "player", stars: int = 6) -> CharacterPlugin:
     return CharacterPlugin(
         char_id=char_id,
         display_name=char_id.title(),
@@ -36,11 +36,11 @@ def _state(
     progress_by_id: dict[str, dict[str, float | int]] | None = None,
 ) -> IdleGameState:
     return IdleGameState(
-        char_ids=["hero"],
+        char_ids=["player"],
         offsite_ids=[],
         party_level=1,
-        stacks={"hero": 1},
-        plugins_by_id={"hero": _plugin(stars=stars)},
+        stacks={"player": 1},
+        plugins_by_id={"player": _plugin(stars=stars)},
         rng=random.Random(7),
         progress_by_id=progress_by_id,
     )
@@ -129,12 +129,12 @@ def test_discover_character_plugins_accepts_valid_runtime_stars(
 def test_rebirth_character_applies_star_weighted_exp_reward_gain(stars: int) -> None:
     state = _state(
         stars=stars,
-        progress_by_id={"hero": {"level": 510, "exp_multiplier": 1.0}},
+        progress_by_id={"player": {"level": 510, "exp_multiplier": 1.0}},
     )
 
-    assert state.rebirth_character("hero") is True
+    assert state.rebirth_character("player") is True
 
-    data = state.get_char_data("hero")
+    data = state.get_char_data("player")
     assert data is not None
     expected_power = calculate_rebirth_power(510)
     expected_gain = calculate_rebirth_exp_mult_gain(power=expected_power, stars=stars)
@@ -151,15 +151,15 @@ def test_rebirth_character_applies_star_weighted_exp_reward_gain(stars: int) -> 
 def test_rebirth_character_requires_level_500() -> None:
     locked_state = _state(
         stars=6,
-        progress_by_id={"hero": {"level": REBIRTH_LEVEL_THRESHOLD - 1}},
+        progress_by_id={"player": {"level": REBIRTH_LEVEL_THRESHOLD - 1}},
     )
     unlocked_state = _state(
         stars=6,
-        progress_by_id={"hero": {"level": REBIRTH_LEVEL_THRESHOLD}},
+        progress_by_id={"player": {"level": REBIRTH_LEVEL_THRESHOLD}},
     )
 
-    assert locked_state.rebirth_character("hero") is False
-    assert unlocked_state.rebirth_character("hero") is True
+    assert locked_state.rebirth_character("player") is False
+    assert unlocked_state.rebirth_character("player") is True
 
 
 def test_rebirth_tax_stays_baseline_until_tax_starts_and_then_eases() -> None:
@@ -193,9 +193,9 @@ def test_prestige_weighting_changes_gain_magnitude_only(
 ) -> None:
     state = _state(
         stars=7,
-        progress_by_id={"hero": {"prestige_count": 1}},
+        progress_by_id={"player": {"prestige_count": 1}},
     )
-    data = state.get_char_data("hero")
+    data = state.get_char_data("player")
     assert data is not None
 
     base_stats = {
@@ -207,7 +207,9 @@ def test_prestige_weighting_changes_gain_magnitude_only(
     }
     monkeypatch.setattr(state._rng, "choices", lambda population, weights, k: ["atk"])
 
-    state._apply_weighted_stat_upgrades(char_id="hero", base_stats=base_stats, level=1)
+    state._apply_weighted_stat_upgrades(
+        char_id="player", base_stats=base_stats, level=1
+    )
 
     expected_rate = calculate_prestige_stat_gain_rate(prestige_count=1, stars=7)
     assert math.isclose(
@@ -217,7 +219,7 @@ def test_prestige_weighting_changes_gain_magnitude_only(
 
 def test_build_prestige_confirmation_html_uses_weighted_stat_gain_rate() -> None:
     html = build_prestige_confirmation_html(
-        display_name="Hero",
+        display_name="Player",
         exp_multiplier=10.0,
         prestige_count=1,
         stars=7,
