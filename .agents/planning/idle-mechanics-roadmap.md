@@ -5,7 +5,7 @@
 This planning doc tracks forward-looking mechanics and unresolved design decisions.
 
 Date captured: 2026-03-05
-Last updated: 2026-03-11
+Last updated: 2026-03-14
 
 ## Planned Mechanics (Target Design)
 
@@ -74,9 +74,16 @@ Locked decisions:
   - it can be used by any character with that prism archetype
 - Prism archetypes are expected to affect stats/progression behavior.
 - Unwanted shards can be salvaged into Prismatic Dust.
+- Star-to-prismatic-power mapping is locked to:
+  - 1 star = 15%
+  - 2 star = 45%
+  - 3 star = 150%
+  - 4 star = 500%
 - Crafting anchors currently locked:
-  - 1 star craft cost = 100 Prismatic Dust
-  - 2 star craft cost = 500 Prismatic Dust
+  - 1 star craft cost = 1000 Prismatic Dust
+  - 2 star craft cost = 2500 Prismatic Dust
+  - 3 star craft cost = 5000 Prismatic Dust
+  - 4 star craft cost = 100000 Prismatic Dust
 - Craft duration starts at 1 hour per star rank, then is modified by buffs/debuffs.
 - Craft duration floor is 5 seconds.
 - If buffs would reduce craft duration below 5 seconds:
@@ -87,29 +94,44 @@ Locked decisions:
   - reduce remaining bonus odds by geometric decay (0.5x) after each awarded extra shard
 - Overflow bonus extra shards must belong to a different prism archetype than the crafted target archetype.
 - Overflow bonus extra-shard star rank can match the crafted rank or be lower.
+- Damage-type shards can be crafted into Prismatic Dust with the following planning guidance:
+  - base craft size is 100 shards over 48 hours
+  - base rate is 28.8 minutes per shard
+  - shard output should flow one at a time during the craft instead of only at completion
+  - the player chooses the requested damage type for shard output
+  - there is a small chance for output to become a different damage type
+  - the player can choose smaller or larger craft sizes
+  - smaller batches finish sooner overall but are less time-efficient per shard
+  - larger batches take longer overall but are more time-efficient per shard
 
 Pending:
-- Exact 3 star and 4 star Prismatic Dust craft costs.
 - Exact formal equation for overflow seconds -> bonus odds conversion pipeline.
 - Exact implementation order for deterministic payouts and 0.5x post-award decay.
 - Exact distribution weights for "match-or-lower" extra-shard star outcomes.
 - Exact `prism_archetype_id` list and naming for the ~20-type catalog.
 - Initial prism archetype planning still needs a roster-grounded planning pass before the catalog is finalized.
+- `prism_archetype_id` naming should:
+  - lean on prism / glass / light motif language
+  - use lowercase snake_case IDs
+  - avoid direct element or damage-type names to prevent confusion with shard/payment terminology
 - Exact stat/progression lanes impacted by prism-archetype/prismatic-shard power.
-- Damage-type shards can be crafted into a really high amount of Prismatic Dust over a really long time; exact values, rates, and durations are still pending.
 
 ## Open High-Impact Decisions
 
-- Final star-to-prismatic-power mapping for 1-4 prismatic shards.
 - Exact prismatic shard odds unit conversions and tick-to-time expectations.
 - Exact rebirth drop formula and caps/floors policy.
 - Warp implementation sequencing and simulation verification for locked rarity math.
-- Final Upgrade Stone extra-reward math.
-- Final 3-4 star Prismatic Dust costs.
+- Final damage-type shard extra-reward math.
 - Final overflow craft-bonus math ordering and payout details.
 - Final prism-archetype stat/progression impact model.
 
-Note: Future "upgrade blessings" with prismatic shards planned separately.
+### Future Upgrade / Prismatic Blessings
+
+Planned intent:
+- Reserve a separate future progression lane for upgrade/prismatic blessings tied to prismatic systems.
+
+Pending:
+- Exact blessing structure, unlock path, and how it interfaces with prismatic shards or Prismatic Dust.
 
 ### Future: Drop Table System
 
