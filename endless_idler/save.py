@@ -42,6 +42,7 @@ DEFAULT_LAYOUT_OWNED_ORDERING = "save_order"
 ONSITE_SLOTS = 4
 OFFSITE_SLOTS = 6
 STANDBY_SLOTS = 10
+STANDBY_RESERVED_INDICES = frozenset({0, max(0, STANDBY_SLOTS - 1)})
 BAR_SLOTS = 6
 _LAYOUT_OWNED_ORDERING_VALUES = frozenset(
     {
@@ -440,49 +441,79 @@ def sanitize_save_characters(*, save: RunSave, allowed_char_ids: set[str]) -> Ru
     allowed = {
         str(char_id).strip() for char_id in allowed_char_ids if str(char_id).strip()
     }
+
+    standby_ids = {
+        cleaned
+        for item in list(save.standby[:STANDBY_SLOTS])
+        for cleaned in [str(item).strip() if item else ""]
+        if cleaned
+    }
+
+    reserved_standby_ids = {
+        cleaned
+        for index, item in enumerate(list(save.standby[:STANDBY_SLOTS]))
+        if index in STANDBY_RESERVED_INDICES
+        for cleaned in [str(item).strip() if item else ""]
+        if cleaned
+    }
+
+    allowed_or_reserved = allowed | standby_ids | reserved_standby_ids
+
     if not allowed:
         return _normalized_save(save)
 
-    def sanitize_slots(values: list[str | None]) -> list[str | None]:
+    def sanitize_slots(
+        values: list[str | None],
+        *,
+        keep_ids: set[str],
+    ) -> list[str | None]:
         updated: list[str | None] = []
         for item in values:
             if not item:
                 updated.append(None)
                 continue
             cleaned = str(item).strip()
-            if not cleaned or cleaned not in allowed:
+            if not cleaned or cleaned not in keep_ids:
                 updated.append(None)
                 continue
             updated.append(cleaned)
         return updated
 
-    save.bar = sanitize_slots(list(save.bar))
+    save.bar = sanitize_slots(list(save.bar), keep_ids=allowed)
 
-    save.onsite = sanitize_slots(list(save.onsite))
+    save.onsite = sanitize_slots(list(save.onsite), keep_ids=allowed)
 
-    save.offsite = sanitize_slots(list(save.offsite))
+    save.offsite = sanitize_slots(list(save.offsite), keep_ids=allowed)
 
-    save.standby = sanitize_slots(list(save.standby))
+    save.standby = sanitize_slots(list(save.standby), keep_ids=allowed_or_reserved)
 
-    save.stacks = {key: value for key, value in save.stacks.items() if key in allowed}
+    save.stacks = {
+        key: value for key, value in save.stacks.items() if key in allowed_or_reserved
+    }
     save.inventory = {
         key: value
         for key, value in save.inventory.items()
         if key in get_item_ids() and value > 0
     }
     save.character_progress = {
-        key: value for key, value in save.character_progress.items() if key in allowed
+        key: value
+        for key, value in save.character_progress.items()
+        if key in allowed_or_reserved
     }
     save.character_stats = {
-        key: value for key, value in save.character_stats.items() if key in allowed
+        key: value
+        for key, value in save.character_stats.items()
+        if key in allowed_or_reserved
     }
     save.character_initial_stats = {
         key: value
         for key, value in save.character_initial_stats.items()
-        if key in allowed
+        if key in allowed_or_reserved
     }
     save.character_deaths = {
-        key: value for key, value in save.character_deaths.items() if key in allowed
+        key: value
+        for key, value in save.character_deaths.items()
+        if key in allowed_or_reserved
     }
 
     return _normalized_save(save)

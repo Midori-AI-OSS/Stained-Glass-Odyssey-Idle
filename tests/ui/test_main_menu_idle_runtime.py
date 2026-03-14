@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random
+
 from contextlib import nullcontext
 from types import SimpleNamespace
 
@@ -38,13 +40,27 @@ class _FakeIdleScreen:
         _FakeIdleScreen.created.append(self)
 
     @staticmethod
-    def build_lineup_signature(save: object) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, int], ...], int]:
+    def build_lineup_signature(
+        save: object,
+    ) -> tuple[
+        tuple[str, ...],
+        tuple[str, ...],
+        tuple[str, ...],
+        tuple[tuple[str, int], ...],
+        int,
+    ]:
         onsite = tuple(str(item) for item in getattr(save, "onsite", []) if item)
         offsite = tuple(str(item) for item in getattr(save, "offsite", []) if item)
+        standby = tuple(str(item) for item in getattr(save, "standby", []) if item)
         stacks = getattr(save, "stacks", {})
-        stack_pairs = tuple(sorted((char_id, int(stacks.get(char_id, 1))) for char_id in [*onsite, *offsite]))
+        stack_pairs = tuple(
+            sorted(
+                (char_id, int(stacks.get(char_id, 1)))
+                for char_id in [*onsite, *offsite, *standby]
+            )
+        )
         party_level = int(getattr(save, "party_level", 1))
-        return onsite, offsite, stack_pairs, party_level
+        return onsite, offsite, standby, stack_pairs, party_level
 
     def shutdown(self, *, persist: bool = True) -> None:
         self.shutdown_calls.append(bool(persist))
@@ -82,16 +98,22 @@ class _FakeStack:
         self.set_current.append(widget)
 
 
-def _fake_save(*, onsite: list[str], offsite: list[str]) -> object:
+def _fake_save(
+    *, onsite: list[str], offsite: list[str], standby: list[str] | None = None
+) -> object:
+    standby_list = list(standby or [])
     return SimpleNamespace(
         onsite=list(onsite),
         offsite=list(offsite),
-        stacks={char_id: 1 for char_id in [*onsite, *offsite]},
+        standby=standby_list,
+        stacks={char_id: 1 for char_id in [*onsite, *offsite, *standby_list]},
         party_level=1,
     )
 
 
-def _make_menu_like(*, save: object, idle_screen: object | None, placeholder: object) -> object:
+def _make_menu_like(
+    *, save: object, idle_screen: object | None, placeholder: object
+) -> object:
     stack = _FakeStack(current_widget=placeholder)
     nav_calls: list[str] = []
     holder = SimpleNamespace(
@@ -109,8 +131,12 @@ def _make_menu_like(*, save: object, idle_screen: object | None, placeholder: ob
         _show_home=lambda: None,
         _refresh_shared_idle_runtime=lambda: None,
     )
-    holder._idle_lineup_signature = lambda: MainMenuWindow._idle_lineup_signature(holder)
-    holder._dispose_idle_runtime = lambda *, persist: MainMenuWindow._dispose_idle_runtime(holder, persist=persist)
+    holder._idle_lineup_signature = lambda: MainMenuWindow._idle_lineup_signature(
+        holder
+    )
+    holder._dispose_idle_runtime = lambda *, persist: (
+        MainMenuWindow._dispose_idle_runtime(holder, persist=persist)
+    )
     holder._ensure_idle_runtime = lambda: MainMenuWindow._ensure_idle_runtime(holder)
     holder._nav_calls = nav_calls
     return holder
@@ -124,7 +150,9 @@ def test_show_idle_rebuilds_runtime_when_lineup_signature_changes(monkeypatch) -
     first_save = _fake_save(onsite=[], offsite=[])
     old_idle = _FakeIdleScreen(save_store=SimpleNamespace(current=first_save))
     new_save = _fake_save(onsite=["ally"], offsite=[])
-    menu_like = _make_menu_like(save=new_save, idle_screen=old_idle, placeholder=placeholder)
+    menu_like = _make_menu_like(
+        save=new_save, idle_screen=old_idle, placeholder=placeholder
+    )
 
     MainMenuWindow._show_idle(menu_like)
 
@@ -155,3 +183,48 @@ def test_show_idle_reuses_runtime_when_lineup_signature_matches(monkeypatch) -> 
     assert menu_like._idle_screen is idle
     assert menu_like._stack.set_current[-1] is idle
     assert len(_FakeIdleScreen.created) == 1
+
+
+def test_lineup_signature_changes_when_standby_changes() -> None:
+    first = _fake_save(onsite=["ally"], offsite=["res"], standby=["bench_a"])
+    second = _fake_save(onsite=["ally"], offsite=["res"], standby=["bench_b"])
+
+    first_signature = main_menu_module.IdleScreenWidget.build_lineup_signature(first)
+    second_signature = main_menu_module.IdleScreenWidget.build_lineup_signature(second)
+
+    assert first_signature != second_signature
+
+
+def test_build_idle_state_from_save_passes_standby_ids(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _CaptureIdleState:
+        def __init__(self, **kwargs) -> None:  # noqa: ANN003
+            captured.update(kwargs)
+
+    monkeypatch.setattr(main_menu_module, "IdleGameState", _CaptureIdleState)
+    holder = SimpleNamespace(
+        _plugins=[],
+        _idle_rng=random.Random(),
+    )
+    save = SimpleNamespace(
+        onsite=["ally"],
+        offsite=["reserve"],
+        standby=[None, "bench", None],
+        party_level=1,
+        stacks={"ally": 1, "reserve": 1, "bench": 1},
+        character_progress={},
+        character_stats={},
+        character_initial_stats={},
+        inventory={},
+        idle_exp_bonus_seconds=0.0,
+        idle_exp_penalty_seconds=0.0,
+        idle_shared_exp_percentage=1,
+        idle_risk_reward_level=0,
+        battle_start_time=0.0,
+        blessings={},
+    )
+
+    MainMenuWindow._build_idle_state_from_save(holder, save)
+
+    assert captured["standby_ids"] == ["bench"]

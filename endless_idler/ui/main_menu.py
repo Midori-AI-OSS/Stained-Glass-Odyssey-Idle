@@ -309,7 +309,13 @@ class MainMenuWindow(QMainWindow):
 
     def _idle_lineup_signature(
         self,
-    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, int], ...], int]:
+    ) -> tuple[
+        tuple[str, ...],
+        tuple[str, ...],
+        tuple[str, ...],
+        tuple[tuple[str, int], ...],
+        int,
+    ]:
         return IdleScreenWidget.build_lineup_signature(self._save_store.current)
 
     def _dispose_idle_runtime(self, *, persist: bool) -> None:
@@ -356,6 +362,7 @@ class MainMenuWindow(QMainWindow):
         return IdleGameState(
             char_ids=[str(item) for item in getattr(save, "onsite", []) if item],
             offsite_ids=[str(item) for item in getattr(save, "offsite", []) if item],
+            standby_ids=[str(item) for item in getattr(save, "standby", []) if item],
             party_level=max(1, int(getattr(save, "party_level", 1))),
             stacks=dict(getattr(save, "stacks", {})),
             plugins_by_id=plugins_by_id,
