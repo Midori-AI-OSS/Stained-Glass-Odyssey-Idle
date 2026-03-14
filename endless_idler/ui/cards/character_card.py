@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QWidget
 from endless_idler.combat.party_stats import apply_base_stat_multiplier
 from endless_idler.combat.party_stats import build_scaled_character_stats
 from endless_idler.combat.stats import Stats
+from endless_idler.progression import REBIRTH_LEVEL_THRESHOLD
 from endless_idler.ui.components.progress_bar import AnimatedProgressBar
 from endless_idler.ui.party_builder_common import build_character_stats_tooltip
 from endless_idler.ui.party_builder_common import format_idle_exp_rate_suffix
@@ -431,7 +432,9 @@ class IdleCharacterCard(QFrame):
 
         exp_multiplier = float(data.get("exp_multiplier", 1.0))
         show_prestige = exp_multiplier >= 10.0
-        show_rebirth = max(1, int(level)) >= 50 and not show_prestige
+        show_rebirth = (
+            max(1, int(level)) >= REBIRTH_LEVEL_THRESHOLD and not show_prestige
+        )
 
         if self._context == "onsite":
             self._update_onsite_buttons(
