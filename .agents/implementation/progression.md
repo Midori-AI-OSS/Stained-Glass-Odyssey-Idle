@@ -13,7 +13,7 @@ Last updated: 2026-03-14
   - valid stars are `5-7`
   - invalid stars fail discovery with an aggregated `ValueError`
 
-## Mech 1 Live Star Effects
+## Live Star Effects
 
 - Star-to-progression multiplier mapping:
   - 7 star = `2.5x`
