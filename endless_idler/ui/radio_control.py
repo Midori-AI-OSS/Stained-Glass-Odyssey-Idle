@@ -48,8 +48,8 @@ class RadioControlWidget(QWidget):
         super().__init__(parent)
         self.setObjectName("RadioControlRoot")
         self.setFixedHeight(self.PLAY_BUTTON_HEIGHT)
-        self.setMinimumWidth(self.COLLAPSED_WIDTH)
-        self.setMaximumWidth(self.COLLAPSED_WIDTH)
+        self.setMinimumWidth(self.EXPANDED_WIDTH)
+        self.setMaximumWidth(self.EXPANDED_WIDTH)
 
         self._expanded = False
         self._drag_active = False
@@ -66,8 +66,7 @@ class RadioControlWidget(QWidget):
 
         self._volume_section = QWidget(self)
         self._volume_section.setFixedHeight(self.PLAY_BUTTON_HEIGHT)
-        self._volume_section.setMinimumWidth(self.COLLAPSED_VOLUME_WIDTH)
-        self._volume_section.setMaximumWidth(self.COLLAPSED_VOLUME_WIDTH)
+        self._volume_section.setFixedWidth(self.EXPANDED_VOLUME_WIDTH)
         volume_section_layout = QHBoxLayout(self._volume_section)
         volume_section_layout.setContentsMargins(0, 0, self.VOLUME_RIGHT_GAP, 0)
         volume_section_layout.setSpacing(0)
@@ -75,6 +74,8 @@ class RadioControlWidget(QWidget):
         self._slider_wrap = QWidget(self._volume_section)
         self._slider_wrap.setObjectName("RadioControlSliderWrap")
         self._slider_wrap.setFixedHeight(self.PLAY_BUTTON_HEIGHT)
+        self._slider_wrap.setMinimumWidth(0)
+        self._slider_wrap.setMaximumWidth(0)
         slider_layout = QHBoxLayout(self._slider_wrap)
         slider_layout.setContentsMargins(0, 0, 0, 0)
         slider_layout.setSpacing(0)
@@ -87,7 +88,8 @@ class RadioControlWidget(QWidget):
         self._volume_slider.sliderPressed.connect(self._on_slider_pressed)
         self._volume_slider.sliderReleased.connect(self._on_slider_released)
         slider_layout.addWidget(self._volume_slider, 1)
-        volume_section_layout.addWidget(self._slider_wrap, 1)
+        volume_section_layout.addStretch(1)
+        volume_section_layout.addWidget(self._slider_wrap, 0)
 
         self._play_section = QWidget(self)
         self._play_section.setFixedSize(self.PLAY_BUTTON_WIDTH, self.PLAY_BUTTON_HEIGHT)
@@ -103,7 +105,9 @@ class RadioControlWidget(QWidget):
         self._play_button.setCheckable(True)
         self._play_button.setFixedSize(self.PLAY_BUTTON_WIDTH, self.PLAY_BUTTON_HEIGHT)
         self._play_button.clicked.connect(self.play_requested.emit)
-        play_section_layout.addWidget(self._play_button, 0, Qt.AlignmentFlag.AlignCenter)
+        play_section_layout.addWidget(
+            self._play_button, 0, Qt.AlignmentFlag.AlignCenter
+        )
 
         root.addStretch(1)
         root.addWidget(self._volume_section, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -119,16 +123,13 @@ class RadioControlWidget(QWidget):
         self._collapse_timer.timeout.connect(self._on_collapse_timeout)
 
         self._volume_width_anim = QPropertyAnimation(
-            self._volume_section,
+            self._slider_wrap,
             b"maximumWidth",
             self,
         )
         self._volume_width_anim.setDuration(self.ANIMATION_MS)
         self._volume_width_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._volume_width_anim.valueChanged.connect(self._sync_volume_min_width)
-        self._volume_width_anim.finished.connect(
-            self._on_volume_width_animation_finished
-        )
 
         self._opacity_anim = QPropertyAnimation(
             self._slider_opacity_effect, b"opacity", self
@@ -146,10 +147,8 @@ class RadioControlWidget(QWidget):
         )
 
         for watched in (
-            self,
             self._play_section,
             self._play_button,
-            self._volume_section,
             self._slider_wrap,
             self._volume_slider,
         ):
@@ -200,7 +199,7 @@ class RadioControlWidget(QWidget):
     def _refresh_interaction_enabled(self) -> None:
         available = self._service_available
         self._play_button.setEnabled(available)
-        self._volume_slider.setEnabled(available)
+        self._volume_slider.setEnabled(available and self._expanded)
         if not available:
             self._collapse_timer.stop()
             self._set_expanded(False)
@@ -298,10 +297,8 @@ class RadioControlWidget(QWidget):
 
     def _is_interaction_active(self) -> bool:
         if (
-            self.underMouse()
-            or self._play_section.underMouse()
+            self._play_section.underMouse()
             or self._play_button.underMouse()
-            or self._volume_section.underMouse()
             or self._slider_wrap.underMouse()
         ):
             return True
@@ -316,11 +313,11 @@ class RadioControlWidget(QWidget):
         self._expanded = expanded
         self._volume_width_anim.stop()
         self._opacity_anim.stop()
-        self._set_root_width(self.EXPANDED_WIDTH)
+        self._volume_slider.setEnabled(self._service_available and expanded)
 
-        current_volume_width = int(self._volume_section.maximumWidth())
+        current_volume_width = int(self._slider_wrap.maximumWidth())
         target_volume_width = (
-            self.EXPANDED_VOLUME_WIDTH if expanded else self.COLLAPSED_VOLUME_WIDTH
+            self.EXPANDED_VOLUME_WIDTH - self.VOLUME_RIGHT_GAP if expanded else 0
         )
         self._volume_width_anim.setStartValue(current_volume_width)
         self._volume_width_anim.setEndValue(target_volume_width)
@@ -337,13 +334,4 @@ class RadioControlWidget(QWidget):
             width = int(float(str(value)))
         except (TypeError, ValueError):
             return
-        self._volume_section.setMinimumWidth(width)
-
-    def _on_volume_width_animation_finished(self) -> None:
-        if self._expanded:
-            return
-        self._set_root_width(self.COLLAPSED_WIDTH)
-
-    def _set_root_width(self, width: int) -> None:
-        self.setMinimumWidth(width)
-        self.setMaximumWidth(width)
+        self._slider_wrap.setMinimumWidth(width)
