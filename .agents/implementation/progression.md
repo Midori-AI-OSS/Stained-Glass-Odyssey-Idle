@@ -1,7 +1,7 @@
 # Progression State
 
 Date captured: 2026-03-05
-Last updated: 2026-03-07
+Last updated: 2026-03-14
 
 ## Live Progression Rules
 
@@ -13,7 +13,7 @@ Last updated: 2026-03-07
   - valid stars are `5-7`
   - invalid stars fail discovery with an aggregated `ValueError`
 
-## Mech 1 Live Star Effects
+## Live Star Effects
 
 - Star-to-progression multiplier mapping:
   - 7 star = `2.5x`
@@ -21,15 +21,5 @@ Last updated: 2026-03-07
   - 5 star = `0.5x`
 - Live effects:
   - rebirth EXP reward gain is multiplied by star rank power
-  - post-50 rebirth EXP tax is softened by star rank power
+  - post-500 rebirth EXP tax is softened by star rank power
   - prestige weighted stat-growth magnitude is multiplied by star rank power
-- Not changed by Mech 1:
-  - rebirth unlock gate
-  - rebirth reset behavior
-  - `rebirth_power`
-  - `rebirths`
-  - prestige unlock gate
-  - prestige EXP reset math
-  - prestige post-floor `req_multiplier` penalty
-  - weighted stat choice weights
-  - save schema

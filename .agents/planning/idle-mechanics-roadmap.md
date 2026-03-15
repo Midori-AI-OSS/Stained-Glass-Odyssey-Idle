@@ -5,11 +5,11 @@
 This planning doc tracks forward-looking mechanics and unresolved design decisions.
 
 Date captured: 2026-03-05
-Last updated: 2026-03-11
+Last updated: 2026-03-14
 
 ## Planned Mechanics (Target Design)
 
-### Mech 3: Warp Banner System
+### Warp Banner System
 
 Planned intent:
 - Build Warp into a banner-based progression/gacha system.
@@ -18,8 +18,7 @@ Locked decisions:
 - Banner set is 7 total:
   - 6 elemental banners
   - 1 YOLO banner
-- Failed pulls on all banners grant item rewards for non-character progression systems
-  (city, housing, gear, or equivalent development paths).
+- Normal non-character pulls award only Prismatic Shards; characters remain rare outcomes.
 - Pity is per-banner, with a single pity track per banner.
 - 5 star odds follow the Endless linear pity curve:
   - `p5(pity) = 0.00001 + pity * ((0.05 - 0.00001) / 159)`
@@ -36,79 +35,103 @@ Locked decisions:
   - on elemental banners, if same-element eligibility fails, no 7 star can occur on that pull
 - Pity resets on any 5 star, 6 star, or 7 star outcome.
 - YOLO banner applies 50x to raw rates (including 7 star), then normalizes to a valid distribution.
+- Elemental banners consume 160 matching damage-type shards per pull.
+- Non-elemental banners consume 160 total damage-type shards paid from up to three damage types chosen by the player.
 
 Pending:
 - Translate the locked formulas into Warp runtime constants/helpers during implementation.
 - Add validation fixtures/simulations for pity progression and 6/7 star probability sanity checks.
 
-### Rebirth Currency for Warp: Upgrade Stones
+### Damage-Type Shard Warp Payments
 
 Planned intent:
-- Rebirth should always feed Warp currency.
+- Keep Warp progression funded by the elemental shard system that is live today and ensure rebirth/progression rewards target that pool.
+- Make damage-type shards the primary conduit for paying for Warp pulls while keeping the experience grounded in existing elemental damage types.
 
 Locked decisions:
-- Every rebirth grants 1 guaranteed Upgrade Stone.
-- Rebirth can grant additional stones.
-- Extra-stone behavior should become harder for each additional extra in the same rebirth event.
-- Extra-stone logic is tied to progression factors, including:
-  - crit_mod
-  - rebirth count
-  - town level
-  - character level
+- Damage-type shards match the elemental shard types currently live (Fire, Ice, Wind, Lightning, Light, Dark) and serve as the exclusive Warp currency.
+- Rebirth and related progression channels must guarantee a minimum damage-type shard inflow so players can cover the 160-shard pull costs locked above.
+- Warp payment logic uses these damage-type shards, which means elemental banners require matching-shard payments and non-elemental banners can draw from up to three player-selected damage types.
+- This damage-type shard pool directly drives Warp progression, superseding the prior Upgrade Stone framing.
 
 Pending:
-- Exact extra-stone formula and deterministic rounding behavior.
-- Exact diminishing-returns algorithm for repeated extras in one rebirth.
+- Exact per-rebirth shard payout schedule (base drops, extras, and rounding behavior).
+- How salvage/crafting/other long-term sources funnel into damage-type shard income for Warp.
+- Interaction rules between shard income and long-running progression modifiers or buffs.
 
-### Mech 4: Weapon Parts, Types, and Salvage Crafting
+### Prismatic Shards, Prism Archetypes, and Prismatic Dust Crafting
 
 Planned intent:
-- Build a long-term weapon progression layer that is independent from character rarity tiers.
+- Build a long-term prismatic progression layer that is independent from character rarity tiers.
 
 Locked decisions:
-- 1-4 stars are weapon parts.
+- 1-4 stars are prismatic shards.
 - 5-7 stars are character rarities.
-- Each character has one fixed `weapon_type_id`.
-- Target weapon catalog size is approximately 20 types.
-- Weapon parts are weapon-type bound:
-  - a part belongs to a weapon type
-  - it can be used by any character with that weapon type
-- Weapon types are expected to affect stats/progression behavior.
-- Unwanted parts can be salvaged into Salvage Dust.
+- Each character has one fixed `prism_archetype_id`.
+- Target prism archetype catalog size is approximately 20 types.
+- Prismatic shards are prism-archetype bound:
+  - a shard belongs to a prism archetype
+  - it can be used by any character with that prism archetype
+- Prism archetypes are expected to affect stats/progression behavior.
+- Unwanted shards can be salvaged into Prismatic Dust.
+- Star-to-prismatic-power mapping is locked to:
+  - 1 star = 15%
+  - 2 star = 45%
+  - 3 star = 150%
+  - 4 star = 500%
 - Crafting anchors currently locked:
-  - 1 star craft cost = 100 Salvage Dust
-  - 2 star craft cost = 500 Salvage Dust
+  - 1 star craft cost = 1000 Prismatic Dust
+  - 2 star craft cost = 2500 Prismatic Dust
+  - 3 star craft cost = 5000 Prismatic Dust
+  - 4 star craft cost = 100000 Prismatic Dust
 - Craft duration starts at 1 hour per star rank, then is modified by buffs/debuffs.
 - Craft duration floor is 5 seconds.
 - If buffs would reduce craft duration below 5 seconds:
-  - each extra second converts to +0.01% bonus odds for random side weapon parts
+  - each extra second converts to +0.01% bonus odds for random side prismatic shards
   - no cap is applied to overflow seconds or bonus odds
 - Bonus-odds payout model:
   - use deterministic + remainder behavior when bonus odds exceed 100%
-  - reduce remaining bonus odds by geometric decay (0.5x) after each awarded extra part
-- Overflow bonus extra parts must be a different weapon type than the crafted target type.
-- Overflow bonus extra-part star rank can match the crafted rank or be lower.
+  - reduce remaining bonus odds by geometric decay (0.5x) after each awarded extra shard
+- Overflow bonus extra shards must belong to a different prism archetype than the crafted target archetype.
+- Overflow bonus extra-shard star rank can match the crafted rank or be lower.
+- Damage-type shards can be crafted into Prismatic Dust with the following planning guidance:
+  - base craft size is 100 shards over 48 hours
+  - base rate is 28.8 minutes per shard
+  - shard output should flow one at a time during the craft instead of only at completion
+  - the player chooses the requested damage type for shard output
+  - there is a small chance for output to become a different damage type
+  - the player can choose smaller or larger craft sizes
+  - smaller batches finish sooner overall but are less time-efficient per shard
+  - larger batches take longer overall but are more time-efficient per shard
 
 Pending:
-- Exact 3 star and 4 star Salvage Dust craft costs.
 - Exact formal equation for overflow seconds -> bonus odds conversion pipeline.
 - Exact implementation order for deterministic payouts and 0.5x post-award decay.
-- Exact distribution weights for "match-or-lower" extra-part star outcomes.
-- Exact `weapon_type_id` list and naming for the ~20-type catalog.
-- Exact stat/progression lanes impacted by weapon-type/weapon-part power.
+- Exact distribution weights for "match-or-lower" extra-shard star outcomes.
+- Exact `prism_archetype_id` list and naming for the ~20-type catalog.
+- Initial prism archetype planning still needs a roster-grounded planning pass before the catalog is finalized.
+- `prism_archetype_id` naming should:
+  - lean on prism / glass / light motif language
+  - use lowercase snake_case IDs
+  - avoid direct element or damage-type names to prevent confusion with shard/payment terminology
+- Exact stat/progression lanes impacted by prism-archetype/prismatic-shard power.
 
 ## Open High-Impact Decisions
 
-- Final star-to-weapon-power mapping for 1-4 weapon parts.
-- Exact shard odds unit conversions and tick-to-time expectations.
+- Exact prismatic shard odds unit conversions and tick-to-time expectations.
 - Exact rebirth drop formula and caps/floors policy.
 - Warp implementation sequencing and simulation verification for locked rarity math.
-- Final Upgrade Stone extra-reward math.
-- Final 3-4 star Salvage Dust costs.
+- Final damage-type shard extra-reward math.
 - Final overflow craft-bonus math ordering and payout details.
-- Final weapon-type stat/progression impact model.
+- Final prism-archetype stat/progression impact model.
 
-Note: Future "upgrade blessings" with weapon parts/shards planned separately.
+### Future Upgrade / Prismatic Blessings
+
+Planned intent:
+- Reserve a separate future progression lane for upgrade/prismatic blessings tied to prismatic systems.
+
+Pending:
+- Exact blessing structure, unlock path, and how it interfaces with prismatic shards or Prismatic Dust.
 
 ### Future: Drop Table System
 

@@ -29,6 +29,7 @@ from endless_idler.progression import calculate_prestige_stat_gain_rate
 from endless_idler.progression import calculate_rebirth_exp_mult_gain
 from endless_idler.progression import calculate_rebirth_exp_tax
 from endless_idler.progression import calculate_rebirth_power
+from endless_idler.progression import REBIRTH_LEVEL_THRESHOLD
 
 
 LOSS_EXP_MULTIPLIER = 0.5
@@ -549,7 +550,7 @@ class IdleGameState(QObject):
                 return False
 
             level = max(1, int(data.get("level", 1)))
-            if level < 50:
+            if level < REBIRTH_LEVEL_THRESHOLD:
                 return False
 
             old_level = level

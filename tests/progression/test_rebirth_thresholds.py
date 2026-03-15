@@ -16,11 +16,12 @@ from endless_idler.progression import calculate_rebirth_exp_mult_gain
 from endless_idler.progression import calculate_rebirth_exp_tax
 from endless_idler.progression import calculate_rebirth_power
 from endless_idler.progression import progression_star_multiplier
+from endless_idler.progression import REBIRTH_LEVEL_THRESHOLD
 from endless_idler.ui.idle.idle_state import IdleGameState
 from endless_idler.ui.idle.screen import build_prestige_confirmation_html
 
 
-def _plugin(*, char_id: str = "hero", stars: int = 6) -> CharacterPlugin:
+def _plugin(*, char_id: str = "player", stars: int = 6) -> CharacterPlugin:
     return CharacterPlugin(
         char_id=char_id,
         display_name=char_id.title(),
@@ -35,11 +36,11 @@ def _state(
     progress_by_id: dict[str, dict[str, float | int]] | None = None,
 ) -> IdleGameState:
     return IdleGameState(
-        char_ids=["hero"],
+        char_ids=["player"],
         offsite_ids=[],
         party_level=1,
-        stacks={"hero": 1},
-        plugins_by_id={"hero": _plugin(stars=stars)},
+        stacks={"player": 1},
+        plugins_by_id={"player": _plugin(stars=stars)},
         rng=random.Random(7),
         progress_by_id=progress_by_id,
     )
@@ -84,15 +85,20 @@ def test_discover_character_plugins_raises_aggregated_value_error_for_invalid_ru
 
     monkeypatch.setattr(plugin_module, "_CHARACTERS_DIR", tmp_path)
 
-    with pytest.raises(ValueError, match="Invalid progression stars for runtime character plugins"):
+    with pytest.raises(
+        ValueError, match="Invalid progression stars for runtime character plugins"
+    ):
         _ = discover_character_plugins()
 
+    message = ""
     try:
         discover_character_plugins()
     except ValueError as exc:
         message = str(exc)
     else:
-        pytest.fail("discover_character_plugins() should have raised ValueError for invalid stars")
+        pytest.fail(
+            "discover_character_plugins() should have raised ValueError for invalid stars"
+        )
 
     assert "alpha=4 (alpha.py)" in message
     assert "omega=8 (omega.py)" in message
@@ -123,38 +129,73 @@ def test_discover_character_plugins_accepts_valid_runtime_stars(
 def test_rebirth_character_applies_star_weighted_exp_reward_gain(stars: int) -> None:
     state = _state(
         stars=stars,
-        progress_by_id={"hero": {"level": 60, "exp_multiplier": 1.0}},
+        progress_by_id={"player": {"level": 510, "exp_multiplier": 1.0}},
     )
 
-    assert state.rebirth_character("hero") is True
+    assert state.rebirth_character("player") is True
 
-    data = state.get_char_data("hero")
+    data = state.get_char_data("player")
     assert data is not None
-    expected_power = calculate_rebirth_power(60)
+    expected_power = calculate_rebirth_power(510)
     expected_gain = calculate_rebirth_exp_mult_gain(power=expected_power, stars=stars)
 
-    assert math.isclose(float(data["rebirth_power"]), expected_power, rel_tol=1e-9, abs_tol=1e-9)
-    assert math.isclose(float(data["exp_multiplier"]), 1.0 + expected_gain, rel_tol=1e-9, abs_tol=1e-9)
+    assert math.isclose(
+        float(data["rebirth_power"]), expected_power, rel_tol=1e-9, abs_tol=1e-9
+    )
+    assert math.isclose(
+        float(data["exp_multiplier"]), 1.0 + expected_gain, rel_tol=1e-9, abs_tol=1e-9
+    )
     assert int(data["rebirths"]) == 1
 
 
-def test_rebirth_tax_stays_baseline_until_tax_starts_and_then_eases() -> None:
-    assert calculate_rebirth_exp_tax(level=54, rebirth_power=1.0, stars=7) == 1.0
+def test_rebirth_character_requires_level_500() -> None:
+    locked_state = _state(
+        stars=6,
+        progress_by_id={"player": {"level": REBIRTH_LEVEL_THRESHOLD - 1}},
+    )
+    unlocked_state = _state(
+        stars=6,
+        progress_by_id={"player": {"level": REBIRTH_LEVEL_THRESHOLD}},
+    )
 
-    tax_six = calculate_rebirth_exp_tax(level=55, rebirth_power=1.0, stars=6)
-    tax_seven = calculate_rebirth_exp_tax(level=55, rebirth_power=1.0, stars=7)
+    assert locked_state.rebirth_character("player") is False
+    assert unlocked_state.rebirth_character("player") is True
+
+
+def test_rebirth_tax_stays_baseline_until_tax_starts_and_then_eases() -> None:
+    assert (
+        calculate_rebirth_exp_tax(
+            level=REBIRTH_LEVEL_THRESHOLD + 4,
+            rebirth_power=1.0,
+            stars=7,
+        )
+        == 1.0
+    )
+
+    tax_six = calculate_rebirth_exp_tax(
+        level=REBIRTH_LEVEL_THRESHOLD + 5,
+        rebirth_power=1.0,
+        stars=6,
+    )
+    tax_seven = calculate_rebirth_exp_tax(
+        level=REBIRTH_LEVEL_THRESHOLD + 5,
+        rebirth_power=1.0,
+        stars=7,
+    )
 
     assert tax_six > 1.01
     assert tax_seven > 1.01
     assert tax_seven < tax_six
 
 
-def test_prestige_weighting_changes_gain_magnitude_only(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_prestige_weighting_changes_gain_magnitude_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     state = _state(
         stars=7,
-        progress_by_id={"hero": {"prestige_count": 1}},
+        progress_by_id={"player": {"prestige_count": 1}},
     )
-    data = state.get_char_data("hero")
+    data = state.get_char_data("player")
     assert data is not None
 
     base_stats = {
@@ -166,15 +207,19 @@ def test_prestige_weighting_changes_gain_magnitude_only(monkeypatch: pytest.Monk
     }
     monkeypatch.setattr(state._rng, "choices", lambda population, weights, k: ["atk"])
 
-    state._apply_weighted_stat_upgrades(char_id="hero", base_stats=base_stats, level=1)
+    state._apply_weighted_stat_upgrades(
+        char_id="player", base_stats=base_stats, level=1
+    )
 
     expected_rate = calculate_prestige_stat_gain_rate(prestige_count=1, stars=7)
-    assert math.isclose(base_stats["atk"], 100.0 * (1.0 + expected_rate), rel_tol=1e-9, abs_tol=1e-9)
+    assert math.isclose(
+        base_stats["atk"], 100.0 * (1.0 + expected_rate), rel_tol=1e-9, abs_tol=1e-9
+    )
 
 
 def test_build_prestige_confirmation_html_uses_weighted_stat_gain_rate() -> None:
     html = build_prestige_confirmation_html(
-        display_name="Hero",
+        display_name="Player",
         exp_multiplier=10.0,
         prestige_count=1,
         stars=7,
