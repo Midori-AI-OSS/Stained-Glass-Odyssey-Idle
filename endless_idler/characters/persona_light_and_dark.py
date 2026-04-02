@@ -35,9 +35,7 @@ class PersonaLightAndDark(PlayerBase):
     damage_type: DamageTypeBase = field(
         default_factory=lambda: load_damage_type(choice(["Light", "Dark"]))
     )
-    passives: list[str] = field(
-        default_factory=lambda: ["persona_light_and_dark_duality", "trinity_synergy"]
-    )
+    passives: list[str] = field(default_factory=list)
     is_dual_type: bool = True
     dual_damage_types: tuple[str, str] = ("Light", "Dark")
 
