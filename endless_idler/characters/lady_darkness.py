@@ -9,6 +9,7 @@ from plugins.damage_types.dark import Dark
 
 placement = "onsite"
 
+
 @dataclass
 class LadyDarkness(PlayerBase):
     id = "lady_darkness"
@@ -28,4 +29,4 @@ class LadyDarkness(PlayerBase):
     char_type: CharacterType = CharacterType.B
     gacha_rarity = 5
     damage_type: DamageTypeBase = field(default_factory=Dark)
-    passives: list[str] = field(default_factory=lambda: ["lady_darkness_eclipsing_veil", "trinity_synergy"])
+    passives: list[str] = field(default_factory=list)
