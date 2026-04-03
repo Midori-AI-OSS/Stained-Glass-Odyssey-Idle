@@ -1,7 +1,7 @@
-"""Passive trigger definitions and event context.
+"""Legacy combat passive trigger definitions and event context.
 
-This module defines when passive abilities can activate (trigger points)
-and the context data passed to them during activation.
+These trigger types remain for old combat passive helpers, but they are not the
+public API of the rebuilt idle passive framework.
 """
 
 from enum import Enum
@@ -11,11 +11,11 @@ from dataclasses import dataclass
 
 class PassiveTrigger(Enum):
     """Defines when a passive ability can activate.
-    
+
     Each trigger represents a specific point in combat where
     passive abilities can check conditions and execute their effects.
     """
-    
+
     TURN_START = "turn_start"
     TURN_END = "turn_end"
     PRE_DAMAGE = "pre_damage"
@@ -29,11 +29,11 @@ class PassiveTrigger(Enum):
 @dataclass
 class TriggerContext:
     """Context data passed to passive abilities during activation.
-    
+
     Contains all information needed for a passive to check conditions
     and execute its effects, including character stats, combat state,
     and trigger-specific data.
-    
+
     Attributes:
         trigger: The specific trigger point that activated
         owner_stats: Stats object of the character who owns this passive
@@ -45,7 +45,7 @@ class TriggerContext:
                For example, PRE_DAMAGE might include damage_amount,
                TARGET_SELECTION might include available_targets, etc.
     """
-    
+
     trigger: PassiveTrigger
     owner_stats: Any  # Will be Stats type from combat module
     all_allies: list[Any]

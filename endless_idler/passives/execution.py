@@ -1,7 +1,7 @@
-"""Passive ability execution utilities.
+"""Legacy combat passive execution utilities.
 
-This module provides helper functions for triggering and executing
-passive abilities during combat.
+This module remains in-tree for old combat-shaped helpers, but the rebuilt
+passive framework no longer uses it as the main package API.
 """
 
 import logging
