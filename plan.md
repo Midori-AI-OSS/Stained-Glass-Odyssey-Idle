@@ -323,9 +323,26 @@ The plan is explicitly locked on top-level canonical passive persistence. Deferr
 
 ## Pass 4: Idle Runtime Passive Integration
 
+Status: complete. See `done.md` for the finished work and verification.
+
 ### Goal
 
 Make `IdleGameState` the runtime owner of passive state, passive ticking, and passive snapshot export.
+
+### Completed work
+
+- Added a dedicated passive runtime module and expanded `PassivePlugin` with a minimal runtime hook shape.
+- Threaded canonical `passives` into `IdleGameState` and runtime snapshot export.
+- Added active-only `passive_runtime` export in idle snapshots.
+- Wired canonical passive save sync through `main_menu.py` and `ui/idle/screen.py`.
+- Added targeted runtime/save-sync tests for passive snapshot behavior.
+
+### Locked output from Pass 4
+
+- `IdleGameState` now owns passive canonical state and active transient passive runtime state.
+- Idle snapshots now export full canonical `passives` plus active-only `passive_runtime`.
+- Canonical `passives` are written back into save objects; `passive_runtime` is not.
+- Passive behavior remains no-op until Pass 5 adds real Trinity logic.
 
 ### Expected file cluster
 

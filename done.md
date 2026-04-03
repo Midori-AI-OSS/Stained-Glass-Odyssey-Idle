@@ -105,3 +105,36 @@ Results:
 
 - lint passed
 - targeted save/recovery pytest batch passed: `19 passed`
+
+## Pass 4: Idle Runtime Passive Integration
+
+Status: complete.
+
+### Completed
+
+- Expanded `PassivePlugin` with a minimal runtime hook shape for future passive behavior.
+- Added `endless_idler/passives/runtime.py` for active passive resolution, runtime state initialization, ticking, and export.
+- Threaded `passives_data` into `IdleGameState` and made it the runtime owner of passive canonical state plus active transient runtime state.
+- Added canonical passive export and active-only `passive_runtime` export to idle runtime snapshots.
+- Threaded canonical passive save data through `MainMenuWindow` and `IdleScreenWidget` idle snapshot save-sync paths.
+- Kept transient `passive_runtime` out of `RunSave` writes.
+- Added targeted idle runtime and UI tests for the new passive snapshot/save-sync contract.
+
+### Notes
+
+- Canonical snapshot `passives` preserves the full `RunSave.passives` map shape.
+- Transient snapshot `passive_runtime` only includes active passive ids resolved from the current lineup.
+- Current passive plugins still have no gameplay behavior, so Pass 4 runtime ticking is structurally live but behaviorally no-op.
+- Trinity-specific runtime behavior remains deferred to Pass 5.
+
+### Verification
+
+- Lint:
+  - `uv run ruff check endless_idler/passives endless_idler/ui/idle/idle_state.py endless_idler/ui/main_menu.py endless_idler/ui/idle/screen.py tests/test_idle_passives.py tests/ui/test_main_menu_idle_runtime.py tests/ui/test_idle_layout_cooldown.py`
+- Targeted tests:
+  - `uv run pytest -q tests/test_idle_passives.py tests/ui/test_main_menu_idle_runtime.py tests/ui/test_idle_layout_cooldown.py tests/test_idle_blessing.py`
+
+Results:
+
+- lint passed
+- targeted idle runtime pytest batch passed: `30 passed`

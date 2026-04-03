@@ -17,6 +17,7 @@ _EXCLUDED_MODULE_NAMES = frozenset(
     {
         "__init__.py",
         "plugin.py",
+        "runtime.py",
         "loader.py",
         "registry.py",
         "base.py",

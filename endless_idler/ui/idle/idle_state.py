@@ -30,6 +30,11 @@ from endless_idler.progression import calculate_rebirth_exp_mult_gain
 from endless_idler.progression import calculate_rebirth_exp_tax
 from endless_idler.progression import calculate_rebirth_power
 from endless_idler.progression import REBIRTH_LEVEL_THRESHOLD
+from endless_idler.passives.runtime import export_active_passive_runtime
+from endless_idler.passives.runtime import export_passives as export_canonical_passives
+from endless_idler.passives.runtime import initialize_passive_state
+from endless_idler.passives.runtime import resolve_active_passive_ids
+from endless_idler.passives.runtime import tick_active_passives
 
 
 LOSS_EXP_MULTIPLIER = 0.5
@@ -91,6 +96,7 @@ class IdleGameState(QObject):
         risk_reward_level: int = 0,
         battle_start_time: float = 0.0,
         blessings_data: dict[str, dict[str, Any]] | None = None,
+        passives_data: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         super().__init__()
         self._char_ids = char_ids
@@ -130,6 +136,16 @@ class IdleGameState(QObject):
         self._elapsed_seconds = float(max(0.0, battle_start_time))
         self._blessings_data = blessings_data if blessings_data else {}
         self._damage_blessing_id_by_type = self._build_damage_blessing_id_by_type()
+        self._active_passive_ids = resolve_active_passive_ids(
+            char_ids=list(char_ids),
+            offsite_ids=list(self._offsite_ids),
+            standby_ids=list(self._standby_ids),
+            plugins_by_id=plugins_by_id,
+        )
+        self._passives_data, self._passive_runtime = initialize_passive_state(
+            passives_data=passives_data,
+            active_passive_ids=list(self._active_passive_ids),
+        )
         self._lock = threading.RLock()
 
         self._tick_count = 0
@@ -665,6 +681,15 @@ class IdleGameState(QObject):
             dt = float(max(0.0, IDLE_TICK_INTERVAL_SECONDS))
             self._elapsed_seconds += dt
             self._process_blessing_ticks(delta_seconds=dt)
+            tick_active_passives(
+                active_passive_ids=list(self._active_passive_ids),
+                canonical_passives=self._passives_data,
+                runtime_passives=self._passive_runtime,
+                idle_state=self,
+                delta_seconds=dt,
+                tick_count=self._tick_count,
+                elapsed_seconds=self._elapsed_seconds,
+            )
 
             roll_ready = self._tick_count % SHARD_ROLL_INTERVAL_TICKS == 0
 
@@ -1395,6 +1420,10 @@ class IdleGameState(QObject):
                 for item_id, count in self._inventory.items()
             }
 
+    def export_passives(self) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            return self._export_passives_unlocked()
+
     def _export_blessings_unlocked(self) -> dict[str, dict[str, Any]]:
         payload: dict[str, dict[str, Any]] = {}
         persistent_plugins = {
@@ -1427,6 +1456,19 @@ class IdleGameState(QObject):
             payload[clean_id] = normalized
         return payload
 
+    def _export_passives_unlocked(self) -> dict[str, dict[str, Any]]:
+        return export_canonical_passives(canonical_passives=self._passives_data)
+
+    def export_passive_runtime(self) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            return self._export_passive_runtime_unlocked()
+
+    def _export_passive_runtime_unlocked(self) -> dict[str, dict[str, Any]]:
+        return export_active_passive_runtime(
+            active_passive_ids=list(self._active_passive_ids),
+            runtime_passives=self._passive_runtime,
+        )
+
     def export_runtime_snapshot(self) -> dict[str, Any]:
         with self._lock:
             return {
@@ -1445,6 +1487,8 @@ class IdleGameState(QObject):
                 "initial_stats": self._export_initial_stats_unlocked(),
                 "blessings": self._export_blessings_unlocked(),
                 "blessing_runtime": self._export_blessing_runtime_unlocked(),
+                "passives": self._export_passives_unlocked(),
+                "passive_runtime": self._export_passive_runtime_unlocked(),
                 "exp_bonus_seconds": float(max(0.0, self._exp_bonus_seconds)),
                 "exp_penalty_seconds": float(max(0.0, self._exp_penalty_seconds)),
                 "inventory": {

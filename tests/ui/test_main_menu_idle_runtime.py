@@ -223,8 +223,41 @@ def test_build_idle_state_from_save_passes_standby_ids(monkeypatch) -> None:
         idle_risk_reward_level=0,
         battle_start_time=0.0,
         blessings={},
+        passives={"lady_fire_infernal_momentum": {}},
     )
 
     MainMenuWindow._build_idle_state_from_save(holder, save)
 
     assert captured["standby_ids"] == ["bench"]
+    assert captured["passives_data"] == {"lady_fire_infernal_momentum": {}}
+
+
+def test_apply_idle_snapshot_to_save_writes_canonical_passives_only() -> None:
+    save = SimpleNamespace(
+        character_progress={},
+        character_stats={},
+        character_initial_stats={},
+        blessings={},
+        passives={},
+        idle_exp_bonus_seconds=0.0,
+        idle_exp_penalty_seconds=0.0,
+        idle_shared_exp_percentage=1,
+        idle_risk_reward_level=0,
+        layout_tick_cooldown_seconds=0.0,
+    )
+    holder = SimpleNamespace(
+        _save_store=SimpleNamespace(current=save),
+        _tick_cooldown_lock=nullcontext(),
+        _tick_cooldown_seconds=0.0,
+    )
+
+    MainMenuWindow._apply_idle_snapshot_to_save(
+        holder,
+        {
+            "passives": {"lady_fire_infernal_momentum": {}},
+            "passive_runtime": {"lady_fire_infernal_momentum": {"ticks": 3}},
+        },
+    )
+
+    assert save.passives == {"lady_fire_infernal_momentum": {}}
+    assert not hasattr(save, "passive_runtime")

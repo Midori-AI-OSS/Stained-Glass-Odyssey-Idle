@@ -181,6 +181,7 @@ class IdleScreenWidget(QWidget):
             risk_reward_level=int(getattr(self._save, "idle_risk_reward_level", 0)),
             battle_start_time=float(getattr(self._save, "battle_start_time", 0.0)),
             blessings_data=dict(getattr(self._save, "blessings", {}) or {}),
+            passives_data=dict(getattr(self._save, "passives", {}) or {}),
         )
 
         self._onsite_cards: list[IdleCharacterCard] = []
@@ -639,6 +640,13 @@ class IdleScreenWidget(QWidget):
                 str(blessing_id): dict(data)
                 for blessing_id, data in blessings.items()
                 if isinstance(blessing_id, str) and isinstance(data, dict)
+            }
+        passives = snapshot.get("passives")
+        if isinstance(passives, dict):
+            save.passives = {
+                str(passive_id): dict(data)
+                for passive_id, data in passives.items()
+                if isinstance(passive_id, str) and isinstance(data, dict)
             }
         save.idle_exp_bonus_seconds = self._coerce_float(
             snapshot.get("exp_bonus_seconds", 0.0), 0.0

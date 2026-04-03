@@ -378,6 +378,7 @@ class MainMenuWindow(QMainWindow):
             risk_reward_level=int(getattr(save, "idle_risk_reward_level", 0)),
             battle_start_time=float(getattr(save, "battle_start_time", 0.0)),
             blessings_data=dict(getattr(save, "blessings", {}) or {}),
+            passives_data=dict(getattr(save, "passives", {}) or {}),
             rng=self._idle_rng,
         )
 
@@ -480,6 +481,13 @@ class MainMenuWindow(QMainWindow):
                 str(blessing_id): dict(data)
                 for blessing_id, data in blessings.items()
                 if isinstance(blessing_id, str) and isinstance(data, dict)
+            }
+        passives = snapshot.get("passives")
+        if isinstance(passives, dict):
+            save.passives = {
+                str(passive_id): dict(data)
+                for passive_id, data in passives.items()
+                if isinstance(passive_id, str) and isinstance(data, dict)
             }
         exp_bonus_seconds = snapshot.get("exp_bonus_seconds", 0.0)
         if isinstance(exp_bonus_seconds, bool):

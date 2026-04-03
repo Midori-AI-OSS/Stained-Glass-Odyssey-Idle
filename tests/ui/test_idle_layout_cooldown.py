@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from typing import cast
 
 from PySide6.QtWidgets import QApplication
@@ -117,3 +118,29 @@ def test_idle_screen_applies_tick_cooldown_before_processing(monkeypatch) -> Non
     screen._produce_tick_payload(2, 0.0)
     assert fake_state.process_calls == 1
     screen.shutdown()
+
+
+def test_idle_screen_snapshot_applies_canonical_passives_only() -> None:
+    save = RunSave()
+    holder = type(
+        "_Holder",
+        (),
+        {
+            "_save": save,
+            "_tick_cooldown_lock": nullcontext(),
+            "_tick_cooldown_seconds": 0.0,
+            "_coerce_float": staticmethod(IdleScreenWidget._coerce_float),
+            "_coerce_int": staticmethod(IdleScreenWidget._coerce_int),
+        },
+    )()
+
+    IdleScreenWidget._apply_snapshot_to_save(
+        holder,
+        {
+            "passives": {"lady_fire_infernal_momentum": {}},
+            "passive_runtime": {"lady_fire_infernal_momentum": {"ticks": 5}},
+        },
+    )
+
+    assert save.passives == {"lady_fire_infernal_momentum": {}}
+    assert not hasattr(save, "passive_runtime")
