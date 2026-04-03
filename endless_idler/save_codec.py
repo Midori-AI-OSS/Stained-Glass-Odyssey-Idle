@@ -10,6 +10,26 @@ from __future__ import annotations
 from typing import Any
 
 
+def _default_passives() -> dict[str, dict[str, Any]]:
+    """Generate default passives from plugin discovery."""
+    from endless_idler.passives.registry import discover_passive_plugins
+
+    defaults: dict[str, dict[str, Any]] = {}
+    for plugin in discover_passive_plugins():
+        passive_defaults: dict[str, Any] = {}
+        for field_name, field_type in plugin.save_schema.items():
+            if field_type is int:
+                passive_defaults[field_name] = 0
+            elif field_type is float:
+                passive_defaults[field_name] = 0.0
+            elif field_type is bool:
+                passive_defaults[field_name] = False
+
+        defaults[plugin.passive_id] = passive_defaults
+
+    return defaults
+
+
 def as_int(value: object, *, default: int) -> int:
     if isinstance(value, bool):
         return int(value)
@@ -224,6 +244,116 @@ def normalized_character_progress(
     return normalized
 
 
+def as_passives_dict(value: object) -> dict[str, dict[str, Any]]:
+    """Validate and normalize canonical passives data using plugin schemas."""
+    from endless_idler.passives.registry import discover_passive_plugins
+
+    if not isinstance(value, dict):
+        raise ValueError("Passives payload must be a dictionary.")
+    if not value:
+        return _default_passives()
+
+    result: dict[str, dict[str, Any]] = {}
+    plugins = discover_passive_plugins()
+    plugin_by_id = {plugin.passive_id: plugin for plugin in plugins}
+    unknown_ids = sorted(
+        passive_id
+        for passive_id in value
+        if isinstance(passive_id, str) and passive_id not in plugin_by_id
+    )
+    if unknown_ids:
+        raise ValueError(f"Unknown passive ids in payload: {unknown_ids}")
+
+    for plugin in plugins:
+        if plugin.passive_id not in value:
+            raise ValueError(
+                f"Missing passive payload for passive '{plugin.passive_id}'."
+            )
+        raw_passive = value.get(plugin.passive_id)
+        if not isinstance(raw_passive, dict):
+            raise ValueError(
+                f"Passive '{plugin.passive_id}' payload must be a dictionary."
+            )
+
+        normalized: dict[str, Any] = {}
+        expected_fields = set(plugin.save_schema)
+        actual_fields = {key for key in raw_passive if isinstance(key, str)}
+        extra_fields = sorted(actual_fields - expected_fields)
+        missing_fields = sorted(expected_fields - actual_fields)
+        if extra_fields or missing_fields:
+            raise ValueError(
+                f"Passive '{plugin.passive_id}' has non-canonical fields. "
+                f"missing={missing_fields}, extra={extra_fields}"
+            )
+
+        for field_name, field_type in plugin.save_schema.items():
+            raw_value = raw_passive[field_name]
+
+            if field_type is int:
+                if isinstance(raw_value, bool) or not isinstance(raw_value, int):
+                    raise ValueError(
+                        f"Passive '{plugin.passive_id}.{field_name}' must be int."
+                    )
+                if raw_value < 0:
+                    raise ValueError(
+                        f"Passive '{plugin.passive_id}.{field_name}' must be >= 0."
+                    )
+                normalized[field_name] = raw_value
+            elif field_type is float:
+                if isinstance(raw_value, bool) or not isinstance(
+                    raw_value, int | float
+                ):
+                    raise ValueError(
+                        f"Passive '{plugin.passive_id}.{field_name}' must be float."
+                    )
+                if float(raw_value) < 0.0:
+                    raise ValueError(
+                        f"Passive '{plugin.passive_id}.{field_name}' must be >= 0.0."
+                    )
+                normalized[field_name] = float(raw_value)
+            elif field_type is bool:
+                if not isinstance(raw_value, bool):
+                    raise ValueError(
+                        f"Passive '{plugin.passive_id}.{field_name}' must be bool."
+                    )
+                normalized[field_name] = raw_value
+
+        result[plugin.passive_id] = normalized
+
+    return result
+
+
+def normalized_passives(value: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Normalize and validate passives data using plugin schemas."""
+    from endless_idler.passives.registry import discover_passive_plugins
+
+    defaults = _default_passives()
+    result: dict[str, dict[str, Any]] = {}
+
+    for plugin in discover_passive_plugins():
+        raw = value.get(plugin.passive_id, {})
+        if not isinstance(raw, dict):
+            result[plugin.passive_id] = defaults.get(plugin.passive_id, {}).copy()
+            continue
+
+        normalized: dict[str, Any] = {}
+        for field_name, field_type in plugin.save_schema.items():
+            raw_value = raw.get(field_name)
+
+            if field_type is int:
+                normalized[field_name] = max(0, as_int(raw_value, default=0))
+            elif field_type is float:
+                normalized[field_name] = max(0.0, as_float(raw_value, default=0.0))
+            elif field_type is bool:
+                normalized[field_name] = (
+                    bool(raw_value) if raw_value is not None else False
+                )
+
+        result[plugin.passive_id] = normalized
+
+    return result
+
+
 def _default_blessings() -> dict[str, dict[str, Any]]:
     """Generate default blessings from plugin discovery."""
     from endless_idler.blessings.registry import discover_blessing_plugins
@@ -306,7 +436,9 @@ def as_blessings_dict(value: object) -> dict[str, dict[str, Any]]:
                     )
                 normalized[field_name] = raw_value
             elif field_type is float:
-                if isinstance(raw_value, bool) or not isinstance(raw_value, int | float):
+                if isinstance(raw_value, bool) or not isinstance(
+                    raw_value, int | float
+                ):
                     raise ValueError(
                         f"Blessing '{plugin.blessing_id}.{field_name}' must be float."
                     )

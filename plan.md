@@ -255,9 +255,25 @@ The current passive package still reflects an older combat-oriented architecture
 
 ## Pass 3: Passive Persistence + Schema
 
+Status: complete. See `done.md` for the finished work and verification.
+
 ### Goal
 
 Add canonical blessing-like passive persistence so passive state survives save/load without using hidden payloads.
+
+### Completed work
+
+- Added top-level `RunSave.passives` with canonical defaults for every discovered passive id.
+- Added blessing-style strict passive save validation and normalization in `save_codec.py`.
+- Threaded passive payloads through `SaveManager.load()`, `SaveManager.save()`, and `_normalized_save()`.
+- Added save-schema coverage for passive round-trip, strict rejection, and save-store crash recovery.
+
+### Locked output from Pass 3
+
+- Canonical saves now include top-level `passives`.
+- Passive payload validation now matches blessing strictness exactly.
+- Current passive payloads are canonical empty dicts until later passes add real schema fields.
+- Runtime passive state remains out of scope until Pass 4.
 
 ### Expected file cluster
 

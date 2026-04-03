@@ -71,3 +71,37 @@ Results:
 - passive discovery returned 20 plugins
 - all discovered character passive ids resolved through the new registry
 - lint passed
+
+## Pass 3: Passive Persistence + Schema
+
+Status: complete.
+
+### Completed
+
+- Added canonical top-level `RunSave.passives` storage in `endless_idler/save.py`.
+- Added `_get_default_passives()` so new saves seed every discovered passive id with canonical defaults.
+- Added strict blessing-style passive validation and normalization in `endless_idler/save_codec.py`.
+- Wired passive payload loading through `as_passives_dict()` and canonical save rewrite through `normalized_passives()`.
+- Added canonical passive payload serialization to `SaveManager.save()`.
+- Added strict save-schema tests for passive round-trip, missing ids, unknown ids, and extra fields.
+- Added `RunSaveStore` crash-backup coverage for invalid passive payload recovery.
+- Updated two stale save-schema assertions so the targeted suite reflects current repo save behavior.
+
+### Notes
+
+- `RunSave.passives` now includes all currently discovered passive ids.
+- Because all current passive plugins still have empty `save_schema`, their canonical payloads are currently empty dicts.
+- Pass 3 does not add runtime passive execution, runtime snapshot export, or Trinity-specific passive state yet.
+- `list[int]` codec support was not added because no concrete passive schema required it in this pass.
+
+### Verification
+
+- Lint:
+  - `uv run ruff check endless_idler/save.py endless_idler/save_codec.py tests/test_save_schema_cleanup.py tests/test_run_save_store.py`
+- Targeted tests:
+  - `uv run pytest -q tests/test_save_schema_cleanup.py tests/test_run_save_store.py`
+
+Results:
+
+- lint passed
+- targeted save/recovery pytest batch passed: `19 passed`
