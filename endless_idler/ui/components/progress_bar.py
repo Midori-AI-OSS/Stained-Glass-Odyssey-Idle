@@ -112,6 +112,7 @@ class AnimatedProgressBar(QWidget):
         # Color transition configuration
         self._color_thresholds: list[tuple[float, tuple[int, int, int, int]]] = []
         self._gradient_enabled = True
+        self._base_color = DEFAULT_BASE_RGBA
         self._start_color = DEFAULT_AURORA_START_RGBA
         self._mid_color = DEFAULT_AURORA_MID_RGBA
         self._end_color = DEFAULT_AURORA_END_RGBA
@@ -197,6 +198,11 @@ class AnimatedProgressBar(QWidget):
         self._end_color = end_color
         self.update()
 
+    def set_base_color(self, color: tuple[int, int, int, int]) -> None:
+        """Set the base fill color used by thresholds and gradients."""
+        self._base_color = color
+        self.update()
+
     def setText(
         self, text: str, alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignCenter
     ) -> None:
@@ -209,6 +215,10 @@ class AnimatedProgressBar(QWidget):
         self._text = text
         self._text_alignment = alignment
         self.update()
+
+    def format(self) -> str:
+        """Return the currently rendered text."""
+        return self._text
 
     def _should_animate(self) -> bool:
         """Check if animation should be running."""
@@ -296,7 +306,7 @@ class AnimatedProgressBar(QWidget):
             )
 
             # Determine fill color based on thresholds or gradient
-            fill_color = QColor(*DEFAULT_BASE_RGBA)  # Default blue
+            fill_color = QColor(*self._base_color)
             use_gradient = False
             fill_gradient = None
 
@@ -305,7 +315,7 @@ class AnimatedProgressBar(QWidget):
                 blended_rgba = _get_blended_color_for_progress(
                     self._display_progress,
                     self._color_thresholds,
-                    DEFAULT_BASE_RGBA,
+                    self._base_color,
                 )
                 fill_color = QColor(*blended_rgba)
 
@@ -313,14 +323,10 @@ class AnimatedProgressBar(QWidget):
             elif self._gradient_enabled:
                 aurora_mix = _blend_factor_for_progress(self._display_progress)
                 start_rgba = _blend_rgba(
-                    DEFAULT_BASE_RGBA, DEFAULT_AURORA_START_RGBA, aurora_mix
+                    self._base_color, self._start_color, aurora_mix
                 )
-                mid_rgba = _blend_rgba(
-                    DEFAULT_BASE_RGBA, DEFAULT_AURORA_MID_RGBA, aurora_mix
-                )
-                end_rgba = _blend_rgba(
-                    DEFAULT_BASE_RGBA, DEFAULT_AURORA_END_RGBA, aurora_mix
-                )
+                mid_rgba = _blend_rgba(self._base_color, self._mid_color, aurora_mix)
+                end_rgba = _blend_rgba(self._base_color, self._end_color, aurora_mix)
 
                 fill_gradient = QLinearGradient(
                     fill_rect.left(),
@@ -345,9 +351,9 @@ class AnimatedProgressBar(QWidget):
             if self._display_shimmer > 0.0:
                 half_width = max(8, int(round(float(fill_rect.width()) * 0.14)))
                 shimmer_travel = float(fill_rect.width() + (half_width * 2))
-                shimmer_center = (
-                    float(fill_rect.left()) - float(half_width)
-                ) + (self._shimmer_phase * shimmer_travel)
+                shimmer_center = (float(fill_rect.left()) - float(half_width)) + (
+                    self._shimmer_phase * shimmer_travel
+                )
                 center_x = int(round(shimmer_center))
                 shimmer_rect = QRect(
                     center_x - half_width,

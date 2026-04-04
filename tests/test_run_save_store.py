@@ -89,6 +89,58 @@ def test_run_save_store_startup_load_exception_creates_crash_backup_and_resets(
     store.shutdown()
 
 
+def test_run_save_store_invalid_passive_payload_creates_crash_backup_and_resets(
+    tmp_path: Path,
+) -> None:
+    save_path = tmp_path / "save.json"
+    save_path.write_text(
+        json.dumps(
+            {
+                "version": 12,
+                "party_level": 55,
+                "passives": {
+                    "lady_fire_infernal_momentum": {
+                        "runtime_only": 7,
+                    },
+                    "trinity_synergy": {
+                        "stack_ttls": [],
+                        "stack_progress_ticks": 0,
+                    },
+                    "lady_light_radiant_aegis": {},
+                    "lady_darkness_eclipsing_veil": {
+                        "bleed_stack_ttls": [],
+                        "bleed_progress_ticks": 0,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    store = RunSaveStore(
+        plugins=_trinity_plugins(),
+        save_manager=SaveManager(path=save_path),
+        rng=random.Random(17),
+    )
+
+    save = store.load_or_create()
+
+    crash_backups = sorted(tmp_path.glob("save.*.crash.backup*.json"))
+    assert len(crash_backups) == 1
+
+    backed_up_payload = json.loads(crash_backups[0].read_text(encoding="utf-8"))
+    assert backed_up_payload["party_level"] == 55
+    assert (
+        backed_up_payload["passives"]["lady_fire_infernal_momentum"]["runtime_only"]
+        == 7
+    )
+
+    rewritten_payload = json.loads(save_path.read_text(encoding="utf-8"))
+    assert rewritten_payload["party_level"] == 1
+    assert rewritten_payload["passives"] == save.passives
+    assert save.party_level == 1
+    store.shutdown()
+
+
 def test_run_save_store_startup_backup_failure_raises_and_preserves_save(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

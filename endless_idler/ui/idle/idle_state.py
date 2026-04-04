@@ -5,6 +5,7 @@ import random
 import threading
 import time
 
+from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QObject
@@ -30,6 +31,16 @@ from endless_idler.progression import calculate_rebirth_exp_mult_gain
 from endless_idler.progression import calculate_rebirth_exp_tax
 from endless_idler.progression import calculate_rebirth_power
 from endless_idler.progression import REBIRTH_LEVEL_THRESHOLD
+from endless_idler.passives._trinity import LADY_LIGHT_STACK_BONUS_PER_STACK
+from endless_idler.passives._trinity import TRINITY_MITIGATION_PER_STACK
+from endless_idler.passives._trinity import TRINITY_SOFT_CAP_THRESHOLD
+from endless_idler.passives._trinity import TRINITY_STACK_INTERVAL_TICKS
+from endless_idler.passives._trinity import TRINITY_STACK_TTL_TICKS
+from endless_idler.passives.runtime import export_active_passive_runtime
+from endless_idler.passives.runtime import export_passives as export_canonical_passives
+from endless_idler.passives.runtime import initialize_passive_state
+from endless_idler.passives.runtime import resolve_active_passive_ids
+from endless_idler.passives.runtime import tick_active_passives
 
 
 LOSS_EXP_MULTIPLIER = 0.5
@@ -66,6 +77,19 @@ SHARD_EMA_ALPHA = 1.0 - math.exp(
 )
 
 
+@dataclass(frozen=True, slots=True)
+class PassiveBarDisplayData:
+    passive_id: str
+    label: str
+    progress: float
+    display_percent: float
+    shimmer: float
+    display_text: str = ""
+    style_id: str = "default"
+    element_id: str = "generic"
+    dual_element_ids: tuple[str, str] = ("", "")
+
+
 class IdleGameState(QObject):
     tick_update = Signal(int)
 
@@ -91,6 +115,7 @@ class IdleGameState(QObject):
         risk_reward_level: int = 0,
         battle_start_time: float = 0.0,
         blessings_data: dict[str, dict[str, Any]] | None = None,
+        passives_data: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         super().__init__()
         self._char_ids = char_ids
@@ -130,6 +155,17 @@ class IdleGameState(QObject):
         self._elapsed_seconds = float(max(0.0, battle_start_time))
         self._blessings_data = blessings_data if blessings_data else {}
         self._damage_blessing_id_by_type = self._build_damage_blessing_id_by_type()
+        self._active_passive_ids = resolve_active_passive_ids(
+            char_ids=list(char_ids),
+            offsite_ids=list(self._offsite_ids),
+            standby_ids=list(self._standby_ids),
+            plugins_by_id=plugins_by_id,
+        )
+        self._passives_data, self._passive_runtime = initialize_passive_state(
+            passives_data=passives_data,
+            active_passive_ids=list(self._active_passive_ids),
+        )
+        self._passive_exp_multiplier_bonus_by_char: dict[str, float] = {}
         self._lock = threading.RLock()
 
         self._tick_count = 0
@@ -305,6 +341,428 @@ class IdleGameState(QObject):
             self._ensure_sparse_growth_schedule(char_id)
 
         self._apply_offsite_stat_share_to_onsite_hp()
+        self._refresh_passive_effects_unlocked(delta_seconds=0.0)
+
+    def _refresh_passive_effects_unlocked(self, *, delta_seconds: float) -> None:
+        self._passive_exp_multiplier_bonus_by_char = {}
+        tick_active_passives(
+            active_passive_ids=list(self._active_passive_ids),
+            canonical_passives=self._passives_data,
+            runtime_passives=self._passive_runtime,
+            idle_state=self,
+            delta_seconds=float(max(0.0, delta_seconds)),
+            tick_count=self._tick_count,
+            elapsed_seconds=self._elapsed_seconds,
+        )
+
+    def add_passive_exp_multiplier_bonus(self, *, char_id: str, bonus: float) -> None:
+        clean_id = str(char_id or "").strip()
+        if not clean_id:
+            return
+        with self._lock:
+            self._add_passive_exp_multiplier_bonus_unlocked(
+                char_id=clean_id,
+                bonus=bonus,
+            )
+
+    def _add_passive_exp_multiplier_bonus_unlocked(
+        self, *, char_id: str, bonus: float
+    ) -> None:
+        clean_id = str(char_id or "").strip()
+        if not clean_id:
+            return
+        amount = float(max(0.0, bonus))
+        if amount <= 0.0:
+            return
+        current = float(self._passive_exp_multiplier_bonus_by_char.get(clean_id, 0.0))
+        self._passive_exp_multiplier_bonus_by_char[clean_id] = current + amount
+
+    def get_deployed_character_ids(self) -> list[str]:
+        with self._lock:
+            return list(dict.fromkeys([*self._char_ids, *self._offsite_ids]))
+
+    def is_character_deployed(self, char_id: str) -> bool:
+        clean_id = str(char_id or "").strip()
+        if not clean_id:
+            return False
+        with self._lock:
+            return clean_id in self._char_ids or clean_id in self._offsite_ids
+
+    def get_passive_canonical_state(self, passive_id: str) -> dict[str, Any]:
+        clean_id = str(passive_id or "").strip()
+        if not clean_id:
+            return {}
+        with self._lock:
+            raw = self._passives_data.get(clean_id, {})
+            return dict(raw) if isinstance(raw, dict) else {}
+
+    def get_passive_runtime_state(self, passive_id: str) -> dict[str, Any]:
+        clean_id = str(passive_id or "").strip()
+        if not clean_id:
+            return {}
+        with self._lock:
+            raw = self._passive_runtime.get(clean_id, {})
+            return dict(raw) if isinstance(raw, dict) else {}
+
+    def get_effective_exp_multiplier(self, char_id: str) -> float:
+        clean_id = str(char_id or "").strip()
+        if not clean_id:
+            return 0.0
+        with self._lock:
+            return self._effective_exp_multiplier_for_char_unlocked(clean_id)
+
+    def get_passive_bars_for_character(
+        self, char_id: str
+    ) -> list[PassiveBarDisplayData]:
+        clean_id = str(char_id or "").strip()
+        if not clean_id:
+            return []
+        with self._lock:
+            return self._get_passive_bars_for_character_unlocked(clean_id)
+
+    def _effective_exp_multiplier_for_char_unlocked(self, char_id: str) -> float:
+        data = self._char_data.get(char_id)
+        if not isinstance(data, dict):
+            return 0.0
+        try:
+            base = max(0.0, float(data.get("exp_multiplier", 1.0)))
+        except (TypeError, ValueError):
+            base = 1.0
+        bonus = float(
+            max(0.0, self._passive_exp_multiplier_bonus_by_char.get(char_id, 0.0))
+        )
+        return max(0.0, base + bonus)
+
+    def _get_passive_bars_for_character_unlocked(
+        self, char_id: str
+    ) -> list[PassiveBarDisplayData]:
+        plugin = self._plugins_by_id.get(char_id)
+        if plugin is None:
+            return []
+        raw_passives = getattr(plugin, "passives", [])
+        if not isinstance(raw_passives, list):
+            return []
+
+        bars: list[PassiveBarDisplayData] = []
+        for raw_passive_id in raw_passives:
+            passive_id = str(raw_passive_id or "").strip()
+            if not passive_id:
+                continue
+            runtime = self._passive_runtime.get(passive_id, {})
+            if not isinstance(runtime, dict):
+                continue
+            bar = self._build_passive_bar_display_unlocked(
+                char_id=char_id,
+                passive_id=passive_id,
+                runtime=runtime,
+                plugin=plugin,
+            )
+            if bar is not None:
+                bars.append(bar)
+        return bars
+
+    def _build_passive_bar_display_unlocked(
+        self,
+        *,
+        char_id: str,
+        passive_id: str,
+        runtime: dict[str, Any],
+        plugin: object,
+    ) -> PassiveBarDisplayData | None:
+        del char_id
+        del plugin
+        if not bool(runtime.get("active", False)):
+            return None
+        if passive_id == "trinity_synergy":
+            return self._build_trinity_bar_display_unlocked(runtime=runtime)
+        if passive_id == "lady_darkness_eclipsing_veil":
+            return self._build_darkness_bar_display_unlocked(runtime=runtime)
+        if passive_id == "lady_light_radiant_aegis":
+            return self._build_light_bar_display_unlocked(runtime=runtime)
+        return None
+
+    def _build_trinity_bar_display_unlocked(
+        self, *, runtime: dict[str, Any]
+    ) -> PassiveBarDisplayData | None:
+        stack_count = self._runtime_int(runtime, "stack_count", 0)
+        mitigation_percent = max(
+            0.0, self._runtime_float(runtime, "mitigation_percent", 0.0)
+        )
+        if "stack_count" not in runtime:
+            return None
+
+        owner_modifier = max(
+            0.0, self._runtime_float(runtime, "owner_passive_modifier", 1.0)
+        )
+        target_stack_count = self._soft_stack_target_count(
+            owner_modifier=owner_modifier,
+            stack_value=TRINITY_MITIGATION_PER_STACK,
+        )
+        progress = self._normalize_bar_value(
+            current=float(stack_count),
+            maximum=target_stack_count,
+        )
+
+        return PassiveBarDisplayData(
+            passive_id="trinity_synergy",
+            label="Trinity",
+            progress=progress,
+            display_percent=mitigation_percent,
+            shimmer=self._trinity_shimmer(progress),
+            display_text=self._format_percent_text(mitigation_percent),
+            style_id="trinity",
+            element_id="generic",
+            dual_element_ids=("dark", "light"),
+        )
+
+    def _build_darkness_bar_display_unlocked(
+        self, *, runtime: dict[str, Any]
+    ) -> PassiveBarDisplayData | None:
+        stack_count = self._runtime_int(runtime, "stack_count", 0)
+        bleed_percent = max(
+            0.0,
+            self._runtime_float(runtime, "bleed_rate_fraction", 0.0) * 100.0,
+        )
+        if stack_count <= 0 and bleed_percent <= 0.0:
+            return None
+
+        progress = self._normalize_bar_value(
+            current=float(stack_count),
+            maximum=self._sustainable_stack_cap(),
+        )
+
+        return PassiveBarDisplayData(
+            passive_id="lady_darkness_eclipsing_veil",
+            label="Veil",
+            progress=progress,
+            display_percent=bleed_percent,
+            shimmer=0.0,
+            display_text=self._format_percent_text(bleed_percent),
+            style_id="default",
+            element_id="dark",
+        )
+
+    def _build_light_bar_display_unlocked(
+        self, *, runtime: dict[str, Any]
+    ) -> PassiveBarDisplayData | None:
+        stack_count = self._runtime_int(runtime, "trinity_stack_count", 0)
+        exp_bonus_multiplier = max(
+            0.0,
+            self._runtime_float(runtime, "exp_multiplier_bonus", 0.0),
+        )
+        if exp_bonus_multiplier <= 0.0:
+            return None
+
+        owner_modifier = max(
+            0.0, self._runtime_float(runtime, "owner_passive_modifier", 1.0)
+        )
+        target_stack_count = self._soft_stack_target_count(
+            owner_modifier=owner_modifier,
+            stack_value=LADY_LIGHT_STACK_BONUS_PER_STACK,
+        )
+        progress = self._normalize_bar_value(
+            current=float(stack_count),
+            maximum=target_stack_count,
+        )
+
+        return PassiveBarDisplayData(
+            passive_id="lady_light_radiant_aegis",
+            label="Aegis",
+            progress=progress,
+            display_percent=exp_bonus_multiplier * 100.0,
+            shimmer=0.0,
+            display_text=self._format_multiplier_bonus_text(exp_bonus_multiplier),
+            style_id="default",
+            element_id="light",
+        )
+
+    @staticmethod
+    def _runtime_int(runtime: dict[str, Any], key: str, fallback: int) -> int:
+        try:
+            return max(0, int(runtime.get(key, fallback)))
+        except (TypeError, ValueError):
+            return max(0, int(fallback))
+
+    @staticmethod
+    def _runtime_float(runtime: dict[str, Any], key: str, fallback: float) -> float:
+        try:
+            return float(runtime.get(key, fallback))
+        except (TypeError, ValueError):
+            return float(fallback)
+
+    @staticmethod
+    def _normalize_bar_value(*, current: float, maximum: float) -> float:
+        if maximum <= 0.0:
+            return 0.0
+        return max(0.0, min(1.0, float(current) / float(maximum)))
+
+    @staticmethod
+    def _sustainable_stack_cap() -> float:
+        if TRINITY_STACK_INTERVAL_TICKS <= 0:
+            return 1.0
+        return max(
+            1.0,
+            float(
+                math.ceil(
+                    float(TRINITY_STACK_TTL_TICKS) / float(TRINITY_STACK_INTERVAL_TICKS)
+                )
+            ),
+        )
+
+    @classmethod
+    def _soft_stack_target_count(
+        cls,
+        *,
+        owner_modifier: float,
+        stack_value: float,
+    ) -> float:
+        sustainable = cls._sustainable_stack_cap()
+        per_stack_value = max(0.0, float(stack_value)) * max(0.0, float(owner_modifier))
+        if per_stack_value <= 0.0:
+            return sustainable
+        theoretical = TRINITY_SOFT_CAP_THRESHOLD / per_stack_value
+        if theoretical <= 0.0:
+            return sustainable
+        return max(1.0, min(sustainable, theoretical))
+
+    @staticmethod
+    def _trinity_shimmer(progress: float) -> float:
+        if progress <= 0.0:
+            return 0.0
+        return max(0.25, min(0.55, 0.25 + (float(progress) * 0.20)))
+
+    @staticmethod
+    def _format_percent_text(percent: float) -> str:
+        value = max(0.0, float(percent))
+        if value <= 0.0:
+            return "0%"
+        if value >= 1.0:
+            decimals = 2
+        elif value >= 0.1:
+            decimals = 4
+        else:
+            decimals = 4
+        formatted = f"{value:.{decimals}f}".rstrip("0").rstrip(".")
+        return f"{formatted}%"
+
+    @staticmethod
+    def _format_multiplier_bonus_text(multiplier: float) -> str:
+        value = max(0.0, float(multiplier))
+        if value <= 0.0:
+            return "0x EXP"
+        if value >= 10.0:
+            decimals = 1
+        elif value >= 1.0:
+            decimals = 2
+        else:
+            decimals = 3
+        formatted = f"{value:.{decimals}f}".rstrip("0").rstrip(".")
+        return f"{formatted}x EXP"
+
+    def _build_runtime_stats_for_char_unlocked(self, char_id: str) -> Stats | None:
+        data = self._char_data.get(char_id)
+        plugin = self._plugins_by_id.get(char_id)
+        if not isinstance(data, dict) or plugin is None:
+            return None
+
+        base_stats = data.get("base_stats")
+        if not isinstance(base_stats, dict):
+            return None
+
+        try:
+            stack = max(1, int(data.get("stack", 1)))
+        except (TypeError, ValueError):
+            stack = 1
+
+        stars = max(1, int(getattr(plugin, "stars", 1) or 1))
+        progress = {
+            "level": max(1, int(data.get("level", 1))),
+            "exp": float(max(0.0, float(data.get("exp", 0.0)))),
+            "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
+            "max_hp_level_bonus_version": max(
+                0, int(data.get("max_hp_level_bonus_version", 0))
+            ),
+            "rebirths": max(0, int(data.get("rebirths", 0))),
+        }
+        stats = build_scaled_character_stats(
+            plugin=plugin,
+            party_level=self._party_level,
+            stars=stars,
+            stacks=stack,
+            progress=progress,
+            saved_base_stats=base_stats,
+        )
+        apply_base_stat_multiplier(
+            stats=stats,
+            multiplier=self._stat_multiplier_for_char(char_id),
+        )
+        return stats
+
+    def apply_passive_hp_loss(
+        self,
+        *,
+        target_char_id: str,
+        raw_damage: float,
+        hp_floor_fraction: float,
+        defense_divisor: float = 5.0,
+    ) -> float:
+        clean_id = str(target_char_id or "").strip()
+        if not clean_id:
+            return 0.0
+        with self._lock:
+            return self._apply_passive_hp_loss_unlocked(
+                target_char_id=clean_id,
+                raw_damage=raw_damage,
+                hp_floor_fraction=hp_floor_fraction,
+                defense_divisor=defense_divisor,
+            )
+
+    def _apply_passive_hp_loss_unlocked(
+        self,
+        *,
+        target_char_id: str,
+        raw_damage: float,
+        hp_floor_fraction: float,
+        defense_divisor: float,
+    ) -> float:
+        data = self._char_data.get(target_char_id)
+        if not isinstance(data, dict):
+            return 0.0
+
+        try:
+            current_hp = max(0.0, float(data.get("hp", 0.0)))
+        except (TypeError, ValueError):
+            current_hp = 0.0
+        try:
+            max_hp = max(1.0, float(data.get("max_hp", 1.0)))
+        except (TypeError, ValueError):
+            max_hp = 1.0
+
+        floor_fraction = max(0.0, min(1.0, float(hp_floor_fraction)))
+        hp_floor = max_hp * floor_fraction
+        if current_hp <= hp_floor:
+            return 0.0
+
+        stats = self._build_runtime_stats_for_char_unlocked(target_char_id)
+        if stats is not None:
+            defense = max(1.0, float(stats.defense))
+            mitigation = max(0.1, float(stats.mitigation))
+        else:
+            base_stats = data.get("base_stats")
+            if not isinstance(base_stats, dict):
+                base_stats = {}
+            defense = max(1.0, float(base_stats.get("defense", 200.0)))
+            mitigation = max(0.1, float(base_stats.get("mitigation", 1.0)))
+
+        scaled_defense = max(1.0, defense / max(1.0, float(defense_divisor)))
+        actual_damage = max(0.0, float(raw_damage)) / (scaled_defense * mitigation)
+        allowed_damage = max(0.0, current_hp - hp_floor)
+        applied_damage = min(actual_damage, allowed_damage)
+        if applied_damage <= 0.0:
+            return 0.0
+
+        data["hp"] = max(0.0, current_hp - applied_damage)
+        return applied_damage
 
     def _progression_stars_for_char(self, char_id: str) -> int:
         plugin = self._plugins_by_id.get(char_id)
@@ -665,6 +1123,7 @@ class IdleGameState(QObject):
             dt = float(max(0.0, IDLE_TICK_INTERVAL_SECONDS))
             self._elapsed_seconds += dt
             self._process_blessing_ticks(delta_seconds=dt)
+            self._refresh_passive_effects_unlocked(delta_seconds=dt)
 
             roll_ready = self._tick_count % SHARD_ROLL_INTERVAL_TICKS == 0
 
@@ -781,6 +1240,15 @@ class IdleGameState(QObject):
         return per_tick / IDLE_TICK_INTERVAL_SECONDS
 
     def get_exp_gain_per_tick(self, char_id: str) -> float:
+        clean_id = str(char_id or "").strip()
+        if not clean_id:
+            return 0.0
+
+        with self._lock:
+            self._refresh_passive_effects_unlocked(delta_seconds=0.0)
+            return self._get_exp_gain_per_tick_unlocked(clean_id)
+
+    def _get_exp_gain_per_tick_unlocked(self, char_id: str) -> float:
         data = self._char_data.get(char_id)
         if not data:
             return 0.0
@@ -886,7 +1354,7 @@ class IdleGameState(QObject):
         char_id: str,
         data: dict[str, Any],
     ) -> float:
-        modifier = float(data.get("exp_multiplier", 1.0))
+        modifier = self._effective_exp_multiplier_for_char_unlocked(char_id)
         modifier *= self._death_exp_debuff_multiplier(data)
         modifier *= float(data.get("passive_modifier", 1.0))
         modifier *= self._exp_multiplier_for_char(char_id)
@@ -1395,6 +1863,10 @@ class IdleGameState(QObject):
                 for item_id, count in self._inventory.items()
             }
 
+    def export_passives(self) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            return self._export_passives_unlocked()
+
     def _export_blessings_unlocked(self) -> dict[str, dict[str, Any]]:
         payload: dict[str, dict[str, Any]] = {}
         persistent_plugins = {
@@ -1427,6 +1899,19 @@ class IdleGameState(QObject):
             payload[clean_id] = normalized
         return payload
 
+    def _export_passives_unlocked(self) -> dict[str, dict[str, Any]]:
+        return export_canonical_passives(canonical_passives=self._passives_data)
+
+    def export_passive_runtime(self) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            return self._export_passive_runtime_unlocked()
+
+    def _export_passive_runtime_unlocked(self) -> dict[str, dict[str, Any]]:
+        return export_active_passive_runtime(
+            active_passive_ids=list(self._active_passive_ids),
+            runtime_passives=self._passive_runtime,
+        )
+
     def export_runtime_snapshot(self) -> dict[str, Any]:
         with self._lock:
             return {
@@ -1445,6 +1930,8 @@ class IdleGameState(QObject):
                 "initial_stats": self._export_initial_stats_unlocked(),
                 "blessings": self._export_blessings_unlocked(),
                 "blessing_runtime": self._export_blessing_runtime_unlocked(),
+                "passives": self._export_passives_unlocked(),
+                "passive_runtime": self._export_passive_runtime_unlocked(),
                 "exp_bonus_seconds": float(max(0.0, self._exp_bonus_seconds)),
                 "exp_penalty_seconds": float(max(0.0, self._exp_penalty_seconds)),
                 "inventory": {

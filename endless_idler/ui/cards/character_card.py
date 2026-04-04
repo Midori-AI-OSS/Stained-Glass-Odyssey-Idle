@@ -25,6 +25,7 @@ from endless_idler.ui.party_builder_common import format_idle_exp_rate_suffix
 from endless_idler.ui.theme.colors import normalize_element_id
 from endless_idler.ui.tooltip import hide_stained_tooltip
 from endless_idler.ui.tooltip import show_stained_tooltip
+from endless_idler.ui.widgets.passive_progress_bar import PassiveProgressBar
 from endless_idler.ui.widgets.shard_progress_bar import ShardProgressBar
 from endless_idler.utils import normalize_progress
 
@@ -88,6 +89,7 @@ class IdleCharacterCard(QFrame):
         self._tooltip_html = ""
         self._portrait_placeholder = ""
         self._portrait_source_pixmap: QPixmap | None = None
+        self._passive_bars: list[PassiveProgressBar] = []
 
         self.setObjectName("idleCharacterCard")
         self.setProperty("context", context)
@@ -446,6 +448,7 @@ class IdleCharacterCard(QFrame):
             )
 
         self._update_shard_bar(data)
+        self._update_passive_bars()
 
         stars = getattr(self._plugin, "stars", None) if self._plugin else None
         stat_multiplier = self._misplacement_stat_multiplier()
@@ -532,6 +535,47 @@ class IdleCharacterCard(QFrame):
             self._shard_bar.setVisible(True)
         else:
             self._shard_bar.setVisible(False)
+
+    def _update_passive_bars(self) -> None:
+        getter = getattr(self._idle_state, "get_passive_bars_for_character", None)
+        passive_bars = getter(self._char_id) if callable(getter) else []
+        if not isinstance(passive_bars, list):
+            passive_bars = []
+
+        while len(self._passive_bars) < len(passive_bars):
+            bar = PassiveProgressBar()
+            bar.setVisible(False)
+            self._passive_bars.append(bar)
+            self._body.addWidget(bar)
+
+        for index, passive_bar in enumerate(self._passive_bars):
+            if index >= len(passive_bars):
+                passive_bar.setVisible(False)
+                continue
+
+            bar_data = passive_bars[index]
+            label = getattr(bar_data, "label", "PASSIVE")
+            progress = float(getattr(bar_data, "progress", 0.0))
+            display_percent = float(getattr(bar_data, "display_percent", 0.0))
+            display_text = str(getattr(bar_data, "display_text", "") or "")
+            shimmer = float(getattr(bar_data, "shimmer", 0.0))
+            style_id = str(getattr(bar_data, "style_id", "default") or "default")
+            element_id = str(getattr(bar_data, "element_id", "generic") or "generic")
+            dual_element_ids = getattr(bar_data, "dual_element_ids", ())
+            if not isinstance(dual_element_ids, tuple):
+                dual_element_ids = tuple(dual_element_ids)
+
+            passive_bar.set_passive_data(
+                label=label,
+                progress=progress,
+                display_percent=display_percent,
+                display_text=display_text,
+                shimmer=shimmer,
+                style_id=style_id,
+                element_id=element_id,
+                dual_element_ids=dual_element_ids,
+            )
+            passive_bar.setVisible(True)
 
     def _apply_element_tint(self, data: dict, stats: Stats) -> None:
         is_dual_type, dual_damage_types = self._dual_type_visual_data(data)

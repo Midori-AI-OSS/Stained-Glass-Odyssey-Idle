@@ -12,15 +12,17 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QProgressBar
 from PySide6.QtWidgets import QSlider
+from PySide6.QtWidgets import QWidget
 
 from endless_idler.characters.plugins import CharacterPlugin
 from endless_idler.ui.cards import IdleCharacterCard
+from endless_idler.ui.components.progress_bar import AnimatedProgressBar
 from endless_idler.ui.idle.blessing_meter import IdleBlessingMeterWidget
 from endless_idler.ui.idle.blessing_meter import _blend_factor_for_progress
 from endless_idler.ui.idle.screen import IdleScreenWidget
 from endless_idler.ui.party_builder_common import MISMATCH_TOOLTIP_VALUE_COLOR
+from endless_idler.ui.widgets.passive_progress_bar import PassiveProgressBar
 
 
 class _FakeSignal:
@@ -96,6 +98,7 @@ class _FakeIdleStateForCard:
         self._misplacement_stat_multiplier = float(misplacement_stat_multiplier)
         self._misplacement_exp_multiplier = float(misplacement_exp_multiplier)
         self._exp_gain_per_second = float(exp_gain_per_second)
+        self._passive_bars: list[object] = []
 
     def get_char_data(self, char_id: str) -> dict[str, float]:
         del char_id
@@ -115,6 +118,10 @@ class _FakeIdleStateForCard:
     def get_misplacement_exp_multiplier(self, char_id: str) -> float:
         del char_id
         return self._misplacement_exp_multiplier
+
+    def get_passive_bars_for_character(self, char_id: str) -> list[object]:
+        del char_id
+        return list(self._passive_bars)
 
 
 def test_blessing_blend_factor_boundaries() -> None:
@@ -155,11 +162,15 @@ def test_idle_screen_panel_order_and_tooltip_text(monkeypatch) -> None:
     fake_save = SimpleNamespace(
         onsite=[],
         offsite=[],
+        standby=[],
         stacks={},
         party_level=1,
         character_progress={},
         character_stats={},
         character_initial_stats={},
+        inventory={},
+        blessings={},
+        passives={},
         idle_exp_bonus_seconds=0.0,
         idle_exp_penalty_seconds=0.0,
         idle_shared_exp_percentage=1,
@@ -175,17 +186,10 @@ def test_idle_screen_panel_order_and_tooltip_text(monkeypatch) -> None:
 
     screen = IdleScreenWidget(save_store=_FakeSaveStore(save=fake_save))
 
-    blessing_panel = screen.findChild(QFrame, "idleBlessingPanel")
     mods_panel = screen.findChild(QFrame, "idleModsPanel")
 
-    assert blessing_panel is not None
     assert mods_panel is not None
-
-    parent = blessing_panel.parentWidget()
-    assert parent is not None
-    column_layout = parent.layout()
-    assert column_layout is not None
-    assert column_layout.indexOf(blessing_panel) < column_layout.indexOf(mods_panel)
+    assert screen.findChild(QFrame, "idleBlessingPanel") is None
     assert not screen.findChildren(QLabel, "idleModsHelp")
 
     shared_help = "Onsite chars lose X%, offsite gain that + 1% per onsite"
@@ -360,10 +364,13 @@ def test_idle_bars_are_bottom_anchored_for_onsite_and_offsite() -> None:
     )
     offsite_body = offsite.layout().itemAt(1).layout()
     assert offsite_body is not None
-    offsite_last = offsite_body.itemAt(offsite_body.count() - 1).widget()
-    offsite_second_last = offsite_body.itemAt(offsite_body.count() - 2).widget()
-    assert isinstance(offsite_second_last, QProgressBar)
-    assert isinstance(offsite_last, QProgressBar)
+    offsite_widgets = [
+        offsite_body.itemAt(index).widget()
+        for index in range(offsite_body.count())
+        if offsite_body.itemAt(index).widget() is not None
+    ]
+    assert isinstance(offsite_widgets[-2], QWidget)
+    assert isinstance(offsite_widgets[-1], QWidget)
 
     onsite = IdleCharacterCard(
         context="onsite",
@@ -380,10 +387,210 @@ def test_idle_bars_are_bottom_anchored_for_onsite_and_offsite() -> None:
     )
     onsite_body = onsite.layout().itemAt(1).layout()
     assert onsite_body is not None
-    onsite_last = onsite_body.itemAt(onsite_body.count() - 1).widget()
-    onsite_second_last = onsite_body.itemAt(onsite_body.count() - 2).widget()
-    assert isinstance(onsite_second_last, QProgressBar)
-    assert isinstance(onsite_last, QProgressBar)
+    onsite_widgets = [
+        onsite_body.itemAt(index).widget()
+        for index in range(onsite_body.count())
+        if onsite_body.itemAt(index).widget() is not None
+    ]
+    assert isinstance(onsite_widgets[-2], QWidget)
+    assert isinstance(onsite_widgets[-1], QWidget)
+
+
+def test_idle_card_shows_passive_bar_under_shard_bar_when_both_exist() -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    idle_state = _FakeIdleStateForCard()
+    idle_state._data["shard_reward_types"] = ("fire",)
+    idle_state._data["shard_bar_ticks"] = 42.0
+    idle_state._passive_bars = [
+        SimpleNamespace(
+            label="Trinity",
+            progress=0.6,
+            display_percent=0.0105,
+            display_text="0.0105%",
+            shimmer=0.8,
+            style_id="trinity",
+            element_id="generic",
+            dual_element_ids=("dark", "light"),
+        )
+    ]
+
+    card = IdleCharacterCard(
+        context="onsite",
+        char_id="onsite_hero",
+        plugin=CharacterPlugin(
+            char_id="onsite_hero",
+            display_name="Onsite Hero",
+            stars=5,
+            damage_type_id="fire",
+        ),
+        idle_state=idle_state,
+        rng=random.Random(5),
+        stack_count=1,
+    )
+    snapshot = card.snapshot()
+    assert snapshot is not None
+    data, stats = snapshot
+    card.apply_snapshot(data, stats, maxima={})
+
+    body = card.layout().itemAt(1).layout()
+    assert body is not None
+    widgets = [
+        body.itemAt(index).widget()
+        for index in range(body.count())
+        if body.itemAt(index).widget() is not None
+        and not body.itemAt(index).widget().isHidden()
+    ]
+    shard_index = next(
+        index
+        for index, widget in enumerate(widgets)
+        if widget.objectName() == "shardProgressBarWidget"
+    )
+    passive_index = next(
+        index
+        for index, widget in enumerate(widgets)
+        if widget.objectName() == "passiveProgressBarWidget"
+    )
+    assert shard_index < passive_index
+
+
+def test_idle_card_shows_passive_bar_under_exp_when_shard_bar_hidden() -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    idle_state = _FakeIdleStateForCard()
+    idle_state._passive_bars = [
+        SimpleNamespace(
+            label="Veil",
+            progress=0.5,
+            display_percent=0.5774,
+            display_text="0.5774%",
+            shimmer=0.0,
+            style_id="default",
+            element_id="dark",
+            dual_element_ids=(),
+        )
+    ]
+
+    card = IdleCharacterCard(
+        context="offsite",
+        char_id="offsite_hero",
+        plugin=CharacterPlugin(
+            char_id="offsite_hero",
+            display_name="Offsite Hero",
+            stars=5,
+            damage_type_id="dark",
+        ),
+        idle_state=idle_state,
+        rng=random.Random(3),
+        stack_count=1,
+    )
+    card.update_display()
+
+    body = card.layout().itemAt(1).layout()
+    assert body is not None
+    widgets = [
+        body.itemAt(index).widget()
+        for index in range(body.count())
+        if body.itemAt(index).widget() is not None
+        and not body.itemAt(index).widget().isHidden()
+    ]
+    exp_index = next(
+        index
+        for index, widget in enumerate(widgets)
+        if widget.objectName() == "idleExpBar"
+    )
+    passive_index = next(
+        index
+        for index, widget in enumerate(widgets)
+        if widget.objectName() == "passiveProgressBarWidget"
+    )
+    assert passive_index == exp_index + 1
+    assert card.findChild(QWidget, "shardProgressBarWidget").isHidden()
+
+
+def test_idle_card_stacks_multiple_passive_bars() -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    idle_state = _FakeIdleStateForCard()
+    idle_state._passive_bars = [
+        SimpleNamespace(
+            label="Trinity",
+            progress=0.4,
+            display_percent=0.0105,
+            display_text="0.0105%",
+            shimmer=0.4,
+            style_id="trinity",
+            element_id="generic",
+            dual_element_ids=("dark", "light"),
+        ),
+        SimpleNamespace(
+            label="Veil",
+            progress=0.8,
+            display_percent=0.5774,
+            display_text="0.5774%",
+            shimmer=0.0,
+            style_id="default",
+            element_id="dark",
+            dual_element_ids=(),
+        ),
+        SimpleNamespace(
+            label="Aegis",
+            progress=0.8,
+            display_percent=108.0,
+            display_text="1.08x EXP",
+            shimmer=0.0,
+            style_id="default",
+            element_id="light",
+            dual_element_ids=(),
+        ),
+    ]
+
+    card = IdleCharacterCard(
+        context="onsite",
+        char_id="onsite_hero",
+        plugin=CharacterPlugin(
+            char_id="onsite_hero",
+            display_name="Onsite Hero",
+            stars=5,
+            damage_type_id="fire",
+        ),
+        idle_state=idle_state,
+        rng=random.Random(5),
+        stack_count=1,
+    )
+    snapshot = card.snapshot()
+    assert snapshot is not None
+    data, stats = snapshot
+    card.apply_snapshot(data, stats, maxima={})
+
+    passive_bars = card.findChildren(PassiveProgressBar, "passiveProgressBarWidget")
+    visible_bars = [bar for bar in passive_bars if not bar.isHidden()]
+    assert len(visible_bars) == 3
+    assert visible_bars[0].format() == "TRINITY 0.0105%"
+    assert visible_bars[1].format() == "VEIL 0.5774%"
+    assert visible_bars[2].format() == "AEGIS 1.08x EXP"
+
+
+def test_passive_progress_bar_uses_trinity_theme_and_keeps_effect_text() -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    bar = PassiveProgressBar()
+    bar.set_passive_data(
+        label="Trinity",
+        progress=1.5,
+        display_percent=0.0105,
+        display_text="0.0105%",
+        shimmer=0.45,
+        style_id="trinity",
+        element_id="generic",
+        dual_element_ids=("dark", "light"),
+    )
+
+    assert bar.property("styleId") == "trinity"
+    assert bar.property("dualElementIds") == "dark,light"
+    assert bar.format() == "TRINITY 0.0105%"
+    assert bar._progress_bar._target_progress == 1.0
+    assert bar._progress_bar._target_shimmer == 0.45
 
 
 def test_idle_offsite_exp_bar_uses_tilde_for_tiny_nonzero_gain() -> None:
@@ -399,7 +606,7 @@ def test_idle_offsite_exp_bar_uses_tilde_for_tiny_nonzero_gain() -> None:
     )
     card.update_display()
 
-    exp_bar = card.findChild(QProgressBar, "idleExpBar")
+    exp_bar = card.findChild(AnimatedProgressBar, "idleExpBar")
     assert exp_bar is not None
     assert exp_bar.format() == "EXP 12 / 30 ~0.00/s"
 
@@ -425,7 +632,7 @@ def test_idle_onsite_exp_bar_uses_tilde_for_tiny_nonzero_gain() -> None:
     data, stats = snapshot
     card.apply_snapshot(data, stats, maxima={})
 
-    exp_bar = card.findChild(QProgressBar, "idleExpBar")
+    exp_bar = card.findChild(AnimatedProgressBar, "idleExpBar")
     assert exp_bar is not None
     assert exp_bar.format() == "EXP 12 / 30 ~0.00/s"
 
