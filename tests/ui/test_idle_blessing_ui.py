@@ -406,7 +406,8 @@ def test_idle_card_shows_passive_bar_under_shard_bar_when_both_exist() -> None:
         SimpleNamespace(
             label="Trinity",
             progress=0.6,
-            display_percent=60.0,
+            display_percent=0.0105,
+            display_text="0.0105%",
             shimmer=0.8,
             style_id="trinity",
             element_id="generic",
@@ -461,8 +462,9 @@ def test_idle_card_shows_passive_bar_under_exp_when_shard_bar_hidden() -> None:
         SimpleNamespace(
             label="Veil",
             progress=0.5,
-            display_percent=150.0,
-            shimmer=1.0,
+            display_percent=0.5774,
+            display_text="0.5774%",
+            shimmer=0.0,
             style_id="default",
             element_id="dark",
             dual_element_ids=(),
@@ -514,7 +516,8 @@ def test_idle_card_stacks_multiple_passive_bars() -> None:
         SimpleNamespace(
             label="Trinity",
             progress=0.4,
-            display_percent=40.0,
+            display_percent=0.0105,
+            display_text="0.0105%",
             shimmer=0.4,
             style_id="trinity",
             element_id="generic",
@@ -523,10 +526,21 @@ def test_idle_card_stacks_multiple_passive_bars() -> None:
         SimpleNamespace(
             label="Veil",
             progress=0.8,
-            display_percent=80.0,
-            shimmer=0.9,
+            display_percent=0.5774,
+            display_text="0.5774%",
+            shimmer=0.0,
             style_id="default",
             element_id="dark",
+            dual_element_ids=(),
+        ),
+        SimpleNamespace(
+            label="Aegis",
+            progress=0.8,
+            display_percent=5.08,
+            display_text="5.08%",
+            shimmer=0.0,
+            style_id="default",
+            element_id="light",
             dual_element_ids=(),
         ),
     ]
@@ -551,20 +565,22 @@ def test_idle_card_stacks_multiple_passive_bars() -> None:
 
     passive_bars = card.findChildren(PassiveProgressBar, "passiveProgressBarWidget")
     visible_bars = [bar for bar in passive_bars if not bar.isHidden()]
-    assert len(visible_bars) == 2
-    assert visible_bars[0].format() == "TRINITY 40%"
-    assert visible_bars[1].format() == "VEIL 80%"
+    assert len(visible_bars) == 3
+    assert visible_bars[0].format() == "TRINITY 0.0105%"
+    assert visible_bars[1].format() == "VEIL 0.5774%"
+    assert visible_bars[2].format() == "AEGIS 5.08%"
 
 
-def test_passive_progress_bar_uses_trinity_theme_and_allows_text_over_100() -> None:
+def test_passive_progress_bar_uses_trinity_theme_and_keeps_effect_text() -> None:
     _ = QApplication.instance() or QApplication([])
 
     bar = PassiveProgressBar()
     bar.set_passive_data(
         label="Trinity",
         progress=1.5,
-        display_percent=150.0,
-        shimmer=0.75,
+        display_percent=0.0105,
+        display_text="0.0105%",
+        shimmer=0.45,
         style_id="trinity",
         element_id="generic",
         dual_element_ids=("dark", "light"),
@@ -572,9 +588,9 @@ def test_passive_progress_bar_uses_trinity_theme_and_allows_text_over_100() -> N
 
     assert bar.property("styleId") == "trinity"
     assert bar.property("dualElementIds") == "dark,light"
-    assert bar.format() == "TRINITY 150%"
+    assert bar.format() == "TRINITY 0.0105%"
     assert bar._progress_bar._target_progress == 1.0
-    assert bar._progress_bar._target_shimmer == 0.75
+    assert bar._progress_bar._target_shimmer == 0.45
 
 
 def test_idle_offsite_exp_bar_uses_tilde_for_tiny_nonzero_gain() -> None:

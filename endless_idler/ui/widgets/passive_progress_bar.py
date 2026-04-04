@@ -57,6 +57,7 @@ class PassiveProgressBar(QWidget):
         label: str,
         progress: float,
         display_percent: float,
+        display_text: str = "",
         shimmer: float,
         style_id: str,
         element_id: str,
@@ -74,7 +75,7 @@ class PassiveProgressBar(QWidget):
         self._progress_bar.set_value(max(0.0, min(1.0, float(progress))))
         self._progress_bar.setText(
             f"{str(label or 'PASSIVE').strip().upper()} "
-            + f"{max(0, int(round(float(display_percent))))}%"
+            + str(display_text or f"{max(0, int(round(float(display_percent))))}%")
         )
         self._progress_bar.set_shimmer(max(0.0, min(1.0, float(shimmer))))
 

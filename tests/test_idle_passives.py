@@ -285,10 +285,47 @@ def test_passive_bar_accessor_returns_only_displayable_active_bars() -> None:
     assert trinity_bars[0].style_id == "trinity"
     assert trinity_bars[0].dual_element_ids == ("dark", "light")
     assert math.isclose(trinity_bars[0].progress, 0.0, rel_tol=0.0, abs_tol=1e-9)
+    assert trinity_bars[0].display_text == "0%"
 
-    assert len(darkness_bars) == 1
-    assert darkness_bars[0].passive_id == "lady_darkness_eclipsing_veil"
-    assert darkness_bars[0].label == "Veil"
-    assert darkness_bars[0].element_id == "dark"
+    assert darkness_bars == []
 
-    assert light_bars == []
+    assert len(light_bars) == 1
+    assert light_bars[0].passive_id == "lady_light_radiant_aegis"
+    assert light_bars[0].label == "Aegis"
+    assert light_bars[0].element_id == "light"
+    assert light_bars[0].display_text == "5%"
+
+
+def test_passive_bar_accessor_uses_stack_power_fill_and_effect_text() -> None:
+    state = _build_trinity_state()
+
+    for _ in range(30):
+        state.process_tick()
+
+    trinity_bar = state.get_passive_bars_for_character("persona_light_and_dark")[0]
+    darkness_bar = state.get_passive_bars_for_character("lady_darkness")[0]
+    light_bar = state.get_passive_bars_for_character("lady_light")[0]
+
+    assert math.isclose(trinity_bar.progress, 1.0 / 15.0, rel_tol=1e-9, abs_tol=1e-9)
+    assert trinity_bar.display_text == "0.0105%"
+
+    assert math.isclose(darkness_bar.progress, 1.0 / 15.0, rel_tol=1e-9, abs_tol=1e-9)
+    assert darkness_bar.display_text == "0.5774%"
+
+    assert math.isclose(light_bar.progress, 1.0 / 15.0, rel_tol=1e-9, abs_tol=1e-9)
+    assert light_bar.display_text == "5.06%"
+
+
+def test_passive_bar_accessor_reaches_full_fill_at_sustained_stack_cap() -> None:
+    state = _build_trinity_state()
+
+    for _ in range(450):
+        state.process_tick()
+
+    trinity_bar = state.get_passive_bars_for_character("persona_light_and_dark")[0]
+    darkness_bar = state.get_passive_bars_for_character("lady_darkness")[0]
+    light_bar = state.get_passive_bars_for_character("lady_light")[0]
+
+    assert math.isclose(trinity_bar.progress, 1.0, rel_tol=1e-9, abs_tol=1e-9)
+    assert math.isclose(darkness_bar.progress, 1.0, rel_tol=1e-9, abs_tol=1e-9)
+    assert math.isclose(light_bar.progress, 1.0, rel_tol=1e-9, abs_tol=1e-9)

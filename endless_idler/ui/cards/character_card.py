@@ -557,6 +557,7 @@ class IdleCharacterCard(QFrame):
             label = getattr(bar_data, "label", "PASSIVE")
             progress = float(getattr(bar_data, "progress", 0.0))
             display_percent = float(getattr(bar_data, "display_percent", 0.0))
+            display_text = str(getattr(bar_data, "display_text", "") or "")
             shimmer = float(getattr(bar_data, "shimmer", 0.0))
             style_id = str(getattr(bar_data, "style_id", "default") or "default")
             element_id = str(getattr(bar_data, "element_id", "generic") or "generic")
@@ -568,6 +569,7 @@ class IdleCharacterCard(QFrame):
                 label=label,
                 progress=progress,
                 display_percent=display_percent,
+                display_text=display_text,
                 shimmer=shimmer,
                 style_id=style_id,
                 element_id=element_id,

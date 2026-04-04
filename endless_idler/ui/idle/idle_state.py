@@ -31,6 +31,11 @@ from endless_idler.progression import calculate_rebirth_exp_mult_gain
 from endless_idler.progression import calculate_rebirth_exp_tax
 from endless_idler.progression import calculate_rebirth_power
 from endless_idler.progression import REBIRTH_LEVEL_THRESHOLD
+from endless_idler.passives._trinity import LADY_LIGHT_STACK_BONUS_PER_STACK
+from endless_idler.passives._trinity import TRINITY_MITIGATION_PER_STACK
+from endless_idler.passives._trinity import TRINITY_SOFT_CAP_THRESHOLD
+from endless_idler.passives._trinity import TRINITY_STACK_INTERVAL_TICKS
+from endless_idler.passives._trinity import TRINITY_STACK_TTL_TICKS
 from endless_idler.passives.runtime import export_active_passive_runtime
 from endless_idler.passives.runtime import export_passives as export_canonical_passives
 from endless_idler.passives.runtime import initialize_passive_state
@@ -79,6 +84,7 @@ class PassiveBarDisplayData:
     progress: float
     display_percent: float
     shimmer: float
+    display_text: str = ""
     style_id: str = "default"
     element_id: str = "generic"
     dual_element_ids: tuple[str, str] = ("", "")
@@ -463,47 +469,123 @@ class IdleGameState(QObject):
         runtime: dict[str, Any],
         plugin: object,
     ) -> PassiveBarDisplayData | None:
+        del char_id
+        del plugin
         if not bool(runtime.get("active", False)):
             return None
-        try:
-            progress = float(runtime.get("progress", 0.0))
-        except (TypeError, ValueError):
-            progress = 0.0
-        if "progress" not in runtime:
+        if passive_id == "trinity_synergy":
+            return self._build_trinity_bar_display_unlocked(runtime=runtime)
+        if passive_id == "lady_darkness_eclipsing_veil":
+            return self._build_darkness_bar_display_unlocked(runtime=runtime)
+        if passive_id == "lady_light_radiant_aegis":
+            return self._build_light_bar_display_unlocked(runtime=runtime)
+        return None
+
+    def _build_trinity_bar_display_unlocked(
+        self, *, runtime: dict[str, Any]
+    ) -> PassiveBarDisplayData | None:
+        stack_count = self._runtime_int(runtime, "stack_count", 0)
+        mitigation_percent = max(
+            0.0, self._runtime_float(runtime, "mitigation_percent", 0.0)
+        )
+        if "stack_count" not in runtime:
             return None
 
-        progress = max(0.0, progress)
-        display_percent = progress * 100.0
-        shimmer = 0.0
-        style_id = "default"
-        element_id = str(getattr(plugin, "damage_type_id", "generic") or "generic")
-        dual_element_ids = ("", "")
-        label = passive_id.replace("_", " ")
-
-        if passive_id == "trinity_synergy":
-            countdown_ticks = self._runtime_float(runtime, "countdown_ticks", 30.0)
-            shimmer = self._countdown_shimmer(countdown_ticks)
-            style_id = "trinity"
-            dual_element_ids = ("dark", "light")
-            label = "Trinity"
-        elif passive_id == "lady_darkness_eclipsing_veil":
-            countdown_ticks = self._runtime_float(runtime, "countdown_ticks", 30.0)
-            shimmer = self._countdown_shimmer(countdown_ticks)
-            element_id = "dark"
-            label = "Veil"
-        else:
-            label = str(label).title()
+        owner_modifier = max(
+            0.0, self._runtime_float(runtime, "owner_passive_modifier", 1.0)
+        )
+        target_stack_count = self._soft_stack_target_count(
+            owner_modifier=owner_modifier,
+            stack_value=TRINITY_MITIGATION_PER_STACK,
+        )
+        progress = self._normalize_bar_value(
+            current=float(stack_count),
+            maximum=target_stack_count,
+        )
 
         return PassiveBarDisplayData(
-            passive_id=passive_id,
-            label=label,
-            progress=max(0.0, min(1.0, progress)),
-            display_percent=display_percent,
-            shimmer=shimmer,
-            style_id=style_id,
-            element_id=element_id,
-            dual_element_ids=dual_element_ids,
+            passive_id="trinity_synergy",
+            label="Trinity",
+            progress=progress,
+            display_percent=mitigation_percent,
+            shimmer=self._trinity_shimmer(progress),
+            display_text=self._format_percent_text(mitigation_percent),
+            style_id="trinity",
+            element_id="generic",
+            dual_element_ids=("dark", "light"),
         )
+
+    def _build_darkness_bar_display_unlocked(
+        self, *, runtime: dict[str, Any]
+    ) -> PassiveBarDisplayData | None:
+        stack_count = self._runtime_int(runtime, "stack_count", 0)
+        bleed_percent = max(
+            0.0,
+            self._runtime_float(runtime, "bleed_rate_fraction", 0.0) * 100.0,
+        )
+        if stack_count <= 0 and bleed_percent <= 0.0:
+            return None
+
+        progress = self._normalize_bar_value(
+            current=float(stack_count),
+            maximum=self._sustainable_stack_cap(),
+        )
+
+        return PassiveBarDisplayData(
+            passive_id="lady_darkness_eclipsing_veil",
+            label="Veil",
+            progress=progress,
+            display_percent=bleed_percent,
+            shimmer=0.0,
+            display_text=self._format_percent_text(bleed_percent),
+            style_id="default",
+            element_id="dark",
+        )
+
+    def _build_light_bar_display_unlocked(
+        self, *, runtime: dict[str, Any]
+    ) -> PassiveBarDisplayData | None:
+        stack_count = self._runtime_int(runtime, "trinity_stack_count", 0)
+        exp_bonus_percent = max(
+            0.0,
+            (
+                self._runtime_float(runtime, "exp_multiplier_bonus", 0.0)
+                - self._runtime_float(runtime, "base_transfer", 0.0)
+            )
+            * 100.0,
+        )
+        if exp_bonus_percent <= 0.0:
+            return None
+
+        owner_modifier = max(
+            0.0, self._runtime_float(runtime, "owner_passive_modifier", 1.0)
+        )
+        target_stack_count = self._soft_stack_target_count(
+            owner_modifier=owner_modifier,
+            stack_value=LADY_LIGHT_STACK_BONUS_PER_STACK,
+        )
+        progress = self._normalize_bar_value(
+            current=float(stack_count),
+            maximum=target_stack_count,
+        )
+
+        return PassiveBarDisplayData(
+            passive_id="lady_light_radiant_aegis",
+            label="Aegis",
+            progress=progress,
+            display_percent=exp_bonus_percent,
+            shimmer=0.0,
+            display_text=self._format_percent_text(exp_bonus_percent),
+            style_id="default",
+            element_id="light",
+        )
+
+    @staticmethod
+    def _runtime_int(runtime: dict[str, Any], key: str, fallback: int) -> int:
+        try:
+            return max(0, int(runtime.get(key, fallback)))
+        except (TypeError, ValueError):
+            return max(0, int(fallback))
 
     @staticmethod
     def _runtime_float(runtime: dict[str, Any], key: str, fallback: float) -> float:
@@ -513,13 +595,59 @@ class IdleGameState(QObject):
             return float(fallback)
 
     @staticmethod
-    def _countdown_shimmer(countdown_ticks: float) -> float:
-        seconds_to_next = max(0.0, float(countdown_ticks) * IDLE_TICK_INTERVAL_SECONDS)
-        if seconds_to_next > 1.0:
+    def _normalize_bar_value(*, current: float, maximum: float) -> float:
+        if maximum <= 0.0:
             return 0.0
-        if seconds_to_next <= (5.0 / 30.0):
+        return max(0.0, min(1.0, float(current) / float(maximum)))
+
+    @staticmethod
+    def _sustainable_stack_cap() -> float:
+        if TRINITY_STACK_INTERVAL_TICKS <= 0:
             return 1.0
-        return (1.0 - seconds_to_next) / (25.0 / 30.0)
+        return max(
+            1.0,
+            float(
+                math.ceil(
+                    float(TRINITY_STACK_TTL_TICKS) / float(TRINITY_STACK_INTERVAL_TICKS)
+                )
+            ),
+        )
+
+    @classmethod
+    def _soft_stack_target_count(
+        cls,
+        *,
+        owner_modifier: float,
+        stack_value: float,
+    ) -> float:
+        sustainable = cls._sustainable_stack_cap()
+        per_stack_value = max(0.0, float(stack_value)) * max(0.0, float(owner_modifier))
+        if per_stack_value <= 0.0:
+            return sustainable
+        theoretical = TRINITY_SOFT_CAP_THRESHOLD / per_stack_value
+        if theoretical <= 0.0:
+            return sustainable
+        return max(1.0, min(sustainable, theoretical))
+
+    @staticmethod
+    def _trinity_shimmer(progress: float) -> float:
+        if progress <= 0.0:
+            return 0.0
+        return max(0.25, min(0.55, 0.25 + (float(progress) * 0.20)))
+
+    @staticmethod
+    def _format_percent_text(percent: float) -> str:
+        value = max(0.0, float(percent))
+        if value <= 0.0:
+            return "0%"
+        if value >= 1.0:
+            decimals = 2
+        elif value >= 0.1:
+            decimals = 4
+        else:
+            decimals = 4
+        formatted = f"{value:.{decimals}f}".rstrip("0").rstrip(".")
+        return f"{formatted}%"
 
     def _build_runtime_stats_for_char_unlocked(self, char_id: str) -> Stats | None:
         data = self._char_data.get(char_id)

@@ -249,17 +249,20 @@ Status: complete.
   - shard bar when available
   - passive bars when active
 - Kept shard bars conditional instead of forcing a placeholder for cards with no shard reward types.
-- Implemented passive-bar visibility so bars only render when the passive is active and exposes real progress data.
-- Implemented Trinity bar styling with a light/dark gradient and blessing-style countdown shimmer.
+- Implemented passive-bar visibility so bars only render when the passive is active and exposes a meaningful current effect or stack-power signal.
+- Replaced cadence-style fill/drain passive bars with impact bars that fill from computed stack power toward the likely effective soft target.
+- Implemented Trinity bar styling with a light/dark gradient and subtle power-based shimmer.
 - Implemented default passive-bar element coloring from the owning character, with Lady Darkness explicitly using dark styling.
-- Left `lady_light_radiant_aegis` hidden because it still has no countdown/progress runtime fields for a real bar.
+- Added a visible Lady Light impact bar using Trinity stack power for fill and current bonus-over-baseline for text.
 - Fixed `AnimatedProgressBar` so custom gradient colors actually affect rendering and exposed a `format()` helper for testable text assertions.
 - Added targeted UI/state tests for passive-bar ordering, stacking, Trinity styling, and the new card-facing passive-bar accessor.
 
 ### Notes
 
 - Passive bar text format is now `LABEL percent`.
-- Visual fill clamps to `100%`, while displayed text may exceed `100%`.
+- Passive bar fill now tracks passive power rather than stack cadence countdown.
+- Fill normalizes against a computed likely soft target so it stays truthful if runtime tuning changes later.
+- Trinity text reports mitigation percent, Lady Darkness text reports bleed strength, and Lady Light text reports bonus over baseline.
 - Passive bars appear below the shard bar when the shard bar exists, otherwise directly below the EXP bar.
 
 ### Verification
