@@ -537,7 +537,7 @@ def test_idle_card_stacks_multiple_passive_bars() -> None:
             label="Aegis",
             progress=0.8,
             display_percent=108.0,
-            display_text="1.08x bonus",
+            display_text="1.08x EXP",
             shimmer=0.0,
             style_id="default",
             element_id="light",
@@ -568,7 +568,7 @@ def test_idle_card_stacks_multiple_passive_bars() -> None:
     assert len(visible_bars) == 3
     assert visible_bars[0].format() == "TRINITY 0.0105%"
     assert visible_bars[1].format() == "VEIL 0.5774%"
-    assert visible_bars[2].format() == "AEGIS 1.08x bonus"
+    assert visible_bars[2].format() == "AEGIS 1.08x EXP"
 
 
 def test_passive_progress_bar_uses_trinity_theme_and_keeps_effect_text() -> None:

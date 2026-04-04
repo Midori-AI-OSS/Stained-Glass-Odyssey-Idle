@@ -262,7 +262,7 @@ Status: complete.
 - Passive bar text format is now effect-specific player-facing text.
 - Passive bar fill now tracks passive power rather than stack cadence countdown.
 - Fill normalizes against a computed likely soft target so it stays truthful if runtime tuning changes later.
-- Trinity text reports mitigation percent, Lady Darkness text reports bleed strength, and Lady Light text reports total passive bonus as `x bonus`.
+- Trinity text reports mitigation percent, Lady Darkness text reports bleed strength, and Lady Light text reports total passive contribution as `x EXP`.
 - Passive bars appear below the shard bar when the shard bar exists, otherwise directly below the EXP bar.
 
 ### Verification

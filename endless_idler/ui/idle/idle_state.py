@@ -649,7 +649,7 @@ class IdleGameState(QObject):
     def _format_multiplier_bonus_text(multiplier: float) -> str:
         value = max(0.0, float(multiplier))
         if value <= 0.0:
-            return "0x bonus"
+            return "0x EXP"
         if value >= 10.0:
             decimals = 1
         elif value >= 1.0:
@@ -657,7 +657,7 @@ class IdleGameState(QObject):
         else:
             decimals = 3
         formatted = f"{value:.{decimals}f}".rstrip("0").rstrip(".")
-        return f"{formatted}x bonus"
+        return f"{formatted}x EXP"
 
     def _build_runtime_stats_for_char_unlocked(self, char_id: str) -> Stats | None:
         data = self._char_data.get(char_id)
