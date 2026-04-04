@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 
 from endless_idler.characters.plugins import CharacterPlugin
@@ -7,23 +8,81 @@ from endless_idler.save import RunSave
 from endless_idler.ui.idle.idle_state import IdleGameState
 
 
+def _stats(*, max_hp: float, defense: float, mitigation: float) -> dict[str, float]:
+    return {
+        "max_hp": max_hp,
+        "atk": 200.0,
+        "defense": defense,
+        "crit_mod": 100.0,
+        "effect_hit_rate": 1.0,
+        "mitigation": mitigation,
+        "regain": 0.0,
+        "dodge_odds": 0.05,
+        "effect_resistance": 0.05,
+        "vitality": 1.0,
+        "atk_speed": 1.0,
+    }
+
+
+def _trinity_plugins() -> dict[str, CharacterPlugin]:
+    return {
+        "lady_darkness": CharacterPlugin(
+            char_id="lady_darkness",
+            display_name="Lady Darkness",
+            stars=5,
+            placement="onsite",
+            passives=["lady_darkness_eclipsing_veil"],
+            base_stats=_stats(max_hp=1000.0, defense=200.0, mitigation=1.0),
+        ),
+        "lady_light": CharacterPlugin(
+            char_id="lady_light",
+            display_name="Lady Light",
+            stars=5,
+            placement="offsite",
+            passives=["lady_light_radiant_aegis"],
+            base_stats=_stats(max_hp=1000.0, defense=200.0, mitigation=1.0),
+        ),
+        "persona_light_and_dark": CharacterPlugin(
+            char_id="persona_light_and_dark",
+            display_name="Persona Light and Dark",
+            stars=6,
+            placement="both",
+            passives=["trinity_synergy"],
+            base_stats=_stats(max_hp=1700.0, defense=240.0, mitigation=4.0),
+            is_dual_type=True,
+            dual_damage_types=("light", "dark"),
+        ),
+    }
+
+
+def _build_trinity_state(
+    *,
+    onsite_ids: list[str] | None = None,
+    offsite_ids: list[str] | None = None,
+    standby_ids: list[str] | None = None,
+    stacks: dict[str, int] | None = None,
+    passives_data: dict[str, dict[str, object]] | None = None,
+) -> IdleGameState:
+    onsite = list(onsite_ids or ["lady_darkness"])
+    offsite = list(offsite_ids or ["lady_light", "persona_light_and_dark"])
+    standby = list(standby_ids or [])
+    all_ids = [*onsite, *offsite, *standby]
+    stack_map = stacks or {char_id: 1 for char_id in all_ids}
+    return IdleGameState(
+        char_ids=onsite,
+        offsite_ids=offsite,
+        standby_ids=standby,
+        party_level=1,
+        stacks=stack_map,
+        plugins_by_id=_trinity_plugins(),
+        rng=random.Random(7),
+        passives_data=passives_data or RunSave().passives,
+    )
+
+
 def test_runtime_snapshot_exports_full_canonical_passives_and_active_runtime() -> None:
     save = RunSave()
-    state = IdleGameState(
-        char_ids=["onsite"],
-        party_level=1,
-        stacks={"onsite": 1},
-        plugins_by_id={
-            "onsite": CharacterPlugin(
-                char_id="onsite",
-                display_name="Onsite",
-                placement="onsite",
-                passives=["lady_fire_infernal_momentum"],
-            )
-        },
-        rng=random.Random(7),
-        passives_data=save.passives,
-    )
+    state = _build_trinity_state(passives_data=save.passives)
 
     snapshot = state.export_runtime_snapshot()
 
@@ -33,29 +92,181 @@ def test_runtime_snapshot_exports_full_canonical_passives_and_active_runtime() -
 
     passive_runtime = snapshot.get("passive_runtime")
     assert isinstance(passive_runtime, dict)
-    assert passive_runtime == {"lady_fire_infernal_momentum": {}}
-    assert "ally_overload" not in passive_runtime
+    assert set(passive_runtime) == {
+        "trinity_synergy",
+        "lady_light_radiant_aegis",
+        "lady_darkness_eclipsing_veil",
+    }
 
 
-def test_process_tick_keeps_noop_passive_runtime_stable() -> None:
-    state = IdleGameState(
-        char_ids=["onsite"],
-        party_level=1,
-        stacks={"onsite": 1},
-        plugins_by_id={
-            "onsite": CharacterPlugin(
-                char_id="onsite",
-                display_name="Onsite",
-                placement="onsite",
-                passives=["lady_fire_infernal_momentum"],
-            )
-        },
-        rng=random.Random(11),
-        passives_data=RunSave().passives,
+def test_trinity_gating_breaks_when_member_moves_to_standby() -> None:
+    state = _build_trinity_state(
+        offsite_ids=["lady_light"],
+        standby_ids=["persona_light_and_dark"],
     )
 
-    snapshot = state.process_tick()
+    for _ in range(45):
+        snapshot = state.process_tick()
 
-    passive_runtime = snapshot.get("passive_runtime")
-    assert isinstance(passive_runtime, dict)
-    assert passive_runtime == {"lady_fire_infernal_momentum": {}}
+    passives = snapshot["passives"]
+    assert passives["trinity_synergy"]["stack_ttls"] == []
+    assert passives["lady_darkness_eclipsing_veil"]["bleed_stack_ttls"] == []
+
+    runtime = snapshot["passive_runtime"]
+    assert runtime["trinity_synergy"]["active"] is False
+    assert runtime["lady_light_radiant_aegis"]["active"] is False
+    assert runtime["lady_darkness_eclipsing_veil"]["active"] is False
+
+
+def test_trinity_stacks_build_on_30_tick_cadence_and_expire_independently() -> None:
+    state = _build_trinity_state()
+
+    for _ in range(450):
+        snapshot = state.process_tick()
+
+    trinity = snapshot["passives"]["trinity_synergy"]
+    darkness = snapshot["passives"]["lady_darkness_eclipsing_veil"]
+    assert len(trinity["stack_ttls"]) == 15
+    assert len(darkness["bleed_stack_ttls"]) == 15
+    assert min(trinity["stack_ttls"]) == 30
+    assert max(trinity["stack_ttls"]) == 450
+    assert min(darkness["bleed_stack_ttls"]) == 30
+    assert max(darkness["bleed_stack_ttls"]) == 450
+
+    snapshot = state.process_tick()
+    trinity = snapshot["passives"]["trinity_synergy"]
+    darkness = snapshot["passives"]["lady_darkness_eclipsing_veil"]
+    assert len(trinity["stack_ttls"]) == 15
+    assert len(darkness["bleed_stack_ttls"]) == 15
+    assert min(trinity["stack_ttls"]) == 29
+    assert max(trinity["stack_ttls"]) == 449
+    assert min(darkness["bleed_stack_ttls"]) == 29
+    assert max(darkness["bleed_stack_ttls"]) == 449
+
+
+def test_trinity_state_round_trips_from_saved_ttl_lists() -> None:
+    save = RunSave()
+    save.passives["trinity_synergy"] = {
+        "stack_ttls": [200, 12],
+        "stack_progress_ticks": 9,
+    }
+    save.passives["lady_darkness_eclipsing_veil"] = {
+        "bleed_stack_ttls": [101, 33],
+        "bleed_progress_ticks": 4,
+    }
+    state = _build_trinity_state(passives_data=save.passives)
+
+    snapshot = state.export_runtime_snapshot()
+    assert snapshot["passives"]["trinity_synergy"] == {
+        "stack_ttls": [200, 12],
+        "stack_progress_ticks": 9,
+    }
+    assert snapshot["passives"]["lady_darkness_eclipsing_veil"] == {
+        "bleed_stack_ttls": [101, 33],
+        "bleed_progress_ticks": 4,
+    }
+
+
+def test_trinity_break_clears_saved_stacks_and_reform_restarts_from_zero() -> None:
+    seeded = RunSave().passives
+    seeded["trinity_synergy"] = {
+        "stack_ttls": [200, 100],
+        "stack_progress_ticks": 19,
+    }
+    seeded["lady_darkness_eclipsing_veil"] = {
+        "bleed_stack_ttls": [210, 140],
+        "bleed_progress_ticks": 11,
+    }
+
+    broken = _build_trinity_state(
+        offsite_ids=["lady_light"],
+        standby_ids=["persona_light_and_dark"],
+        passives_data=seeded,
+    )
+    broken_snapshot = broken.process_tick()
+    assert broken_snapshot["passives"]["trinity_synergy"] == {
+        "stack_ttls": [],
+        "stack_progress_ticks": 0,
+    }
+    assert broken_snapshot["passives"]["lady_darkness_eclipsing_veil"] == {
+        "bleed_stack_ttls": [],
+        "bleed_progress_ticks": 0,
+    }
+
+    restored = _build_trinity_state(passives_data=broken_snapshot["passives"])
+    for _ in range(29):
+        restored.process_tick()
+    before_gain = restored.export_runtime_snapshot()["passives"]["trinity_synergy"]
+    assert before_gain["stack_ttls"] == []
+    assert before_gain["stack_progress_ticks"] == 29
+
+    after_gain = restored.process_tick()["passives"]["trinity_synergy"]
+    assert after_gain["stack_ttls"] == [450]
+    assert after_gain["stack_progress_ticks"] == 0
+
+
+def test_lady_light_uses_full_exp_multiplier_transfer_from_sources() -> None:
+    state = _build_trinity_state()
+    trinity_gain = state.get_exp_gain_per_tick("lady_light")
+    broken_gain = _build_trinity_state(
+        offsite_ids=["lady_light"],
+        standby_ids=["persona_light_and_dark"],
+    ).get_exp_gain_per_tick("lady_light")
+    runtime = state.export_runtime_snapshot()["passive_runtime"]
+    light_runtime = runtime["lady_light_radiant_aegis"]
+    assert light_runtime["active"] is True
+    assert math.isclose(
+        float(light_runtime["source_dark_exp_multiplier"]),
+        1.0,
+        rel_tol=1e-9,
+        abs_tol=1e-9,
+    )
+    assert math.isclose(
+        float(light_runtime["source_persona_exp_multiplier"]),
+        1.0,
+        rel_tol=1e-9,
+        abs_tol=1e-9,
+    )
+    assert math.isclose(
+        float(light_runtime["base_transfer"]),
+        1.0,
+        rel_tol=1e-9,
+        abs_tol=1e-9,
+    )
+    assert math.isclose(
+        float(light_runtime["exp_multiplier_bonus"]),
+        1.05,
+        rel_tol=1e-9,
+        abs_tol=1e-9,
+    )
+    assert trinity_gain > broken_gain
+
+
+def test_lady_darkness_bleed_respects_floor_and_converts_damage_to_exp_bonus() -> None:
+    state = _build_trinity_state()
+
+    for _ in range(30):
+        snapshot = state.process_tick()
+
+    runtime = snapshot["passive_runtime"]["lady_darkness_eclipsing_veil"]
+    assert runtime["stack_count"] == 1
+    assert float(runtime["hp_loss_fraction"]) > 0.0
+    assert float(runtime["exp_multiplier_bonus"]) > 0.0
+
+    light_data = state.get_char_data("lady_light")
+    persona_data = state.get_char_data("persona_light_and_dark")
+    assert isinstance(light_data, dict)
+    assert isinstance(persona_data, dict)
+    assert float(light_data["hp"]) >= float(light_data["max_hp"]) * 0.3
+    assert float(persona_data["hp"]) >= float(persona_data["max_hp"]) * 0.3
+
+
+def test_get_exp_gain_per_tick_refreshes_current_tick_passive_effects() -> None:
+    state = _build_trinity_state()
+
+    initial = state.get_exp_gain_per_tick("lady_darkness")
+    for _ in range(30):
+        state.process_tick()
+    after_bleed = state.get_exp_gain_per_tick("lady_darkness")
+
+    assert after_bleed > initial

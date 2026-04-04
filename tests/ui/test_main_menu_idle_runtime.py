@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import endless_idler.ui.main_menu as main_menu_module
 
+from endless_idler.save import RunSave
 from endless_idler.ui.main_menu import MainMenuWindow
 
 
@@ -223,13 +224,13 @@ def test_build_idle_state_from_save_passes_standby_ids(monkeypatch) -> None:
         idle_risk_reward_level=0,
         battle_start_time=0.0,
         blessings={},
-        passives={"lady_fire_infernal_momentum": {}},
+        passives=RunSave().passives,
     )
 
     MainMenuWindow._build_idle_state_from_save(holder, save)
 
     assert captured["standby_ids"] == ["bench"]
-    assert captured["passives_data"] == {"lady_fire_infernal_momentum": {}}
+    assert captured["passives_data"] == RunSave().passives
 
 
 def test_apply_idle_snapshot_to_save_writes_canonical_passives_only() -> None:
@@ -238,7 +239,7 @@ def test_apply_idle_snapshot_to_save_writes_canonical_passives_only() -> None:
         character_stats={},
         character_initial_stats={},
         blessings={},
-        passives={},
+        passives=RunSave().passives,
         idle_exp_bonus_seconds=0.0,
         idle_exp_penalty_seconds=0.0,
         idle_shared_exp_percentage=1,
@@ -254,10 +255,10 @@ def test_apply_idle_snapshot_to_save_writes_canonical_passives_only() -> None:
     MainMenuWindow._apply_idle_snapshot_to_save(
         holder,
         {
-            "passives": {"lady_fire_infernal_momentum": {}},
+            "passives": RunSave().passives,
             "passive_runtime": {"lady_fire_infernal_momentum": {"ticks": 3}},
         },
     )
 
-    assert save.passives == {"lady_fire_infernal_momentum": {}}
+    assert save.passives == RunSave().passives
     assert not hasattr(save, "passive_runtime")

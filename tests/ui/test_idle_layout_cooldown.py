@@ -137,10 +137,10 @@ def test_idle_screen_snapshot_applies_canonical_passives_only() -> None:
     IdleScreenWidget._apply_snapshot_to_save(
         holder,
         {
-            "passives": {"lady_fire_infernal_momentum": {}},
+            "passives": RunSave().passives,
             "passive_runtime": {"lady_fire_infernal_momentum": {"ticks": 5}},
         },
     )
 
-    assert save.passives == {"lady_fire_infernal_momentum": {}}
+    assert save.passives == RunSave().passives
     assert not hasattr(save, "passive_runtime")

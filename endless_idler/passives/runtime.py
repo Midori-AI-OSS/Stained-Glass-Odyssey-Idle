@@ -22,6 +22,75 @@ class PassiveTickContext:
     elapsed_seconds: float
 
 
+def _default_canonical_state(plugin: PassivePlugin) -> dict[str, Any]:
+    defaults: dict[str, Any] = {}
+    for field_name, field_type in plugin.save_schema.items():
+        if field_type is int:
+            defaults[field_name] = 0
+        elif field_type is float:
+            defaults[field_name] = 0.0
+        elif field_type is bool:
+            defaults[field_name] = False
+        elif field_type == list[int]:
+            defaults[field_name] = []
+    return defaults
+
+
+def _is_stateful_passive(
+    *,
+    plugin: PassivePlugin,
+    canonical_state: dict[str, Any],
+    runtime_state: dict[str, Any] | None,
+) -> bool:
+    defaults = _default_canonical_state(plugin)
+    if canonical_state != defaults:
+        return True
+    return bool(runtime_state)
+
+
+def _ordered_passive_ids_to_tick(
+    *,
+    active_passive_ids: list[str],
+    canonical_passives: dict[str, dict[str, Any]],
+    runtime_passives: dict[str, dict[str, Any]],
+) -> list[str]:
+    order: list[str] = []
+    seen: set[str] = set()
+
+    for passive_id in active_passive_ids:
+        if passive_id in seen:
+            continue
+        seen.add(passive_id)
+        order.append(passive_id)
+
+    for passive_id, canonical_state in canonical_passives.items():
+        if passive_id in seen:
+            continue
+        plugin = get_passive_by_id(passive_id)
+        if plugin is None:
+            continue
+        runtime_state = runtime_passives.get(passive_id)
+        if not _is_stateful_passive(
+            plugin=plugin,
+            canonical_state=canonical_state
+            if isinstance(canonical_state, dict)
+            else {},
+            runtime_state=runtime_state if isinstance(runtime_state, dict) else None,
+        ):
+            continue
+        seen.add(passive_id)
+        order.append(passive_id)
+
+    indexed_order = {passive_id: index for index, passive_id in enumerate(order)}
+    return sorted(
+        order,
+        key=lambda passive_id: (
+            int(getattr(get_passive_by_id(passive_id), "tick_order", 0) or 0),
+            indexed_order[passive_id],
+        ),
+    )
+
+
 def resolve_active_passive_ids(
     *,
     char_ids: list[str],
@@ -73,7 +142,13 @@ def tick_active_passives(
     tick_count: int,
     elapsed_seconds: float,
 ) -> None:
-    for passive_id in active_passive_ids:
+    passive_ids_to_tick = _ordered_passive_ids_to_tick(
+        active_passive_ids=active_passive_ids,
+        canonical_passives=canonical_passives,
+        runtime_passives=runtime_passives,
+    )
+
+    for passive_id in passive_ids_to_tick:
         plugin = get_passive_by_id(passive_id)
         if plugin is None:
             continue

@@ -146,6 +146,7 @@ class IdleGameState(QObject):
             passives_data=passives_data,
             active_passive_ids=list(self._active_passive_ids),
         )
+        self._passive_exp_multiplier_bonus_by_char: dict[str, float] = {}
         self._lock = threading.RLock()
 
         self._tick_count = 0
@@ -321,6 +322,193 @@ class IdleGameState(QObject):
             self._ensure_sparse_growth_schedule(char_id)
 
         self._apply_offsite_stat_share_to_onsite_hp()
+        self._refresh_passive_effects_unlocked(delta_seconds=0.0)
+
+    def _refresh_passive_effects_unlocked(self, *, delta_seconds: float) -> None:
+        self._passive_exp_multiplier_bonus_by_char = {}
+        tick_active_passives(
+            active_passive_ids=list(self._active_passive_ids),
+            canonical_passives=self._passives_data,
+            runtime_passives=self._passive_runtime,
+            idle_state=self,
+            delta_seconds=float(max(0.0, delta_seconds)),
+            tick_count=self._tick_count,
+            elapsed_seconds=self._elapsed_seconds,
+        )
+
+    def add_passive_exp_multiplier_bonus(self, *, char_id: str, bonus: float) -> None:
+        clean_id = str(char_id or "").strip()
+        if not clean_id:
+            return
+        with self._lock:
+            self._add_passive_exp_multiplier_bonus_unlocked(
+                char_id=clean_id,
+                bonus=bonus,
+            )
+
+    def _add_passive_exp_multiplier_bonus_unlocked(
+        self, *, char_id: str, bonus: float
+    ) -> None:
+        clean_id = str(char_id or "").strip()
+        if not clean_id:
+            return
+        amount = float(max(0.0, bonus))
+        if amount <= 0.0:
+            return
+        current = float(self._passive_exp_multiplier_bonus_by_char.get(clean_id, 0.0))
+        self._passive_exp_multiplier_bonus_by_char[clean_id] = current + amount
+
+    def get_deployed_character_ids(self) -> list[str]:
+        with self._lock:
+            return list(dict.fromkeys([*self._char_ids, *self._offsite_ids]))
+
+    def is_character_deployed(self, char_id: str) -> bool:
+        clean_id = str(char_id or "").strip()
+        if not clean_id:
+            return False
+        with self._lock:
+            return clean_id in self._char_ids or clean_id in self._offsite_ids
+
+    def get_passive_canonical_state(self, passive_id: str) -> dict[str, Any]:
+        clean_id = str(passive_id or "").strip()
+        if not clean_id:
+            return {}
+        with self._lock:
+            raw = self._passives_data.get(clean_id, {})
+            return dict(raw) if isinstance(raw, dict) else {}
+
+    def get_passive_runtime_state(self, passive_id: str) -> dict[str, Any]:
+        clean_id = str(passive_id or "").strip()
+        if not clean_id:
+            return {}
+        with self._lock:
+            raw = self._passive_runtime.get(clean_id, {})
+            return dict(raw) if isinstance(raw, dict) else {}
+
+    def get_effective_exp_multiplier(self, char_id: str) -> float:
+        clean_id = str(char_id or "").strip()
+        if not clean_id:
+            return 0.0
+        with self._lock:
+            return self._effective_exp_multiplier_for_char_unlocked(clean_id)
+
+    def _effective_exp_multiplier_for_char_unlocked(self, char_id: str) -> float:
+        data = self._char_data.get(char_id)
+        if not isinstance(data, dict):
+            return 0.0
+        try:
+            base = max(0.0, float(data.get("exp_multiplier", 1.0)))
+        except (TypeError, ValueError):
+            base = 1.0
+        bonus = float(
+            max(0.0, self._passive_exp_multiplier_bonus_by_char.get(char_id, 0.0))
+        )
+        return max(0.0, base + bonus)
+
+    def _build_runtime_stats_for_char_unlocked(self, char_id: str) -> Stats | None:
+        data = self._char_data.get(char_id)
+        plugin = self._plugins_by_id.get(char_id)
+        if not isinstance(data, dict) or plugin is None:
+            return None
+
+        base_stats = data.get("base_stats")
+        if not isinstance(base_stats, dict):
+            return None
+
+        try:
+            stack = max(1, int(data.get("stack", 1)))
+        except (TypeError, ValueError):
+            stack = 1
+
+        stars = max(1, int(getattr(plugin, "stars", 1) or 1))
+        progress = {
+            "level": max(1, int(data.get("level", 1))),
+            "exp": float(max(0.0, float(data.get("exp", 0.0)))),
+            "exp_multiplier": float(max(0.0, float(data.get("exp_multiplier", 1.0)))),
+            "max_hp_level_bonus_version": max(
+                0, int(data.get("max_hp_level_bonus_version", 0))
+            ),
+            "rebirths": max(0, int(data.get("rebirths", 0))),
+        }
+        stats = build_scaled_character_stats(
+            plugin=plugin,
+            party_level=self._party_level,
+            stars=stars,
+            stacks=stack,
+            progress=progress,
+            saved_base_stats=base_stats,
+        )
+        apply_base_stat_multiplier(
+            stats=stats,
+            multiplier=self._stat_multiplier_for_char(char_id),
+        )
+        return stats
+
+    def apply_passive_hp_loss(
+        self,
+        *,
+        target_char_id: str,
+        raw_damage: float,
+        hp_floor_fraction: float,
+        defense_divisor: float = 5.0,
+    ) -> float:
+        clean_id = str(target_char_id or "").strip()
+        if not clean_id:
+            return 0.0
+        with self._lock:
+            return self._apply_passive_hp_loss_unlocked(
+                target_char_id=clean_id,
+                raw_damage=raw_damage,
+                hp_floor_fraction=hp_floor_fraction,
+                defense_divisor=defense_divisor,
+            )
+
+    def _apply_passive_hp_loss_unlocked(
+        self,
+        *,
+        target_char_id: str,
+        raw_damage: float,
+        hp_floor_fraction: float,
+        defense_divisor: float,
+    ) -> float:
+        data = self._char_data.get(target_char_id)
+        if not isinstance(data, dict):
+            return 0.0
+
+        try:
+            current_hp = max(0.0, float(data.get("hp", 0.0)))
+        except (TypeError, ValueError):
+            current_hp = 0.0
+        try:
+            max_hp = max(1.0, float(data.get("max_hp", 1.0)))
+        except (TypeError, ValueError):
+            max_hp = 1.0
+
+        floor_fraction = max(0.0, min(1.0, float(hp_floor_fraction)))
+        hp_floor = max_hp * floor_fraction
+        if current_hp <= hp_floor:
+            return 0.0
+
+        stats = self._build_runtime_stats_for_char_unlocked(target_char_id)
+        if stats is not None:
+            defense = max(1.0, float(stats.defense))
+            mitigation = max(0.1, float(stats.mitigation))
+        else:
+            base_stats = data.get("base_stats")
+            if not isinstance(base_stats, dict):
+                base_stats = {}
+            defense = max(1.0, float(base_stats.get("defense", 200.0)))
+            mitigation = max(0.1, float(base_stats.get("mitigation", 1.0)))
+
+        scaled_defense = max(1.0, defense / max(1.0, float(defense_divisor)))
+        actual_damage = max(0.0, float(raw_damage)) / (scaled_defense * mitigation)
+        allowed_damage = max(0.0, current_hp - hp_floor)
+        applied_damage = min(actual_damage, allowed_damage)
+        if applied_damage <= 0.0:
+            return 0.0
+
+        data["hp"] = max(0.0, current_hp - applied_damage)
+        return applied_damage
 
     def _progression_stars_for_char(self, char_id: str) -> int:
         plugin = self._plugins_by_id.get(char_id)
@@ -681,15 +869,7 @@ class IdleGameState(QObject):
             dt = float(max(0.0, IDLE_TICK_INTERVAL_SECONDS))
             self._elapsed_seconds += dt
             self._process_blessing_ticks(delta_seconds=dt)
-            tick_active_passives(
-                active_passive_ids=list(self._active_passive_ids),
-                canonical_passives=self._passives_data,
-                runtime_passives=self._passive_runtime,
-                idle_state=self,
-                delta_seconds=dt,
-                tick_count=self._tick_count,
-                elapsed_seconds=self._elapsed_seconds,
-            )
+            self._refresh_passive_effects_unlocked(delta_seconds=dt)
 
             roll_ready = self._tick_count % SHARD_ROLL_INTERVAL_TICKS == 0
 
@@ -806,6 +986,15 @@ class IdleGameState(QObject):
         return per_tick / IDLE_TICK_INTERVAL_SECONDS
 
     def get_exp_gain_per_tick(self, char_id: str) -> float:
+        clean_id = str(char_id or "").strip()
+        if not clean_id:
+            return 0.0
+
+        with self._lock:
+            self._refresh_passive_effects_unlocked(delta_seconds=0.0)
+            return self._get_exp_gain_per_tick_unlocked(clean_id)
+
+    def _get_exp_gain_per_tick_unlocked(self, char_id: str) -> float:
         data = self._char_data.get(char_id)
         if not data:
             return 0.0
@@ -911,7 +1100,7 @@ class IdleGameState(QObject):
         char_id: str,
         data: dict[str, Any],
     ) -> float:
-        modifier = float(data.get("exp_multiplier", 1.0))
+        modifier = self._effective_exp_multiplier_for_char_unlocked(char_id)
         modifier *= self._death_exp_debuff_multiplier(data)
         modifier *= float(data.get("passive_modifier", 1.0))
         modifier *= self._exp_multiplier_for_char(char_id)

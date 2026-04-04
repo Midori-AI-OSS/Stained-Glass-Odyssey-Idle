@@ -237,8 +237,100 @@ def test_load_rejects_missing_passive_payload(monkeypatch, tmp_path: Path) -> No
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="Missing passive payload"):
+    loaded = SaveManager().load()
+    assert loaded is not None
+    assert loaded.passives["lady_fire_infernal_momentum"] == {}
+
+
+def test_load_seeds_new_passive_ids_into_existing_canonical_payload(
+    monkeypatch, tmp_path: Path
+) -> None:
+    save_path = tmp_path / "save.json"
+    monkeypatch.setenv("ENDLESS_IDLER_SAVE_PATH", str(save_path))
+
+    canonical = RunSave().passives
+    _ = canonical.pop("trinity_synergy")
+    _ = canonical.pop("lady_light_radiant_aegis")
+    _ = canonical.pop("lady_darkness_eclipsing_veil")
+
+    save_path.write_text(
+        json.dumps(
+            {
+                "version": 12,
+                "party_level": 1,
+                "passives": canonical,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = SaveManager().load()
+    assert loaded is not None
+    assert loaded.passives["trinity_synergy"] == {
+        "stack_ttls": [],
+        "stack_progress_ticks": 0,
+    }
+    assert loaded.passives["lady_darkness_eclipsing_veil"] == {
+        "bleed_stack_ttls": [],
+        "bleed_progress_ticks": 0,
+    }
+    assert loaded.passives["lady_light_radiant_aegis"] == {}
+
+
+def test_load_rejects_noncanonical_list_int_passive_payload(
+    monkeypatch, tmp_path: Path
+) -> None:
+    save_path = tmp_path / "save.json"
+    monkeypatch.setenv("ENDLESS_IDLER_SAVE_PATH", str(save_path))
+
+    canonical = RunSave().passives
+    canonical["trinity_synergy"] = {
+        "stack_ttls": [450, True],
+        "stack_progress_ticks": 0,
+    }
+
+    save_path.write_text(
+        json.dumps(
+            {
+                "version": 12,
+                "party_level": 1,
+                "passives": canonical,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="must be list\\[int\\]"):
         _ = SaveManager().load()
+
+
+def test_current_version_round_trips_list_int_passive_schema(
+    monkeypatch, tmp_path: Path
+) -> None:
+    save_path = tmp_path / "save.json"
+    monkeypatch.setenv("ENDLESS_IDLER_SAVE_PATH", str(save_path))
+
+    save = RunSave()
+    save.passives["trinity_synergy"] = {
+        "stack_ttls": [449, 420, 13],
+        "stack_progress_ticks": 17,
+    }
+    save.passives["lady_darkness_eclipsing_veil"] = {
+        "bleed_stack_ttls": [450, 12],
+        "bleed_progress_ticks": 9,
+    }
+    SaveManager().save(save)
+
+    loaded = SaveManager().load()
+    assert loaded is not None
+    assert loaded.passives["trinity_synergy"] == {
+        "stack_ttls": [449, 420, 13],
+        "stack_progress_ticks": 17,
+    }
+    assert loaded.passives["lady_darkness_eclipsing_veil"] == {
+        "bleed_stack_ttls": [450, 12],
+        "bleed_progress_ticks": 9,
+    }
 
 
 def test_missing_passives_key_loads_and_rewrites_canonical_defaults(

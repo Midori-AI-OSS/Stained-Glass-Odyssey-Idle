@@ -93,6 +93,8 @@ def _get_default_passives() -> dict[str, dict[str, Any]]:
                 passive_defaults[field_name] = 0.0
             elif field_type is bool:
                 passive_defaults[field_name] = False
+            elif field_type == list[int]:
+                passive_defaults[field_name] = []
 
         defaults[plugin.passive_id] = passive_defaults
 

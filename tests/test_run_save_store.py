@@ -101,7 +101,16 @@ def test_run_save_store_invalid_passive_payload_creates_crash_backup_and_resets(
                 "passives": {
                     "lady_fire_infernal_momentum": {
                         "runtime_only": 7,
-                    }
+                    },
+                    "trinity_synergy": {
+                        "stack_ttls": [],
+                        "stack_progress_ticks": 0,
+                    },
+                    "lady_light_radiant_aegis": {},
+                    "lady_darkness_eclipsing_veil": {
+                        "bleed_stack_ttls": [],
+                        "bleed_progress_ticks": 0,
+                    },
                 },
             }
         ),

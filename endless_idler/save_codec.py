@@ -10,6 +10,50 @@ from __future__ import annotations
 from typing import Any
 
 
+def _is_int_list_type(field_type: object) -> bool:
+    return field_type == list[int]
+
+
+def _passive_default_value(field_type: object) -> Any:
+    if field_type is int:
+        return 0
+    if field_type is float:
+        return 0.0
+    if field_type is bool:
+        return False
+    if _is_int_list_type(field_type):
+        return []
+    return None
+
+
+def _normalized_nonnegative_int_list(value: object) -> list[int]:
+    if not isinstance(value, list):
+        return []
+
+    normalized: list[int] = []
+    for item in value:
+        if isinstance(item, bool):
+            continue
+        if isinstance(item, int):
+            number = item
+        elif isinstance(item, float):
+            number = int(item)
+        elif isinstance(item, str):
+            stripped = item.strip()
+            if not stripped:
+                continue
+            try:
+                number = int(stripped)
+            except ValueError:
+                continue
+        else:
+            continue
+        if number < 0:
+            continue
+        normalized.append(number)
+    return normalized
+
+
 def _default_passives() -> dict[str, dict[str, Any]]:
     """Generate default passives from plugin discovery."""
     from endless_idler.passives.registry import discover_passive_plugins
@@ -18,12 +62,10 @@ def _default_passives() -> dict[str, dict[str, Any]]:
     for plugin in discover_passive_plugins():
         passive_defaults: dict[str, Any] = {}
         for field_name, field_type in plugin.save_schema.items():
-            if field_type is int:
-                passive_defaults[field_name] = 0
-            elif field_type is float:
-                passive_defaults[field_name] = 0.0
-            elif field_type is bool:
-                passive_defaults[field_name] = False
+            default_value = _passive_default_value(field_type)
+            if default_value is None:
+                continue
+            passive_defaults[field_name] = default_value
 
         defaults[plugin.passive_id] = passive_defaults
 
@@ -264,11 +306,12 @@ def as_passives_dict(value: object) -> dict[str, dict[str, Any]]:
     if unknown_ids:
         raise ValueError(f"Unknown passive ids in payload: {unknown_ids}")
 
+    defaults = _default_passives()
+
     for plugin in plugins:
         if plugin.passive_id not in value:
-            raise ValueError(
-                f"Missing passive payload for passive '{plugin.passive_id}'."
-            )
+            result[plugin.passive_id] = defaults.get(plugin.passive_id, {}).copy()
+            continue
         raw_passive = value.get(plugin.passive_id)
         if not isinstance(raw_passive, dict):
             raise ValueError(
@@ -317,6 +360,23 @@ def as_passives_dict(value: object) -> dict[str, dict[str, Any]]:
                         f"Passive '{plugin.passive_id}.{field_name}' must be bool."
                     )
                 normalized[field_name] = raw_value
+            elif _is_int_list_type(field_type):
+                if not isinstance(raw_value, list):
+                    raise ValueError(
+                        f"Passive '{plugin.passive_id}.{field_name}' must be list[int]."
+                    )
+                values: list[int] = []
+                for item in raw_value:
+                    if isinstance(item, bool) or not isinstance(item, int):
+                        raise ValueError(
+                            f"Passive '{plugin.passive_id}.{field_name}' must be list[int]."
+                        )
+                    if item < 0:
+                        raise ValueError(
+                            f"Passive '{plugin.passive_id}.{field_name}' items must be >= 0."
+                        )
+                    values.append(item)
+                normalized[field_name] = values
 
         result[plugin.passive_id] = normalized
 
@@ -348,6 +408,8 @@ def normalized_passives(value: dict[str, dict[str, Any]]) -> dict[str, dict[str,
                 normalized[field_name] = (
                     bool(raw_value) if raw_value is not None else False
                 )
+            elif _is_int_list_type(field_type):
+                normalized[field_name] = _normalized_nonnegative_int_list(raw_value)
 
         result[plugin.passive_id] = normalized
 
