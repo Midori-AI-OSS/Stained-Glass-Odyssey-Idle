@@ -100,62 +100,9 @@ This order stays deliberate.
 
 ## Remaining Plan
 
-## Pass 6: Tests + Verification
-
-### Goal
-
-Verify both the general passive framework and the recovered Trinity behavior end to end.
-
-### Expected file cluster
-
-- `tests/passives/test_registry.py`
-- `tests/passives/test_plugin.py`
-- `tests/test_idle_passives.py`
-- `tests/test_idle_trinity_runtime.py`
-- `tests/test_passive_integration.py`
-- save and UI runtime tests as needed
-
-### Key implementation work
-
-- Add passive discovery and registry tests.
-- Add passive plugin schema and canonical export tests.
-- Add save round-trip and schema rejection coverage for passive state.
-- Expand idle runtime tests for passive seeding, ticking, and snapshot export beyond the current Trinity-first coverage.
-- Add Trinity tests for:
-  - trio gating
-  - immediate reset on trio break
-  - restart-from-zero on trio reform
-  - stack cadence
-  - independent expiry
-  - soft-cap behavior
-  - Lady Light transfer
-  - Lady Darkness damage floor and EXP gain
-- Baseline unrelated failures before calling them regressions, especially `tests/test_shard_bars.py`.
-
-### Rationale
-
-The passive rebuild changes framework, save shape, idle runtime, and gameplay behavior. It needs layered verification, not just a single Trinity happy-path test.
-
-### Risks
-
-- If tests are added only at the Trinity layer, framework regressions may be missed.
-- If baseline failures are not separated from new regressions, verification noise will be misleading.
-
-### Acceptance criteria
-
-- Passive framework behavior is covered separately from Trinity behavior.
-- Canonical save behavior is enforced by tests.
-- Idle runtime export and persistence are both covered.
-- Trinity behavior is validated across lifecycle, timing, and persistence cases.
-
-### Suggested verification
-
-- Iteration:
-  - targeted `uv run pytest` for touched modules
-- Final validation:
-  - `uv run ruff check .`
-  - `uv run basedpyright`
-  - `uv run pytest -q`
+- All six planned passes are complete.
+- `done.md` now holds the completed verification record for the passive framework, Trinity behavior, and passive UI follow-up work.
+- Any next work should start from a new task rather than extending the original recovery roadmap.
 
 ## Cross-Pass Guardrails
 
@@ -168,4 +115,4 @@ The passive rebuild changes framework, save shape, idle runtime, and gameplay be
 
 ## Suggested Commit Boundaries
 
-- `[TEST] add final passive verification`
+- Recovery roadmap complete; future commits should use task-specific scopes.

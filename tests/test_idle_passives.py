@@ -4,6 +4,7 @@ import math
 import random
 
 from endless_idler.characters.plugins import CharacterPlugin
+from endless_idler.passives._trinity import apply_log_soft_cap
 from endless_idler.save import RunSave
 from endless_idler.ui.idle.idle_state import IdleGameState
 
@@ -97,6 +98,19 @@ def test_runtime_snapshot_exports_full_canonical_passives_and_active_runtime() -
         "lady_light_radiant_aegis",
         "lady_darkness_eclipsing_veil",
     }
+
+
+def test_apply_log_soft_cap_is_linear_until_threshold_then_diminishes() -> None:
+    below_threshold = apply_log_soft_cap(0.25)
+    at_threshold = apply_log_soft_cap(0.5)
+    above_threshold = apply_log_soft_cap(0.75)
+    much_above_threshold = apply_log_soft_cap(2.0)
+
+    assert math.isclose(below_threshold, 0.25, rel_tol=1e-12)
+    assert math.isclose(at_threshold, 0.5, rel_tol=1e-12)
+    assert 0.5 < above_threshold < 0.75
+    assert above_threshold - 0.5 < 0.25
+    assert much_above_threshold < 2.0
 
 
 def test_trinity_gating_breaks_when_member_moves_to_standby() -> None:
@@ -242,6 +256,62 @@ def test_lady_light_uses_full_exp_multiplier_transfer_from_sources() -> None:
     assert trinity_gain > broken_gain
 
 
+def test_trinity_mitigation_respects_runtime_passive_modifier() -> None:
+    low_modifier = _build_trinity_state(
+        stacks={
+            "lady_darkness": 1,
+            "lady_light": 1,
+            "persona_light_and_dark": 1,
+        }
+    )
+    boosted_modifier = _build_trinity_state(
+        stacks={
+            "lady_darkness": 1,
+            "lady_light": 1,
+            "persona_light_and_dark": 20,
+        }
+    )
+
+    for _ in range(30):
+        low_modifier.process_tick()
+        boosted_modifier.process_tick()
+
+    low_runtime = low_modifier.export_runtime_snapshot()["passive_runtime"][
+        "trinity_synergy"
+    ]
+    boosted_runtime = boosted_modifier.export_runtime_snapshot()["passive_runtime"][
+        "trinity_synergy"
+    ]
+
+    assert float(boosted_runtime["mitigation_percent"]) > float(
+        low_runtime["mitigation_percent"]
+    )
+
+
+def test_lady_light_stack_bonus_fraction_grows_with_trinity_stacks() -> None:
+    low_state = _build_trinity_state()
+    high_state = _build_trinity_state()
+
+    for _ in range(30):
+        low_state.process_tick()
+    for _ in range(300):
+        high_state.process_tick()
+
+    low_runtime = low_state.export_runtime_snapshot()["passive_runtime"][
+        "lady_light_radiant_aegis"
+    ]
+    high_runtime = high_state.export_runtime_snapshot()["passive_runtime"][
+        "lady_light_radiant_aegis"
+    ]
+
+    assert int(high_runtime["trinity_stack_count"]) > int(
+        low_runtime["trinity_stack_count"]
+    )
+    assert float(high_runtime["stack_bonus_fraction"]) > float(
+        low_runtime["stack_bonus_fraction"]
+    )
+
+
 def test_lady_darkness_bleed_respects_floor_and_converts_damage_to_exp_bonus() -> None:
     state = _build_trinity_state()
 
@@ -270,6 +340,34 @@ def test_get_exp_gain_per_tick_refreshes_current_tick_passive_effects() -> None:
     after_bleed = state.get_exp_gain_per_tick("lady_darkness")
 
     assert after_bleed > initial
+
+
+def test_stateful_passives_tick_while_inactive_to_clear_stale_runtime() -> None:
+    state = _build_trinity_state()
+
+    for _ in range(30):
+        state.process_tick()
+
+    active_runtime = state.export_runtime_snapshot()["passive_runtime"]
+    assert active_runtime["trinity_synergy"]["active"] is True
+    assert active_runtime["lady_darkness_eclipsing_veil"]["active"] is True
+    assert active_runtime["lady_light_radiant_aegis"]["active"] is True
+
+    broken_state = _build_trinity_state(
+        offsite_ids=["lady_light"],
+        standby_ids=["persona_light_and_dark"],
+        passives_data=state.export_runtime_snapshot()["passives"],
+    )
+
+    broken_snapshot = broken_state.process_tick()
+    broken_runtime = broken_snapshot["passive_runtime"]
+
+    assert broken_runtime["trinity_synergy"]["active"] is False
+    assert broken_runtime["trinity_synergy"]["stack_count"] == 0
+    assert broken_runtime["lady_darkness_eclipsing_veil"]["active"] is False
+    assert broken_runtime["lady_darkness_eclipsing_veil"]["stack_count"] == 0
+    assert broken_runtime["lady_light_radiant_aegis"]["active"] is False
+    assert broken_runtime["lady_light_radiant_aegis"]["exp_multiplier_bonus"] == 0.0
 
 
 def test_passive_bar_accessor_returns_only_displayable_active_bars() -> None:

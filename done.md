@@ -271,3 +271,57 @@ Status: complete.
   - `uv run ruff check endless_idler/ui/components/progress_bar.py endless_idler/ui/widgets/passive_progress_bar.py endless_idler/ui/theme/passive_progress_bar_widget.py endless_idler/ui/theme/registry.py endless_idler/ui/cards/character_card.py endless_idler/ui/idle/idle_state.py tests/test_idle_passives.py tests/ui/test_idle_blessing_ui.py`
 - Targeted tests:
   - `uv run pytest -q tests/test_idle_passives.py tests/ui/test_idle_blessing_ui.py`
+
+## Pass 6: Tests + Verification
+
+Status: complete.
+
+### Completed
+
+- Added dedicated passive framework tests under `tests/passives/`:
+  - `test_plugin.py`
+  - `test_loader.py`
+  - `test_registry.py`
+  - `test_runtime.py`
+- Added framework-level coverage for:
+  - `PassivePlugin` defaults, immutability, and hook wiring
+  - passive loader success and failure modes
+  - registry discovery, cache resets, required fields, and duplicate-id rejection
+  - passive runtime helpers for canonical defaults, activation resolution, tick ordering, runtime initialization, ticking, and export helpers
+- Expanded `tests/test_idle_passives.py` with direct Trinity math and runtime assertions for:
+  - `apply_log_soft_cap` diminishing returns
+  - mitigation scaling with `passive_modifier`
+  - Lady Light stack-bonus scaling
+  - stateful inactive passive cleanup
+  - existing preview refresh behavior
+- Kept Pass 6 focused on passive-framework and Trinity verification rather than unrelated system fixes.
+
+### Notes
+
+- Passive save canonical validation was already well-covered from Pass 3 and only needed framework-level coverage to round out Pass 6.
+- Trinity behavior remains primarily covered in `tests/test_idle_passives.py` rather than being fragmented across many additional top-level files.
+- Broad verification still reports unrelated pre-existing baselines outside passive-framework scope.
+
+### Verification
+
+- Targeted lint:
+  - `uv run ruff check tests/passives/test_plugin.py tests/passives/test_loader.py tests/passives/test_registry.py tests/passives/test_runtime.py tests/test_idle_passives.py`
+- Targeted tests:
+  - `uv run pytest -q tests/passives/test_plugin.py tests/passives/test_loader.py tests/passives/test_registry.py tests/passives/test_runtime.py tests/test_idle_passives.py`
+- Full lint:
+  - `uv run ruff check .`
+- Full type-check baseline check:
+  - `uv run basedpyright`
+- Full test-suite baseline check:
+  - `uv run pytest -q`
+- Rechecked unrelated failing baseline files:
+  - `uv run pytest -q tests/test_shard_bars.py tests/test_time_spawn_scaling.py`
+
+Results:
+
+- targeted Pass 6 lint passed
+- targeted Pass 6 pytest batch passed: `38 passed`
+- full-repo `ruff` passed
+- full-repo `basedpyright` still reports the unrelated legacy-character/baseline import and typing errors already noted in earlier passes
+- full-repo `pytest` still reports the pre-existing shard-bar failures in `tests/test_shard_bars.py`
+- full-repo `pytest` also still reports the unrelated float-equality failure in `tests/test_time_spawn_scaling.py::test_formula_breakdown`
