@@ -293,7 +293,7 @@ def test_passive_bar_accessor_returns_only_displayable_active_bars() -> None:
     assert light_bars[0].passive_id == "lady_light_radiant_aegis"
     assert light_bars[0].label == "Aegis"
     assert light_bars[0].element_id == "light"
-    assert light_bars[0].display_text == "5%"
+    assert light_bars[0].display_text == "1.05x bonus"
 
 
 def test_passive_bar_accessor_uses_stack_power_fill_and_effect_text() -> None:
@@ -313,7 +313,7 @@ def test_passive_bar_accessor_uses_stack_power_fill_and_effect_text() -> None:
     assert darkness_bar.display_text == "0.5774%"
 
     assert math.isclose(light_bar.progress, 1.0 / 15.0, rel_tol=1e-9, abs_tol=1e-9)
-    assert light_bar.display_text == "5.06%"
+    assert light_bar.display_text == "1.05x bonus"
 
 
 def test_passive_bar_accessor_reaches_full_fill_at_sustained_stack_cap() -> None:

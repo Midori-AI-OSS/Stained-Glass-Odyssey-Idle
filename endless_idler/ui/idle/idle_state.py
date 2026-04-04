@@ -546,15 +546,11 @@ class IdleGameState(QObject):
         self, *, runtime: dict[str, Any]
     ) -> PassiveBarDisplayData | None:
         stack_count = self._runtime_int(runtime, "trinity_stack_count", 0)
-        exp_bonus_percent = max(
+        exp_bonus_multiplier = max(
             0.0,
-            (
-                self._runtime_float(runtime, "exp_multiplier_bonus", 0.0)
-                - self._runtime_float(runtime, "base_transfer", 0.0)
-            )
-            * 100.0,
+            self._runtime_float(runtime, "exp_multiplier_bonus", 0.0),
         )
-        if exp_bonus_percent <= 0.0:
+        if exp_bonus_multiplier <= 0.0:
             return None
 
         owner_modifier = max(
@@ -573,9 +569,9 @@ class IdleGameState(QObject):
             passive_id="lady_light_radiant_aegis",
             label="Aegis",
             progress=progress,
-            display_percent=exp_bonus_percent,
+            display_percent=exp_bonus_multiplier * 100.0,
             shimmer=0.0,
-            display_text=self._format_percent_text(exp_bonus_percent),
+            display_text=self._format_multiplier_bonus_text(exp_bonus_multiplier),
             style_id="default",
             element_id="light",
         )
@@ -648,6 +644,20 @@ class IdleGameState(QObject):
             decimals = 4
         formatted = f"{value:.{decimals}f}".rstrip("0").rstrip(".")
         return f"{formatted}%"
+
+    @staticmethod
+    def _format_multiplier_bonus_text(multiplier: float) -> str:
+        value = max(0.0, float(multiplier))
+        if value <= 0.0:
+            return "0x bonus"
+        if value >= 10.0:
+            decimals = 1
+        elif value >= 1.0:
+            decimals = 2
+        else:
+            decimals = 3
+        formatted = f"{value:.{decimals}f}".rstrip("0").rstrip(".")
+        return f"{formatted}x bonus"
 
     def _build_runtime_stats_for_char_unlocked(self, char_id: str) -> Stats | None:
         data = self._char_data.get(char_id)

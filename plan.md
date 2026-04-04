@@ -1,4 +1,4 @@
-# Passive Framework + Trinity Recovery Plan
+# Passive Framework Verification Plan
 
 ## Status
 
@@ -8,12 +8,7 @@
 
 ## Purpose
 
-This plan rebuilds the lost Trinity branch as a clean forward implementation against the current repository state.
-
-The locked direction is:
-- rebuild a general passive framework first
-- make passive persistence and runtime mirror blessings closely
-- implement Trinity on top of that framework
+This plan tracks only the remaining verification roadmap for the completed passive-framework and Trinity rebuild.
 
 This plan is optimized for:
 - a correct end state in the current repo
@@ -82,54 +77,6 @@ This plan is not optimized for:
   - conditional passive bars only while the passive is actively working
   - if the shard bar is hidden, passive bars render directly under EXP
   - additional passive bars stack below the first passive bar
-
-## Recovered Target Behavior
-
-These are the intended recovered mechanics that still define the rebuild target.
-
-### Trinity gating
-
-- Trinity is active only when all three members are present:
-  - `lady_darkness`
-  - `lady_light`
-  - `persona_light_and_dark`
-- Trinity-only bonuses must turn off immediately when the trio is incomplete.
-- All Trinity stacks must clear immediately when the trio is incomplete.
-- Re-forming the trio starts Trinity from zero again.
-
-### Timing and stack model
-
-- Idle tick rate remains fixed at 30 Hz.
-- Main Trinity stacks:
-  - gain 1 stack every 30 ticks
-  - expire independently after 450 ticks
-- Lady Darkness has a separate bleed-side timed stack pool:
-  - same cadence: 1 stack every 30 ticks
-  - same independent expiry: 450 ticks
-- The timing follow-up means cadence stays constant.
-- Only value and effect scaling change after the soft cap.
-
-### Lady Light direction
-
-- Lady Light is idle-native here, not combat-native.
-- Lady Light provides conditional EXP transfer while full Trinity is active.
-- Base transfer strength is:
-  - 50% of Lady Darkness EXP-gain stat
-  - plus 50% of Persona Light and Dark EXP-gain stat
-- Each Trinity stack adds `+0.05%` to Lady Light transfer strength.
-- Lady Light follows the same soft-cap style as the Darkness-side scaling.
-
-### Lady Darkness direction
-
-- `LadyDarknessEclipsingVeil` is idle-native bleed and EXP interaction.
-- Lady Darkness EXP gain comes from real post-mitigation damage allies actually take.
-- EXP source is not direct stack count.
-- Lady Darkness stops damaging party members below 30% HP.
-
-### Trinity mitigation
-
-- Trinity bleed mitigation is `0.01%` reduction per stack.
-- The soft-cap idea around 50% remains part of the design.
 
 ## Recovery Strategy Overview
 

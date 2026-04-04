@@ -253,16 +253,16 @@ Status: complete.
 - Replaced cadence-style fill/drain passive bars with impact bars that fill from computed stack power toward the likely effective soft target.
 - Implemented Trinity bar styling with a light/dark gradient and subtle power-based shimmer.
 - Implemented default passive-bar element coloring from the owning character, with Lady Darkness explicitly using dark styling.
-- Added a visible Lady Light impact bar using Trinity stack power for fill and current bonus-over-baseline for text.
+- Added a visible Lady Light impact bar using Trinity stack power for fill and full passive contribution for text.
 - Fixed `AnimatedProgressBar` so custom gradient colors actually affect rendering and exposed a `format()` helper for testable text assertions.
 - Added targeted UI/state tests for passive-bar ordering, stacking, Trinity styling, and the new card-facing passive-bar accessor.
 
 ### Notes
 
-- Passive bar text format is now `LABEL percent`.
+- Passive bar text format is now effect-specific player-facing text.
 - Passive bar fill now tracks passive power rather than stack cadence countdown.
 - Fill normalizes against a computed likely soft target so it stays truthful if runtime tuning changes later.
-- Trinity text reports mitigation percent, Lady Darkness text reports bleed strength, and Lady Light text reports bonus over baseline.
+- Trinity text reports mitigation percent, Lady Darkness text reports bleed strength, and Lady Light text reports total passive bonus as `x bonus`.
 - Passive bars appear below the shard bar when the shard bar exists, otherwise directly below the EXP bar.
 
 ### Verification
