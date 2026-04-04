@@ -5,6 +5,7 @@ import random
 import threading
 import time
 
+from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QObject
@@ -69,6 +70,18 @@ SHARD_ITEM_ID_BY_TYPE = {key: f"{key}_shard" for key in SHARD_ALLOWED_TYPES}
 SHARD_EMA_ALPHA = 1.0 - math.exp(
     -IDLE_TICK_INTERVAL_SECONDS / SHARD_EXP_SMOOTHING_SECONDS
 )
+
+
+@dataclass(frozen=True, slots=True)
+class PassiveBarDisplayData:
+    passive_id: str
+    label: str
+    progress: float
+    display_percent: float
+    shimmer: float
+    style_id: str = "default"
+    element_id: str = "generic"
+    dual_element_ids: tuple[str, str] = ("", "")
 
 
 class IdleGameState(QObject):
@@ -392,6 +405,15 @@ class IdleGameState(QObject):
         with self._lock:
             return self._effective_exp_multiplier_for_char_unlocked(clean_id)
 
+    def get_passive_bars_for_character(
+        self, char_id: str
+    ) -> list[PassiveBarDisplayData]:
+        clean_id = str(char_id or "").strip()
+        if not clean_id:
+            return []
+        with self._lock:
+            return self._get_passive_bars_for_character_unlocked(clean_id)
+
     def _effective_exp_multiplier_for_char_unlocked(self, char_id: str) -> float:
         data = self._char_data.get(char_id)
         if not isinstance(data, dict):
@@ -404,6 +426,100 @@ class IdleGameState(QObject):
             max(0.0, self._passive_exp_multiplier_bonus_by_char.get(char_id, 0.0))
         )
         return max(0.0, base + bonus)
+
+    def _get_passive_bars_for_character_unlocked(
+        self, char_id: str
+    ) -> list[PassiveBarDisplayData]:
+        plugin = self._plugins_by_id.get(char_id)
+        if plugin is None:
+            return []
+        raw_passives = getattr(plugin, "passives", [])
+        if not isinstance(raw_passives, list):
+            return []
+
+        bars: list[PassiveBarDisplayData] = []
+        for raw_passive_id in raw_passives:
+            passive_id = str(raw_passive_id or "").strip()
+            if not passive_id:
+                continue
+            runtime = self._passive_runtime.get(passive_id, {})
+            if not isinstance(runtime, dict):
+                continue
+            bar = self._build_passive_bar_display_unlocked(
+                char_id=char_id,
+                passive_id=passive_id,
+                runtime=runtime,
+                plugin=plugin,
+            )
+            if bar is not None:
+                bars.append(bar)
+        return bars
+
+    def _build_passive_bar_display_unlocked(
+        self,
+        *,
+        char_id: str,
+        passive_id: str,
+        runtime: dict[str, Any],
+        plugin: object,
+    ) -> PassiveBarDisplayData | None:
+        if not bool(runtime.get("active", False)):
+            return None
+        try:
+            progress = float(runtime.get("progress", 0.0))
+        except (TypeError, ValueError):
+            progress = 0.0
+        if "progress" not in runtime:
+            return None
+
+        progress = max(0.0, progress)
+        display_percent = progress * 100.0
+        shimmer = 0.0
+        style_id = "default"
+        element_id = str(getattr(plugin, "damage_type_id", "generic") or "generic")
+        dual_element_ids = ("", "")
+        label = passive_id.replace("_", " ")
+
+        if passive_id == "trinity_synergy":
+            countdown_ticks = self._runtime_float(runtime, "countdown_ticks", 30.0)
+            shimmer = self._countdown_shimmer(countdown_ticks)
+            style_id = "trinity"
+            dual_element_ids = ("dark", "light")
+            label = "Trinity"
+        elif passive_id == "lady_darkness_eclipsing_veil":
+            countdown_ticks = self._runtime_float(runtime, "countdown_ticks", 30.0)
+            shimmer = self._countdown_shimmer(countdown_ticks)
+            element_id = "dark"
+            label = "Veil"
+        else:
+            label = str(label).title()
+
+        return PassiveBarDisplayData(
+            passive_id=passive_id,
+            label=label,
+            progress=max(0.0, min(1.0, progress)),
+            display_percent=display_percent,
+            shimmer=shimmer,
+            style_id=style_id,
+            element_id=element_id,
+            dual_element_ids=dual_element_ids,
+        )
+
+    @staticmethod
+    def _runtime_float(runtime: dict[str, Any], key: str, fallback: float) -> float:
+        try:
+            return float(runtime.get(key, fallback))
+        except (TypeError, ValueError):
+            return float(fallback)
+
+    @staticmethod
+    def _countdown_shimmer(countdown_ticks: float) -> float:
+        seconds_to_next = max(0.0, float(countdown_ticks) * IDLE_TICK_INTERVAL_SECONDS)
+        if seconds_to_next > 1.0:
+            return 0.0
+        if seconds_to_next <= (5.0 / 30.0):
+            return 1.0
+        return (1.0 - seconds_to_next) / (25.0 / 30.0)
 
     def _build_runtime_stats_for_char_unlocked(self, char_id: str) -> Stats | None:
         data = self._char_data.get(char_id)

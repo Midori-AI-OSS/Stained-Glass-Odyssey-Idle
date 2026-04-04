@@ -75,6 +75,13 @@ This plan is not optimized for:
 - New Trinity passive ids are backward-compatible with existing canonical passive payloads through default seeding, while unknown ids and non-canonical fields are still rejected.
 - Passive canonical schema now supports `list[int]`, which Trinity uses for independent-expiry TTL pools.
 - `trinity_synergy` now owns the shared Trinity pool canonically, and `lady_darkness_eclipsing_veil` owns the separate Darkness bleed pool canonically.
+- Idle character-card bar ordering is now locked as:
+  - HP
+  - EXP
+  - conditional shard bar when reward types exist
+  - conditional passive bars only while the passive is actively working
+  - if the shard bar is hidden, passive bars render directly under EXP
+  - additional passive bars stack below the first passive bar
 
 ## Recovered Target Behavior
 

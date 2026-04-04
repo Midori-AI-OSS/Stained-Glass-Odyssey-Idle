@@ -30,6 +30,9 @@ from endless_idler.ui.theme.layout_screen_widget import (
 from endless_idler.ui.theme.party_hp_header import (
     STYLESHEET as PARTY_HP_HEADER_STYLESHEET,
 )
+from endless_idler.ui.theme.passive_progress_bar_widget import (
+    STYLESHEET as PASSIVE_PROGRESS_BAR_WIDGET_STYLESHEET,
+)
 from endless_idler.ui.theme.progress_bar import STYLESHEET as PROGRESS_BAR_STYLESHEET
 from endless_idler.ui.theme.radio_control_widget import (
     STYLESHEET as RADIO_CONTROL_WIDGET_STYLESHEET,
@@ -57,6 +60,7 @@ def build_stained_glass_stylesheet() -> str:
         INVENTORY_WIDGET_STYLESHEET,
         LAYOUT_SCREEN_WIDGET_STYLESHEET,
         PARTY_HP_HEADER_STYLESHEET,
+        PASSIVE_PROGRESS_BAR_WIDGET_STYLESHEET,
         PROGRESS_BAR_STYLESHEET,
         RADIO_CONTROL_WIDGET_STYLESHEET,
         SETTINGS_WIDGET_STYLESHEET,

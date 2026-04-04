@@ -233,3 +233,38 @@ Results:
 - adjacent idle blessing regression batch passed: `21 passed`
 - `basedpyright` still reports the pre-existing unresolved-import/type baseline in copied character modules and other unrelated files
 - `tests/test_shard_bars.py` still fails as a pre-existing unrelated baseline; shard-bar implementation lines in `idle_state.py` matched `HEAD~1`
+
+## Post-Pass 5: Idle Passive Progress Bars
+
+Status: complete.
+
+### Completed
+
+- Added `PassiveBarDisplayData` plus `IdleGameState.get_passive_bars_for_character()` so idle cards can consume display-ready passive bar data without reaching into raw runtime payloads.
+- Added reusable `endless_idler/ui/widgets/passive_progress_bar.py` on top of `AnimatedProgressBar`.
+- Added `endless_idler/ui/theme/passive_progress_bar_widget.py` and registered it through `endless_idler/ui/theme/registry.py`.
+- Updated `IdleCharacterCard` to place bars in the locked order:
+  - HP
+  - EXP
+  - shard bar when available
+  - passive bars when active
+- Kept shard bars conditional instead of forcing a placeholder for cards with no shard reward types.
+- Implemented passive-bar visibility so bars only render when the passive is active and exposes real progress data.
+- Implemented Trinity bar styling with a light/dark gradient and blessing-style countdown shimmer.
+- Implemented default passive-bar element coloring from the owning character, with Lady Darkness explicitly using dark styling.
+- Left `lady_light_radiant_aegis` hidden because it still has no countdown/progress runtime fields for a real bar.
+- Fixed `AnimatedProgressBar` so custom gradient colors actually affect rendering and exposed a `format()` helper for testable text assertions.
+- Added targeted UI/state tests for passive-bar ordering, stacking, Trinity styling, and the new card-facing passive-bar accessor.
+
+### Notes
+
+- Passive bar text format is now `LABEL percent`.
+- Visual fill clamps to `100%`, while displayed text may exceed `100%`.
+- Passive bars appear below the shard bar when the shard bar exists, otherwise directly below the EXP bar.
+
+### Verification
+
+- Lint:
+  - `uv run ruff check endless_idler/ui/components/progress_bar.py endless_idler/ui/widgets/passive_progress_bar.py endless_idler/ui/theme/passive_progress_bar_widget.py endless_idler/ui/theme/registry.py endless_idler/ui/cards/character_card.py endless_idler/ui/idle/idle_state.py tests/test_idle_passives.py tests/ui/test_idle_blessing_ui.py`
+- Targeted tests:
+  - `uv run pytest -q tests/test_idle_passives.py tests/ui/test_idle_blessing_ui.py`

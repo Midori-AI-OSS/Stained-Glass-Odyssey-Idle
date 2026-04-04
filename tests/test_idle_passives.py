@@ -270,3 +270,25 @@ def test_get_exp_gain_per_tick_refreshes_current_tick_passive_effects() -> None:
     after_bleed = state.get_exp_gain_per_tick("lady_darkness")
 
     assert after_bleed > initial
+
+
+def test_passive_bar_accessor_returns_only_displayable_active_bars() -> None:
+    state = _build_trinity_state()
+
+    trinity_bars = state.get_passive_bars_for_character("persona_light_and_dark")
+    darkness_bars = state.get_passive_bars_for_character("lady_darkness")
+    light_bars = state.get_passive_bars_for_character("lady_light")
+
+    assert len(trinity_bars) == 1
+    assert trinity_bars[0].passive_id == "trinity_synergy"
+    assert trinity_bars[0].label == "Trinity"
+    assert trinity_bars[0].style_id == "trinity"
+    assert trinity_bars[0].dual_element_ids == ("dark", "light")
+    assert math.isclose(trinity_bars[0].progress, 0.0, rel_tol=0.0, abs_tol=1e-9)
+
+    assert len(darkness_bars) == 1
+    assert darkness_bars[0].passive_id == "lady_darkness_eclipsing_veil"
+    assert darkness_bars[0].label == "Veil"
+    assert darkness_bars[0].element_id == "dark"
+
+    assert light_bars == []
