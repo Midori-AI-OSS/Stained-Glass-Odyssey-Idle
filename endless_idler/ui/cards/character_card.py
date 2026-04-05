@@ -194,8 +194,8 @@ class IdleCharacterCard(QFrame):
         self._setup_bars()
 
         compact_height = max(1, int(self.sizeHint().height()))
-        self._set_status_widgets_visible(False)
         self.setFixedHeight(compact_height)
+        self._set_status_widgets_visible(False)
 
         for widget in (
             self._portrait,
