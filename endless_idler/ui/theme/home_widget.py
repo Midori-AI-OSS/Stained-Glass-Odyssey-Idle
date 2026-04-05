@@ -18,6 +18,21 @@ QFrame#HomePanel {
     border-radius: 0px;
 }
 
+QStackedWidget#HomeContentStack {
+    background: transparent;
+}
+
+QScrollArea#HomeUpgradeScroll,
+QWidget#HomeUpgradeHost {
+    background: transparent;
+}
+
+QLabel#HomeUpgradeEmptyState {
+    color: rgba(237, 239, 245, 180);
+    font-size: 12px;
+    font-weight: 600;
+}
+
 QTabBar#HomeTabs::tab {
     background-color: rgba(18, 20, 28, 135);
     border: 1px solid rgba(255, 255, 255, 18);

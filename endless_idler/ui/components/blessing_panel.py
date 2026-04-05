@@ -13,6 +13,11 @@ from PySide6.QtWidgets import QWidget
 from endless_idler.ui.components.progress_bar import AnimatedProgressBar
 from endless_idler.ui.tooltip import hide_stained_tooltip
 from endless_idler.ui.tooltip import show_stained_tooltip
+from endless_idler.ui.theme.colors import color_for_damage_type_id
+
+
+_DAMAGE_TYPE_BAR_ALPHA = 170
+_DAMAGE_TYPE_COLOR_IDS = {"fire", "ice", "lightning", "wind", "dark", "light"}
 
 
 class BlessingPanel(QFrame):
@@ -124,10 +129,31 @@ class BlessingPanel(QFrame):
             return
         self._color_id = new_id
         _ = self.setProperty("elementId", self._color_id)
+        self._apply_progress_bar_color()
         style = self.style()
         style.unpolish(self)
         style.polish(self)
         self.update()
+
+    def _apply_progress_bar_color(self) -> None:
+        if self._color_id not in _DAMAGE_TYPE_COLOR_IDS:
+            self._progress_bar.set_color_thresholds([])
+            return
+
+        color = color_for_damage_type_id(self._color_id)
+        rgba = (
+            color.red(),
+            color.green(),
+            color.blue(),
+            _DAMAGE_TYPE_BAR_ALPHA,
+        )
+        self._progress_bar.set_color_thresholds(
+            [
+                (0.0, rgba),
+                (0.5, rgba),
+                (1.0, rgba),
+            ]
+        )
 
     @override
     def enterEvent(self, event: QEnterEvent) -> None:

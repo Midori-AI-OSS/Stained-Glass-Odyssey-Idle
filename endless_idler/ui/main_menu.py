@@ -9,6 +9,8 @@ from collections.abc import Callable
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QResizeEvent
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
@@ -41,6 +43,7 @@ from endless_idler.ui.settings import SettingsPage
 
 class MainMenuWindow(QMainWindow):
     APP_TITLE = "Stained Glass Odyssey Idle"
+    TOPBAR_NAV_COMFORT_GAP = 24
     _PAGE_HOME = "home"
     _PAGE_IDLE = "idle"
     _PAGE_INVENTORY = "inventory"
@@ -79,6 +82,9 @@ class MainMenuWindow(QMainWindow):
         )
         self._latest_idle_tick_payload: dict[str, object] = {}
         self._nav_buttons: dict[str, QToolButton] = {}
+        self._topbar_buttons: list[QToolButton] = []
+        self._topbar_nav_full_buttons_width = 0
+        self._topbar_nav_compact = False
 
         self.setWindowTitle(self.APP_TITLE)
         self.resize(1280, 820)
@@ -92,9 +98,11 @@ class MainMenuWindow(QMainWindow):
 
         topbar = QFrame(shell)
         topbar.setObjectName("AppTopBar")
+        self._topbar = topbar
         topbar_layout = QHBoxLayout(topbar)
         topbar_layout.setContentsMargins(12, 10, 12, 10)
         topbar_layout.setSpacing(8)
+        self._topbar_layout = topbar_layout
         shell_layout.addWidget(topbar)
 
         topbar_layout.addWidget(
@@ -173,6 +181,8 @@ class MainMenuWindow(QMainWindow):
         self._home_screen = HomePage(
             save_store=self._save_store,
             idle_runtime_snapshot_provider=self._latest_idle_snapshot,
+            idle_state_provider=lambda: self._idle_state,
+            idle_state_commit=self._apply_idle_snapshot_to_save,
             parent=self,
         )
         self._layout_screen = LayoutScreenWidget(
@@ -233,6 +243,7 @@ class MainMenuWindow(QMainWindow):
     ) -> QToolButton:
         button = QToolButton(self)
         button.setText(label)
+        button.setToolTip(label)
         button.setIcon(lucide_icon(icon_name))
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         button.setCheckable(True)
@@ -240,6 +251,7 @@ class MainMenuWindow(QMainWindow):
         button.setProperty("appNav", True)
         button.clicked.connect(on_click)
         self._nav_buttons[page_key] = button
+        self._topbar_buttons.append(button)
         return button
 
     def _make_stub_button(
@@ -251,10 +263,12 @@ class MainMenuWindow(QMainWindow):
     ) -> QToolButton:
         button = QToolButton(self)
         button.setText(label)
+        button.setToolTip(label)
         button.setIcon(lucide_icon(icon_name))
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         button.setProperty("appStub", True)
         button.clicked.connect(on_click)
+        self._topbar_buttons.append(button)
         return button
 
     @staticmethod
@@ -274,6 +288,61 @@ class MainMenuWindow(QMainWindow):
     def _set_active_nav(self, key: str) -> None:
         for page_key, button in self._nav_buttons.items():
             button.setChecked(page_key == key)
+
+    def _measure_topbar_nav_buttons_width(self) -> int:
+        return sum(button.sizeHint().width() for button in self._topbar_buttons)
+
+    def _topbar_navigation_available_width(self) -> int:
+        contents_width = self._topbar.contentsRect().width()
+        margins = self._topbar_layout.contentsMargins()
+        return max(0, contents_width - margins.left() - margins.right())
+
+    def _topbar_navigation_required_width(self) -> int:
+        spacing = max(0, self._topbar_layout.spacing())
+        radio_width = (
+            self._radio_control.sizeHint().width()
+            if self._radio_control.isVisible()
+            else 0
+        )
+        button_count = len(self._topbar_buttons)
+        if button_count <= 0:
+            return 0
+        return (
+            self._topbar_nav_full_buttons_width
+            + radio_width
+            + (spacing * (button_count + 1))
+            + self.TOPBAR_NAV_COMFORT_GAP
+        )
+
+    def _update_topbar_navigation_mode(self) -> None:
+        if not self._topbar_buttons:
+            return
+
+        if self._topbar_nav_full_buttons_width <= 0:
+            self._topbar_nav_full_buttons_width = (
+                self._measure_topbar_nav_buttons_width()
+            )
+
+        compact = (
+            self._topbar_navigation_available_width()
+            < self._topbar_navigation_required_width()
+        )
+        if compact == self._topbar_nav_compact:
+            return
+
+        self._topbar_nav_compact = compact
+        style = (
+            Qt.ToolButtonStyle.ToolButtonIconOnly
+            if compact
+            else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        for button in self._topbar_buttons:
+            button.setToolButtonStyle(style)
+            button.updateGeometry()
+
+        self._topbar_layout.invalidate()
+        self._topbar_layout.activate()
+        self._topbar.updateGeometry()
 
     def _show_home(self) -> None:
         self._stack.setCurrentWidget(self._home_screen)
@@ -306,6 +375,14 @@ class MainMenuWindow(QMainWindow):
         self._settings_screen.set_save_path(str(self._save_store.path))
         self._stack.setCurrentWidget(self._settings_screen)
         self._set_active_nav(self._PAGE_SETTINGS)
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        self._update_topbar_navigation_mode()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._update_topbar_navigation_mode()
 
     def _idle_lineup_signature(
         self,
@@ -698,6 +775,7 @@ class MainMenuWindow(QMainWindow):
         )
         self._radio_control.set_volume(clamp_volume(snapshot.get("volume")))
         self._radio_control.set_status_tooltip(str(snapshot.get("status_text") or ""))
+        self._update_topbar_navigation_mode()
         self._update_window_title_from_radio_state(snapshot)
 
     def _update_window_title_from_radio_state(self, state: dict[str, object]) -> None:

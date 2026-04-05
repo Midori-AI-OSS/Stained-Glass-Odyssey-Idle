@@ -4,6 +4,11 @@ import random
 
 from contextlib import nullcontext
 from types import SimpleNamespace
+from typing import Any
+from typing import cast
+
+from PySide6.QtCore import QSize
+from PySide6.QtCore import Qt
 
 import endless_idler.ui.main_menu as main_menu_module
 
@@ -12,7 +17,10 @@ from endless_idler.ui.main_menu import MainMenuWindow
 
 
 class _FakeSignal:
-    def connect(self, callback) -> None:  # noqa: ANN001
+    def __init__(self) -> None:
+        self._callback: Any = None
+
+    def connect(self, callback: Any) -> None:
         self._callback = callback
 
 
@@ -99,6 +107,82 @@ class _FakeStack:
         self.set_current.append(widget)
 
 
+class _FakeButton:
+    def __init__(self, width: int) -> None:
+        self._size_hint = QSize(width, 36)
+        self.styles: list[Qt.ToolButtonStyle] = []
+
+    def sizeHint(self) -> QSize:
+        return QSize(self._size_hint)
+
+    def setToolButtonStyle(self, style: Qt.ToolButtonStyle) -> None:
+        self.styles.append(style)
+
+    def updateGeometry(self) -> None:
+        pass
+
+
+class _FakeMargins:
+    def __init__(self, left: int, right: int) -> None:
+        self._left = left
+        self._right = right
+
+    def left(self) -> int:
+        return self._left
+
+    def right(self) -> int:
+        return self._right
+
+
+class _FakeLayout:
+    def __init__(self, *, spacing: int, left: int, right: int) -> None:
+        self._spacing = spacing
+        self._margins = _FakeMargins(left, right)
+
+    def spacing(self) -> int:
+        return self._spacing
+
+    def contentsMargins(self) -> _FakeMargins:
+        return self._margins
+
+    def invalidate(self) -> None:
+        pass
+
+    def activate(self) -> None:
+        pass
+
+
+class _FakeRect:
+    def __init__(self, width: int) -> None:
+        self._width = width
+
+    def width(self) -> int:
+        return self._width
+
+
+class _FakeTopbar:
+    def __init__(self, width: int) -> None:
+        self._width = width
+
+    def contentsRect(self) -> _FakeRect:
+        return _FakeRect(self._width)
+
+    def updateGeometry(self) -> None:
+        pass
+
+
+class _FakeRadioControl:
+    def __init__(self, width: int, *, visible: bool = True) -> None:
+        self._width = width
+        self._visible = visible
+
+    def isVisible(self) -> bool:
+        return self._visible
+
+    def sizeHint(self) -> QSize:
+        return QSize(self._width, 40)
+
+
 def _fake_save(
     *, onsite: list[str], offsite: list[str], standby: list[str] | None = None
 ) -> object:
@@ -114,10 +198,10 @@ def _fake_save(
 
 def _make_menu_like(
     *, save: object, idle_screen: object | None, placeholder: object
-) -> object:
+) -> Any:
     stack = _FakeStack(current_widget=placeholder)
     nav_calls: list[str] = []
-    holder = SimpleNamespace(
+    holder: Any = SimpleNamespace(
         _layout_screen=_FakeLayoutScreen(),
         _save_store=SimpleNamespace(current=save),
         _idle_screen=idle_screen,
@@ -151,7 +235,7 @@ def test_show_idle_rebuilds_runtime_when_lineup_signature_changes(monkeypatch) -
     first_save = _fake_save(onsite=[], offsite=[])
     old_idle = _FakeIdleScreen(save_store=SimpleNamespace(current=first_save))
     new_save = _fake_save(onsite=["ally"], offsite=[])
-    menu_like = _make_menu_like(
+    menu_like: Any = _make_menu_like(
         save=new_save, idle_screen=old_idle, placeholder=placeholder
     )
 
@@ -175,7 +259,9 @@ def test_show_idle_reuses_runtime_when_lineup_signature_matches(monkeypatch) -> 
     placeholder = object()
     save = _fake_save(onsite=["ally"], offsite=[])
     idle = _FakeIdleScreen(save_store=SimpleNamespace(current=save))
-    menu_like = _make_menu_like(save=save, idle_screen=idle, placeholder=placeholder)
+    menu_like: Any = _make_menu_like(
+        save=save, idle_screen=idle, placeholder=placeholder
+    )
 
     MainMenuWindow._show_idle(menu_like)
 
@@ -204,7 +290,7 @@ def test_build_idle_state_from_save_passes_standby_ids(monkeypatch) -> None:
             captured.update(kwargs)
 
     monkeypatch.setattr(main_menu_module, "IdleGameState", _CaptureIdleState)
-    holder = SimpleNamespace(
+    holder: Any = SimpleNamespace(
         _plugins=[],
         _idle_rng=random.Random(),
     )
@@ -246,7 +332,7 @@ def test_apply_idle_snapshot_to_save_writes_canonical_passives_only() -> None:
         idle_risk_reward_level=0,
         layout_tick_cooldown_seconds=0.0,
     )
-    holder = SimpleNamespace(
+    holder: Any = SimpleNamespace(
         _save_store=SimpleNamespace(current=save),
         _tick_cooldown_lock=nullcontext(),
         _tick_cooldown_seconds=0.0,
@@ -262,3 +348,35 @@ def test_apply_idle_snapshot_to_save_writes_canonical_passives_only() -> None:
 
     assert save.passives == RunSave().passives
     assert not hasattr(save, "passive_runtime")
+
+
+def test_topbar_navigation_compacts_and_restores_icon_only() -> None:
+    holder: Any = cast(Any, SimpleNamespace())
+    buttons = [_FakeButton(width) for width in (48, 52, 58)]
+    holder._topbar_buttons = buttons
+    holder._topbar_nav_full_buttons_width = 0
+    holder._topbar_nav_compact = False
+    holder._measure_topbar_nav_buttons_width = lambda: 158
+    holder._topbar_navigation_available_width = lambda: 332
+    holder._topbar_navigation_required_width = lambda: 340
+    holder._topbar = _FakeTopbar(332)
+    holder._topbar_layout = _FakeLayout(spacing=6, left=10, right=10)
+
+    MainMenuWindow._update_topbar_navigation_mode(holder)
+
+    assert holder._topbar_nav_compact is True
+    assert holder._topbar_nav_full_buttons_width == 158
+    assert all(
+        button.styles[-1] == Qt.ToolButtonStyle.ToolButtonIconOnly for button in buttons
+    )
+
+    holder._topbar = _FakeTopbar(372)
+    holder._topbar_navigation_available_width = lambda: 372
+
+    MainMenuWindow._update_topbar_navigation_mode(holder)
+
+    assert holder._topbar_nav_compact is False
+    assert all(
+        button.styles[-1] == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        for button in buttons
+    )
