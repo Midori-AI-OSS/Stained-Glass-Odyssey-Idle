@@ -181,6 +181,8 @@ class MainMenuWindow(QMainWindow):
         self._home_screen = HomePage(
             save_store=self._save_store,
             idle_runtime_snapshot_provider=self._latest_idle_snapshot,
+            idle_state_provider=lambda: self._idle_state,
+            idle_state_commit=self._apply_idle_snapshot_to_save,
             parent=self,
         )
         self._layout_screen = LayoutScreenWidget(

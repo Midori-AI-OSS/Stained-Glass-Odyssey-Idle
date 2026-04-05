@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QPushButton
+from PySide6.QtWidgets import QSizePolicy
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
@@ -71,10 +72,12 @@ class IdleCharacterCard(QFrame):
         char_id: str,
         plugin: object,
         idle_state: object,
+        idle_state_provider: Callable[[], object] | None = None,
         rng: random.Random,
         stack_count: int,
         on_rebirth: Callable[[str], None] | None = None,
         on_prestige: Callable[[str], None] | None = None,
+        compact_view: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -82,10 +85,12 @@ class IdleCharacterCard(QFrame):
         self._char_id = str(char_id)
         self._plugin = plugin
         self._idle_state = idle_state
+        self._idle_state_provider = idle_state_provider or (lambda: idle_state)
         self._rng = rng
         self._stack_count = max(1, int(stack_count))
         self._on_rebirth = on_rebirth
         self._on_prestige = on_prestige
+        self._compact_view = bool(compact_view)
         self._tooltip_html = ""
         self._portrait_placeholder = ""
         self._portrait_source_pixmap: QPixmap | None = None
@@ -100,7 +105,12 @@ class IdleCharacterCard(QFrame):
         self._display_name = str(display_name)
         portrait_path = plugin.random_image_path(rng) if plugin else None
 
-        if context == "onsite":
+        if self._compact_view:
+            self._setup_compact_layout(
+                portrait_path=portrait_path,
+                display_name=self._display_name,
+            )
+        elif context == "onsite":
             self._setup_onsite_layout(
                 portrait_path=portrait_path,
                 display_name=self._display_name,
@@ -114,6 +124,93 @@ class IdleCharacterCard(QFrame):
     @property
     def char_id(self) -> str:
         return self._char_id
+
+    def _current_idle_state(self) -> object:
+        state = self._idle_state_provider()
+        if state is not None:
+            return state
+        return self._idle_state
+
+    def _setup_compact_layout(
+        self, *, portrait_path: str | None, display_name: str
+    ) -> None:
+        self.setFixedWidth(CARD_WIDTH_ONSITE)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+        root = QHBoxLayout()
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(12)
+        self.setLayout(root)
+
+        self._portrait = PortraitLabel(
+            size=(PORTRAIT_SIZE_ONSITE, PORTRAIT_SIZE_ONSITE)
+        )
+        self._portrait.setObjectName("idlePortrait")
+        self._portrait.set_portrait(
+            str(portrait_path) if portrait_path else None,
+            placeholder=display_name,
+        )
+        root.addWidget(self._portrait, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        self._body = QVBoxLayout()
+        self._body.setContentsMargins(0, 0, 0, 0)
+        self._body.setSpacing(6)
+        root.addLayout(self._body, 1)
+
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.setSpacing(8)
+        self._body.addLayout(header)
+
+        self._name_label = QLabel(f"{display_name} (1)")
+        self._name_label.setObjectName("idleCharName")
+        header.addWidget(self._name_label, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        header.addStretch(1)
+
+        if self._context == "onsite":
+            self._action_button = QPushButton("")
+            self._action_button.setObjectName("idleActionButton")
+            self._action_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._action_button.setVisible(False)
+            header.addWidget(self._action_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        else:
+            self._rebirth_button = QPushButton("Rebirth")
+            self._rebirth_button.setObjectName("idleRebirthButton")
+            self._rebirth_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._rebirth_button.setVisible(False)
+            self._rebirth_button.clicked.connect(self._request_rebirth)
+            header.addWidget(self._rebirth_button, 0, Qt.AlignmentFlag.AlignVCenter)
+
+            self._prestige_button = QPushButton("Prestige")
+            self._prestige_button.setObjectName("idlePrestigeButton")
+            self._prestige_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._prestige_button.setVisible(False)
+            self._prestige_button.clicked.connect(self._request_prestige)
+            header.addWidget(self._prestige_button, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        self._body.addStretch(1)
+
+        self._setup_bars()
+
+        compact_height = max(1, int(self.sizeHint().height()))
+        self._set_status_widgets_visible(False)
+        self.setFixedHeight(compact_height)
+
+        for widget in (
+            self._portrait,
+            self._name_label,
+            self._hp_bar,
+            self._exp_bar,
+        ):
+            widget.installEventFilter(self)
+
+    def _set_status_widgets_visible(self, visible: bool) -> None:
+        self._hp_bar.setVisible(visible)
+        self._exp_bar.setVisible(visible)
+        self._shard_bar.setVisible(visible)
+        for bar in self._passive_bars:
+            bar.setVisible(visible)
 
     def _setup_onsite_layout(
         self, *, portrait_path: str | None, display_name: str
@@ -302,7 +399,7 @@ class IdleCharacterCard(QFrame):
         self._portrait.setPixmap(scaled)
 
     def resizeEvent(self, event: object) -> None:
-        if self._context == "offsite":
+        if self._context == "offsite" and not self._compact_view:
             self._apply_offsite_portrait_size()
         try:
             super().resizeEvent(event)
@@ -310,13 +407,15 @@ class IdleCharacterCard(QFrame):
             return
 
     def _misplacement_stat_multiplier(self) -> float:
-        getter = getattr(self._idle_state, "get_misplacement_stat_multiplier", None)
+        state = self._current_idle_state()
+        getter = getattr(state, "get_misplacement_stat_multiplier", None)
         if not callable(getter):
             return 1.0
         return float(getter(self._char_id))
 
     def _misplacement_exp_multiplier(self) -> float:
-        getter = getattr(self._idle_state, "get_misplacement_exp_multiplier", None)
+        state = self._current_idle_state()
+        getter = getattr(state, "get_misplacement_exp_multiplier", None)
         if not callable(getter):
             return 1.0
         return float(getter(self._char_id))
@@ -352,7 +451,8 @@ class IdleCharacterCard(QFrame):
         return False, ("generic", "generic")
 
     def snapshot(self) -> tuple[dict, Stats] | None:
-        getter = getattr(self._idle_state, "get_char_data", None)
+        state = self._current_idle_state()
+        getter = getattr(state, "get_char_data", None)
         if not callable(getter):
             return None
         data = getter(self._char_id)
@@ -360,7 +460,7 @@ class IdleCharacterCard(QFrame):
             return None
 
         party_level = 1
-        party_level_getter = getattr(self._idle_state, "get_party_level", None)
+        party_level_getter = getattr(state, "get_party_level", None)
         if callable(party_level_getter):
             try:
                 party_level = max(1, int(party_level_getter()))
@@ -416,7 +516,8 @@ class IdleCharacterCard(QFrame):
         max_hp = float(getattr(stats, "max_hp", float(data.get("max_hp", 1000.0))))
 
         gain_per_second = 0.0
-        getter = getattr(self._idle_state, "get_exp_gain_per_second", None)
+        state = self._current_idle_state()
+        getter = getattr(state, "get_exp_gain_per_second", None)
         if callable(getter):
             try:
                 gain_per_second = float(getter(self._char_id))
@@ -449,6 +550,11 @@ class IdleCharacterCard(QFrame):
 
         self._update_shard_bar(data)
         self._update_passive_bars()
+        if self._compact_view:
+            self._set_status_widgets_visible(False)
+            self._shard_bar.setVisible(False)
+            for bar in self._passive_bars:
+                bar.setVisible(False)
 
         stars = getattr(self._plugin, "stars", None) if self._plugin else None
         stat_multiplier = self._misplacement_stat_multiplier()
@@ -469,7 +575,8 @@ class IdleCharacterCard(QFrame):
             show_stained_tooltip(self, self._tooltip_html, element_id=stats.element_id)
 
     def update_display(self) -> None:
-        data_getter = getattr(self._idle_state, "get_char_data", None)
+        state = self._current_idle_state()
+        data_getter = getattr(state, "get_char_data", None)
         if not callable(data_getter):
             return
         data = data_getter(self._char_id)
@@ -521,6 +628,9 @@ class IdleCharacterCard(QFrame):
         self._prestige_button.setVisible(show_prestige)
 
     def _update_shard_bar(self, data: dict) -> None:
+        if self._compact_view:
+            self._shard_bar.setVisible(False)
+            return
         shard_reward_types = data.get("shard_reward_types")
         if isinstance(shard_reward_types, tuple) and len(shard_reward_types) > 0:
             shard_bar_ticks = int(data.get("shard_bar_ticks", 0))
@@ -537,7 +647,13 @@ class IdleCharacterCard(QFrame):
             self._shard_bar.setVisible(False)
 
     def _update_passive_bars(self) -> None:
-        getter = getattr(self._idle_state, "get_passive_bars_for_character", None)
+        if self._compact_view:
+            for bar in self._passive_bars:
+                bar.setVisible(False)
+            return
+
+        state = self._current_idle_state()
+        getter = getattr(state, "get_passive_bars_for_character", None)
         passive_bars = getter(self._char_id) if callable(getter) else []
         if not isinstance(passive_bars, list):
             passive_bars = []
@@ -637,7 +753,8 @@ class IdleCharacterCard(QFrame):
     def _show_tooltip(self) -> None:
         if not self._tooltip_html:
             return
-        data_getter = getattr(self._idle_state, "get_char_data", None)
+        state = self._current_idle_state()
+        data_getter = getattr(state, "get_char_data", None)
         if callable(data_getter):
             data = data_getter(self._char_id)
             if data:

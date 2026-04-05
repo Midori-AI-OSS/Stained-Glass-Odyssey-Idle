@@ -661,3 +661,44 @@ def test_card_context_property_set_correctly() -> None:
     )
     assert offsite_card.property("context") == "offsite"
     assert offsite_card.objectName() == "idleCharacterCard"
+
+
+def test_idle_compact_card_hides_status_bars() -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    onsite_card = IdleCharacterCard(
+        context="onsite",
+        char_id="onsite_hero",
+        plugin=CharacterPlugin(
+            char_id="onsite_hero",
+            display_name="Onsite Hero",
+            stars=5,
+            damage_type_id="fire",
+        ),
+        idle_state=_FakeIdleStateForCard(),
+        rng=random.Random(5),
+        stack_count=1,
+        compact_view=True,
+    )
+    offsite_card = IdleCharacterCard(
+        context="offsite",
+        char_id="offsite_hero",
+        plugin=None,
+        idle_state=_FakeIdleStateForCard(),
+        rng=random.Random(7),
+        stack_count=1,
+        compact_view=True,
+    )
+
+    onsite_card.update_display()
+    offsite_card.update_display()
+
+    assert onsite_card.width() == 420
+    assert offsite_card.width() == 420
+    assert onsite_card.height() == offsite_card.height()
+    assert onsite_card.findChild(AnimatedProgressBar, "idleExpBar").isHidden()
+    assert offsite_card.findChild(AnimatedProgressBar, "idleExpBar").isHidden()
+    assert onsite_card.findChild(QWidget, "shardProgressBarWidget").isHidden()
+    assert offsite_card.findChild(QWidget, "shardProgressBarWidget").isHidden()
+    assert not onsite_card.findChildren(PassiveProgressBar)
+    assert not offsite_card.findChildren(PassiveProgressBar)

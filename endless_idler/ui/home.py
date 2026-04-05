@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import random
 
 from collections.abc import Callable
 from typing import TYPE_CHECKING
@@ -8,7 +9,11 @@ from typing import Any
 from typing import Protocol
 
 from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame
+from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QScrollArea
+from PySide6.QtWidgets import QStackedWidget
 from PySide6.QtWidgets import QTabBar
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
@@ -16,7 +21,11 @@ from PySide6.QtWidgets import QWidget
 from endless_idler.blessings import discover_blessing_plugins
 from endless_idler.blessings.lunar_blessing import get_lunar_progress_per_tick
 from endless_idler.blessings.plugin import BlessingPlugin
+from endless_idler.characters.plugins import discover_character_plugins
+from endless_idler.ui.cards import IdleCharacterCard
 from endless_idler.ui.components.blessing_panel import BlessingPanel
+from endless_idler.ui.idle.idle_state import IdleGameState
+from endless_idler.ui.idle.screen import IdleScreenWidget
 
 if TYPE_CHECKING:
     from endless_idler.save import RunSave
@@ -33,11 +42,19 @@ class HomePage(QWidget):
         self,
         save_store: SaveStoreLike,
         idle_runtime_snapshot_provider: Callable[[], dict[str, object]] | None = None,
+        idle_state_provider: Callable[[], object] | None = None,
+        idle_state_commit: Callable[[dict[str, object]], None] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._save_store = save_store
         self._idle_runtime_snapshot_provider = idle_runtime_snapshot_provider
+        self._idle_state_provider = idle_state_provider
+        self._idle_state_commit = idle_state_commit
+        self._character_plugins = discover_character_plugins()
+        self._character_plugins_by_id = {
+            plugin.char_id: plugin for plugin in self._character_plugins
+        }
         self.setObjectName("HomePageRoot")
 
         root = QVBoxLayout(self)
@@ -51,25 +68,75 @@ class HomePage(QWidget):
         self._panel_layout.setSpacing(10)
         root.addWidget(panel, 1)
 
-        tabs = QTabBar()
-        tabs.setObjectName("HomeTabs")
-        tabs.setDocumentMode(True)
-        tabs.setExpanding(True)
-        tabs.addTab("Overview")
-        tabs.addTab("Upgrades")
-        tabs.setCurrentIndex(0)
-        self._panel_layout.addWidget(tabs)
+        self._tabs = QTabBar()
+        self._tabs.setObjectName("HomeTabs")
+        self._tabs.setDocumentMode(True)
+        self._tabs.setExpanding(True)
+        self._tabs.addTab("Overview")
+        self._tabs.addTab("Upgrades")
+        self._tabs.setCurrentIndex(0)
+        self._panel_layout.addWidget(self._tabs)
+
+        self._content_stack = QStackedWidget(panel)
+        self._content_stack.setObjectName("HomeContentStack")
+        self._panel_layout.addWidget(self._content_stack, 1)
+
+        self._overview_page = QWidget(self._content_stack)
+        self._overview_layout = QVBoxLayout(self._overview_page)
+        self._overview_layout.setContentsMargins(0, 0, 0, 0)
+        self._overview_layout.setSpacing(10)
+        self._content_stack.addWidget(self._overview_page)
+
+        self._upgrade_page = QWidget(self._content_stack)
+        self._upgrade_layout = QVBoxLayout(self._upgrade_page)
+        self._upgrade_layout.setContentsMargins(0, 0, 0, 0)
+        self._upgrade_layout.setSpacing(0)
+        self._upgrade_scroll = QScrollArea(self._upgrade_page)
+        self._upgrade_scroll.setObjectName("HomeUpgradeScroll")
+        self._upgrade_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._upgrade_scroll.setWidgetResizable(True)
+        self._upgrade_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self._upgrade_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self._upgrade_layout.addWidget(self._upgrade_scroll, 1)
+
+        self._upgrade_host = QWidget(self._upgrade_scroll)
+        self._upgrade_host.setObjectName("HomeUpgradeHost")
+        self._upgrade_host_layout = QVBoxLayout(self._upgrade_host)
+        self._upgrade_host_layout.setContentsMargins(0, 0, 0, 0)
+        self._upgrade_host_layout.setSpacing(10)
+        self._upgrade_host_layout.setAlignment(
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter
+        )
+        self._upgrade_scroll.setWidget(self._upgrade_host)
+        self._content_stack.addWidget(self._upgrade_page)
+
+        self._tabs.currentChanged.connect(self._on_tab_changed)
 
         self._blessing_panels: dict[str, BlessingPanel] = {}
         self._create_blessing_panels()
-
-        self._panel_layout.addStretch(1)
+        self._overview_layout.addStretch(1)
+        self._upgrade_cards: list[IdleCharacterCard] = []
+        self._upgrade_lineup_signature: (
+            tuple[
+                tuple[str, ...],
+                tuple[str, ...],
+                tuple[str, ...],
+                tuple[tuple[str, int], ...],
+                int,
+            ]
+            | None
+        ) = None
+        self._rebuild_upgrade_cards()
 
         self._update_timer = QTimer(self)
         self._update_timer.setInterval(33)
-        self._update_timer.timeout.connect(self._update_blessing_display)
+        self._update_timer.timeout.connect(self._update_home_display)
         self._update_timer.start()
-        self._update_blessing_display()
+        self._update_home_display()
 
     def _get_save(self) -> "RunSave":
         return self._save_store.current
@@ -150,7 +217,155 @@ class HomePage(QWidget):
             elif self._is_lunar_blessing(plugin):
                 panel.set_color_id("lunar")
             self._blessing_panels[plugin.blessing_id] = panel
-            self._panel_layout.addWidget(panel)
+            self._overview_layout.addWidget(panel)
+
+    def _current_idle_state(self) -> object | None:
+        provider = self._idle_state_provider
+        if provider is None:
+            return None
+        state = provider()
+        return state if state is not None else None
+
+    def _build_idle_state(self) -> object | None:
+        state = self._current_idle_state()
+        if state is not None:
+            return state
+
+        save = self._get_save()
+        plugins_by_id: dict[str, object] = {
+            plugin.char_id: plugin for plugin in self._character_plugins
+        }
+        return IdleGameState(
+            char_ids=[str(item) for item in getattr(save, "onsite", []) if item],
+            offsite_ids=[str(item) for item in getattr(save, "offsite", []) if item],
+            standby_ids=[str(item) for item in getattr(save, "standby", []) if item],
+            party_level=max(1, int(getattr(save, "party_level", 1))),
+            stacks=dict(getattr(save, "stacks", {})),
+            plugins_by_id=plugins_by_id,
+            rng=random.Random(),
+            progress_by_id=dict(getattr(save, "character_progress", {})),
+            stats_by_id=dict(getattr(save, "character_stats", {})),
+            initial_stats_by_id=dict(
+                getattr(save, "character_initial_stats", {}) or {}
+            ),
+            inventory=dict(getattr(save, "inventory", {})),
+            exp_bonus_seconds=float(getattr(save, "idle_exp_bonus_seconds", 0.0)),
+            exp_penalty_seconds=float(getattr(save, "idle_exp_penalty_seconds", 0.0)),
+            shared_exp_percentage=int(getattr(save, "idle_shared_exp_percentage", 1)),
+            risk_reward_level=int(getattr(save, "idle_risk_reward_level", 0)),
+            battle_start_time=float(getattr(save, "battle_start_time", 0.0)),
+            blessings_data=dict(getattr(save, "blessings", {}) or {}),
+            passives_data=dict(getattr(save, "passives", {}) or {}),
+        )
+
+    def _commit_idle_state(self, state: object) -> None:
+        commit = self._idle_state_commit
+        exporter = getattr(state, "export_runtime_snapshot", None)
+        if commit is None or not callable(exporter):
+            return
+        snapshot = exporter()
+        if not isinstance(snapshot, dict):
+            return
+        commit(snapshot)
+        persist = getattr(self._save_store, "persist", None)
+        if callable(persist):
+            persist(force=True)
+
+    def _lineup_signature(
+        self,
+    ) -> tuple[
+        tuple[str, ...],
+        tuple[str, ...],
+        tuple[str, ...],
+        tuple[tuple[str, int], ...],
+        int,
+    ]:
+        return IdleScreenWidget.build_lineup_signature(self._get_save())
+
+    def _on_tab_changed(self, index: int) -> None:
+        self._content_stack.setCurrentIndex(index)
+
+    def _clear_upgrade_cards(self) -> None:
+        while self._upgrade_host_layout.count() > 0:
+            item = self._upgrade_host_layout.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.deleteLater()
+        self._upgrade_cards.clear()
+
+    def _rebuild_upgrade_cards(self) -> None:
+        signature = self._lineup_signature()
+        if signature == self._upgrade_lineup_signature:
+            return
+        self._upgrade_lineup_signature = signature
+        self._clear_upgrade_cards()
+
+        state = self._build_idle_state()
+        if state is None:
+            placeholder = QLabel("No characters available yet.", self._upgrade_host)
+            placeholder.setObjectName("HomeUpgradeEmptyState")
+            placeholder.setAlignment(
+                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
+            )
+            self._upgrade_host_layout.addWidget(placeholder)
+            self._upgrade_host_layout.addStretch(1)
+            return
+
+        save = self._get_save()
+        seen: set[str] = set()
+        onsite_ids = [str(item) for item in getattr(save, "onsite", []) if item]
+        offsite_ids = [str(item) for item in getattr(save, "offsite", []) if item]
+        combined_ids = [*onsite_ids, *offsite_ids]
+        for char_id in combined_ids:
+            if char_id in seen:
+                continue
+            seen.add(char_id)
+            context = "onsite" if char_id in onsite_ids else "offsite"
+            plugin = self._character_plugins_by_id.get(char_id)
+            card = IdleCharacterCard(
+                context=context,
+                char_id=char_id,
+                plugin=plugin,
+                idle_state=state,
+                idle_state_provider=self._build_idle_state,
+                rng=random.Random(),
+                stack_count=max(1, int(getattr(save, "stacks", {}).get(char_id, 1))),
+                on_rebirth=self._rebirth_character,
+                on_prestige=self._prestige_character,
+                compact_view=True,
+                parent=self._upgrade_host,
+            )
+            self._upgrade_cards.append(card)
+            self._upgrade_host_layout.addWidget(card, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        self._upgrade_host_layout.addStretch(1)
+
+    def _update_upgrade_cards(self) -> None:
+        for card in self._upgrade_cards:
+            card.update_display()
+
+    def _rebirth_character(self, char_id: str) -> None:
+        state = self._build_idle_state()
+        rebirth = getattr(state, "rebirth_character", None)
+        if not callable(rebirth) or not rebirth(char_id):
+            return
+        self._commit_idle_state(state)
+        self._rebuild_upgrade_cards()
+        self._update_upgrade_cards()
+
+    def _prestige_character(self, char_id: str) -> None:
+        state = self._build_idle_state()
+        prestige = getattr(state, "prestige_character", None)
+        if not callable(prestige) or not prestige(char_id):
+            return
+        self._commit_idle_state(state)
+        self._rebuild_upgrade_cards()
+        self._update_upgrade_cards()
+
+    def _update_home_display(self) -> None:
+        self._update_blessing_display()
+        self._rebuild_upgrade_cards()
+        self._update_upgrade_cards()
 
     def _get_blessing_steps(self, plugin: BlessingPlugin) -> int:
         """Get the current step count for a blessing."""
@@ -183,7 +398,9 @@ class HomePage(QWidget):
         if runtime:
             return max(
                 0.0,
-                self._runtime_float(runtime, "countdown_seconds", float(plugin.step_seconds)),
+                self._runtime_float(
+                    runtime, "countdown_seconds", float(plugin.step_seconds)
+                ),
             )
         return float(plugin.step_seconds)
 

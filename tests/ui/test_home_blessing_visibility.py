@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QWidget
 
 from endless_idler.blessings.registry import get_blessing_by_id
 from endless_idler.save import RunSave
@@ -13,6 +14,55 @@ class _FakeSaveStore:
 
     def __init__(self, save: RunSave) -> None:
         self.current = save
+
+
+class _FakeIdleState:
+    def __init__(self, save: RunSave) -> None:
+        self._save = save
+
+    def get_char_data(self, char_id: str) -> dict[str, object]:
+        if char_id not in self._save.onsite and char_id not in self._save.offsite:
+            return {}
+        return {
+            "level": 7,
+            "exp": 12.0,
+            "next_exp": 30.0,
+            "hp": 90.0,
+            "max_hp": 100.0,
+            "exp_multiplier": 1.0,
+        }
+
+    def get_party_level(self) -> int:
+        return 1
+
+    def get_exp_gain_per_second(self, char_id: str) -> float:
+        del char_id
+        return 0.0
+
+    def get_misplacement_stat_multiplier(self, char_id: str) -> float:
+        del char_id
+        return 1.0
+
+    def get_misplacement_exp_multiplier(self, char_id: str) -> float:
+        del char_id
+        return 1.0
+
+    def get_passive_bars_for_character(self, char_id: str) -> list[object]:
+        del char_id
+        return []
+
+    def export_runtime_snapshot(self) -> dict[str, object]:
+        return {
+            "progress": {},
+            "character_stats": {},
+            "initial_stats": {},
+            "blessings": dict(self._save.blessings),
+            "passives": dict(self._save.passives),
+            "exp_bonus_seconds": 0.0,
+            "exp_penalty_seconds": 0.0,
+            "shared_exp_percentage": 1,
+            "risk_reward_level": 0,
+        }
 
 
 def test_lunar_blessing_visible_when_save_entry_missing() -> None:
@@ -90,3 +140,26 @@ def test_damage_type_blessing_bar_uses_element_color() -> None:
     lunar_panel = page._blessing_panels["lunar_blessing"]
     assert lunar_panel.property("elementId") == "lunar"
     assert lunar_panel._progress_bar._color_thresholds == []
+
+
+def test_home_upgrades_tab_shows_compact_cards() -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    save = RunSave()
+    save.onsite = ["luna"]
+    save.offsite = ["atlas"]
+    save.stacks = {"luna": 2, "atlas": 1}
+    page = HomePage(
+        save_store=_FakeSaveStore(save),
+        idle_state_provider=lambda: _FakeIdleState(save),
+    )
+    page._update_timer.stop()
+
+    page._tabs.setCurrentIndex(1)
+    page._update_home_display()
+
+    assert page._content_stack.currentIndex() == 1
+    cards = page._upgrade_cards
+    assert len(cards) == 2
+    assert all(card.width() == 420 for card in cards)
+    assert all(card.findChild(QWidget, "idleExpBar").isHidden() for card in cards)
