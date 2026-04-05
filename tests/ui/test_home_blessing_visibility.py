@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QApplication
 from endless_idler.blessings.registry import get_blessing_by_id
 from endless_idler.save import RunSave
 from endless_idler.ui.home import HomePage
+from endless_idler.ui.theme.colors import color_for_damage_type_id
 
 
 class _FakeSaveStore:
@@ -60,3 +61,32 @@ def test_odyssey_tooltip_polish_fields() -> None:
     assert "Step:" not in tooltip
     assert "Countdown:" not in tooltip
     assert "Weeks:" not in tooltip
+
+
+def test_damage_type_blessing_bar_uses_element_color() -> None:
+    _ = QApplication.instance() or QApplication([])
+
+    save = RunSave()
+    save.blessings["fire_blessing"] = {"unlocked": True, "steps": 0}
+    page = HomePage(save_store=_FakeSaveStore(save))
+    page._update_timer.stop()
+
+    fire_panel = page._blessing_panels["fire_blessing"]
+    fire_color = color_for_damage_type_id("fire")
+    expected_fire_rgba = (
+        fire_color.red(),
+        fire_color.green(),
+        fire_color.blue(),
+        170,
+    )
+
+    assert fire_panel.property("elementId") == "fire"
+    assert fire_panel._progress_bar._color_thresholds == [
+        (0.0, expected_fire_rgba),
+        (0.5, expected_fire_rgba),
+        (1.0, expected_fire_rgba),
+    ]
+
+    lunar_panel = page._blessing_panels["lunar_blessing"]
+    assert lunar_panel.property("elementId") == "lunar"
+    assert lunar_panel._progress_bar._color_thresholds == []
