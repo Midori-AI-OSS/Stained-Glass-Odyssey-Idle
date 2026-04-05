@@ -5,7 +5,7 @@
 This planning doc tracks forward-looking mechanics and unresolved design decisions.
 
 Date captured: 2026-03-05
-Last updated: 2026-03-14
+Last updated: 2026-04-05
 
 ## Planned Mechanics (Target Design)
 
@@ -115,6 +115,15 @@ Pending:
   - use lowercase snake_case IDs
   - avoid direct element or damage-type names to prevent confusion with shard/payment terminology
 - Exact stat/progression lanes impacted by prism-archetype/prismatic-shard power.
+
+### Prism Archetypes
+
+Planned starter set for art and identity:
+- `halo_guardian` - barrier/taunt/protection. Fits Lady Light, Carly, Persona Light and Dark.
+- `lunar_blade` - precise moonlit duelist/control. Fits Ryne, Luna.
+- `eclipse_veil` - light/shadow duality, concealment, debuffs. Fits Lady Darkness, Persona Light and Dark.
+- `prism_weaver` - refracted magic, support, artifice, coordination. Fits Lady Echo, Jennifer Feltmann, Becca, Ally.
+- `shardstorm_vanguard` - fast burst, storm/glass/lightning energy. Fits Lady Storm, Lady Lightning, Lady Wind, Ixia.
 
 ## Open High-Impact Decisions
 
