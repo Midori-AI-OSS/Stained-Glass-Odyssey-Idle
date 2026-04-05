@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QSlider
 from PySide6.QtWidgets import QWidget
 
@@ -693,9 +694,21 @@ def test_idle_compact_card_hides_status_bars() -> None:
     onsite_card.update_display()
     offsite_card.update_display()
 
-    assert onsite_card.width() == 420
-    assert offsite_card.width() == 420
+    onsite_card.resize(640, onsite_card.height())
+    offsite_card.resize(640, offsite_card.height())
+    assert onsite_card.minimumWidth() == 420
+    assert offsite_card.minimumWidth() == 420
+    assert onsite_card.sizePolicy().horizontalPolicy().name == "Expanding"
+    assert offsite_card.sizePolicy().horizontalPolicy().name == "Expanding"
     assert onsite_card.height() == offsite_card.height()
+    assert not onsite_card.findChild(QPushButton, "idleRebirthButton").isHidden()
+    assert not onsite_card.findChild(QPushButton, "idlePrestigeButton").isHidden()
+    assert not offsite_card.findChild(QPushButton, "idleRebirthButton").isHidden()
+    assert not offsite_card.findChild(QPushButton, "idlePrestigeButton").isHidden()
+    assert not onsite_card.findChild(QPushButton, "idleRebirthButton").isEnabled()
+    assert not onsite_card.findChild(QPushButton, "idlePrestigeButton").isEnabled()
+    assert not offsite_card.findChild(QPushButton, "idleRebirthButton").isEnabled()
+    assert not offsite_card.findChild(QPushButton, "idlePrestigeButton").isEnabled()
     assert onsite_card.findChild(AnimatedProgressBar, "idleExpBar").isHidden()
     assert offsite_card.findChild(AnimatedProgressBar, "idleExpBar").isHidden()
     assert onsite_card.findChild(QWidget, "shardProgressBarWidget").isHidden()

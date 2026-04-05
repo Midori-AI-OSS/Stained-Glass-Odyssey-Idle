@@ -108,9 +108,7 @@ class HomePage(QWidget):
         self._upgrade_host_layout = QVBoxLayout(self._upgrade_host)
         self._upgrade_host_layout.setContentsMargins(0, 0, 0, 0)
         self._upgrade_host_layout.setSpacing(10)
-        self._upgrade_host_layout.setAlignment(
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter
-        )
+        self._upgrade_host_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self._upgrade_scroll.setWidget(self._upgrade_host)
         self._content_stack.addWidget(self._upgrade_page)
 
@@ -336,7 +334,7 @@ class HomePage(QWidget):
                 parent=self._upgrade_host,
             )
             self._upgrade_cards.append(card)
-            self._upgrade_host_layout.addWidget(card, 0, Qt.AlignmentFlag.AlignHCenter)
+            self._upgrade_host_layout.addWidget(card)
 
         self._upgrade_host_layout.addStretch(1)
 

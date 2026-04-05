@@ -30,6 +30,14 @@ QPushButton#idleActionButton:hover {
     background-color: rgba(120, 180, 255, 44);
 }
 
+QPushButton#idleActionButton:disabled,
+QPushButton#idleRebirthButton:disabled,
+QPushButton#idlePrestigeButton:disabled {
+    background-color: rgba(255, 255, 255, 7);
+    border: 1px solid rgba(255, 255, 255, 12);
+    color: rgba(255, 255, 255, 95);
+}
+
 QPushButton#idleRebirthButton,
 QPushButton#idlePrestigeButton {
     background-color: rgba(255, 255, 255, 14);

@@ -134,8 +134,8 @@ class IdleCharacterCard(QFrame):
     def _setup_compact_layout(
         self, *, portrait_path: str | None, display_name: str
     ) -> None:
-        self.setFixedWidth(CARD_WIDTH_ONSITE)
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setMinimumWidth(CARD_WIDTH_ONSITE)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         root = QHBoxLayout()
         root.setContentsMargins(12, 12, 12, 12)
@@ -168,26 +168,17 @@ class IdleCharacterCard(QFrame):
 
         header.addStretch(1)
 
-        if self._context == "onsite":
-            self._action_button = QPushButton("")
-            self._action_button.setObjectName("idleActionButton")
-            self._action_button.setCursor(Qt.CursorShape.PointingHandCursor)
-            self._action_button.setVisible(False)
-            header.addWidget(self._action_button, 0, Qt.AlignmentFlag.AlignVCenter)
-        else:
-            self._rebirth_button = QPushButton("Rebirth")
-            self._rebirth_button.setObjectName("idleRebirthButton")
-            self._rebirth_button.setCursor(Qt.CursorShape.PointingHandCursor)
-            self._rebirth_button.setVisible(False)
-            self._rebirth_button.clicked.connect(self._request_rebirth)
-            header.addWidget(self._rebirth_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        self._rebirth_button = QPushButton("Rebirth")
+        self._rebirth_button.setObjectName("idleRebirthButton")
+        self._rebirth_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._rebirth_button.clicked.connect(self._request_rebirth)
+        header.addWidget(self._rebirth_button, 0, Qt.AlignmentFlag.AlignVCenter)
 
-            self._prestige_button = QPushButton("Prestige")
-            self._prestige_button.setObjectName("idlePrestigeButton")
-            self._prestige_button.setCursor(Qt.CursorShape.PointingHandCursor)
-            self._prestige_button.setVisible(False)
-            self._prestige_button.clicked.connect(self._request_prestige)
-            header.addWidget(self._prestige_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        self._prestige_button = QPushButton("Prestige")
+        self._prestige_button.setObjectName("idlePrestigeButton")
+        self._prestige_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._prestige_button.clicked.connect(self._request_prestige)
+        header.addWidget(self._prestige_button, 0, Qt.AlignmentFlag.AlignVCenter)
 
         self._body.addStretch(1)
 
@@ -211,6 +202,14 @@ class IdleCharacterCard(QFrame):
         self._shard_bar.setVisible(visible)
         for bar in self._passive_bars:
             bar.setVisible(visible)
+
+    def _update_compact_buttons(
+        self, *, show_rebirth: bool, show_prestige: bool
+    ) -> None:
+        self._rebirth_button.setVisible(True)
+        self._rebirth_button.setEnabled(show_rebirth)
+        self._prestige_button.setVisible(True)
+        self._prestige_button.setEnabled(show_prestige)
 
     def _setup_onsite_layout(
         self, *, portrait_path: str | None, display_name: str
@@ -539,7 +538,11 @@ class IdleCharacterCard(QFrame):
             max(1, int(level)) >= REBIRTH_LEVEL_THRESHOLD and not show_prestige
         )
 
-        if self._context == "onsite":
+        if self._compact_view:
+            self._update_compact_buttons(
+                show_rebirth=show_rebirth, show_prestige=show_prestige
+            )
+        elif self._context == "onsite":
             self._update_onsite_buttons(
                 show_rebirth=show_rebirth, show_prestige=show_prestige
             )
