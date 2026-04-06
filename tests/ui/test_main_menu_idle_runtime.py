@@ -45,6 +45,7 @@ class _FakeIdleScreen:
         self.received_idle_state = idle_state
         self.received_owns_tick_source = owns_tick_source
         self.shutdown_calls: list[bool] = []
+        self.force_persist_calls = 0
         self.deleted = False
         _FakeIdleScreen.created.append(self)
 
@@ -73,6 +74,9 @@ class _FakeIdleScreen:
 
     def shutdown(self, *, persist: bool = True) -> None:
         self.shutdown_calls.append(bool(persist))
+
+    def force_persist(self) -> None:
+        self.force_persist_calls += 1
 
     def deleteLater(self) -> None:
         self.deleted = True
@@ -211,6 +215,7 @@ def _make_menu_like(
         _idle_runtime_lock=nullcontext(),
         _idle_state=object(),
         _plugins=[],
+        _PAGE_LAYOUT="layout",
         _PAGE_IDLE="idle",
         _set_active_nav=lambda key: nav_calls.append(str(key)),
         _show_home=lambda: None,
@@ -272,6 +277,24 @@ def test_show_idle_reuses_runtime_when_lineup_signature_matches(monkeypatch) -> 
     assert len(_FakeIdleScreen.created) == 1
 
 
+def test_show_layout_flushes_idle_before_switching(monkeypatch) -> None:
+    monkeypatch.setattr(main_menu_module, "IdleScreenWidget", _FakeIdleScreen)
+    _FakeIdleScreen.created.clear()
+
+    placeholder = object()
+    save = _fake_save(onsite=["ally"], offsite=[])
+    idle = _FakeIdleScreen(save_store=SimpleNamespace(current=save))
+    menu_like: Any = _make_menu_like(
+        save=save, idle_screen=idle, placeholder=placeholder
+    )
+
+    MainMenuWindow._show_layout(menu_like)
+
+    assert idle.force_persist_calls == 1
+    assert menu_like._stack.set_current[-1] is menu_like._layout_screen
+    assert menu_like._nav_calls == ["layout"]
+
+
 def test_lineup_signature_changes_when_standby_changes() -> None:
     first = _fake_save(onsite=["ally"], offsite=["res"], standby=["bench_a"])
     second = _fake_save(onsite=["ally"], offsite=["res"], standby=["bench_b"])
@@ -317,6 +340,55 @@ def test_build_idle_state_from_save_passes_standby_ids(monkeypatch) -> None:
 
     assert captured["standby_ids"] == ["bench"]
     assert captured["passives_data"] == RunSave().passives
+
+
+def test_build_idle_state_from_save_restores_live_blessing_runtime(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _CaptureIdleState:
+        def __init__(self, **kwargs) -> None:  # noqa: ANN003
+            captured.update(kwargs)
+
+    monkeypatch.setattr(main_menu_module, "IdleGameState", _CaptureIdleState)
+    holder: Any = SimpleNamespace(
+        _plugins=[],
+        _idle_rng=random.Random(),
+    )
+    save = SimpleNamespace(
+        onsite=["ally"],
+        offsite=[],
+        standby=[],
+        party_level=1,
+        stacks={"ally": 1},
+        character_progress={},
+        character_stats={},
+        character_initial_stats={},
+        inventory={},
+        idle_exp_bonus_seconds=0.0,
+        idle_exp_penalty_seconds=0.0,
+        idle_shared_exp_percentage=1,
+        idle_risk_reward_level=0,
+        battle_start_time=0.0,
+        blessings={"fire_blessing": {"steps": 2, "unlocked": True}},
+        passives=RunSave().passives,
+    )
+
+    MainMenuWindow._build_idle_state_from_save(
+        holder,
+        save,
+        runtime_snapshot={
+            "elapsed_seconds": 123.4,
+            "blessing_runtime": {
+                "fire_blessing": {
+                    "elapsed_seconds": 99.25,
+                    "steps": 2,
+                }
+            },
+        },
+    )
+
+    assert captured["battle_start_time"] == 123.4
+    assert captured["blessings_data"]["fire_blessing"]["tick_elapsed_seconds"] == 99.25
 
 
 def test_apply_idle_snapshot_to_save_writes_canonical_passives_only() -> None:

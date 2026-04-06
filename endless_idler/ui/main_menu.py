@@ -66,7 +66,10 @@ class MainMenuWindow(QMainWindow):
         self._tick_runtime_subscriber_key = "main-menu-idle-save-sync"
         self._idle_runtime_lock = threading.Lock()
         self._idle_rng = random.Random()
-        self._idle_state = self._build_idle_state_from_save(self._save_store.current)
+        self._idle_state = self._build_idle_state_from_save(
+            self._save_store.current,
+            runtime_snapshot=None,
+        )
         self._idle_state_lineup_signature = self._idle_lineup_signature()
         self._reset_exit_requested = False
         self._tick_cooldown_lock = threading.Lock()
@@ -358,6 +361,8 @@ class MainMenuWindow(QMainWindow):
         self._set_active_nav(self._PAGE_IDLE)
 
     def _show_layout(self) -> None:
+        if self._idle_screen is not None:
+            self._idle_screen.force_persist()
         self._stack.setCurrentWidget(self._layout_screen)
         self._set_active_nav(self._PAGE_LAYOUT)
 
@@ -432,10 +437,51 @@ class MainMenuWindow(QMainWindow):
         if self._stack.currentWidget() is self._idle_placeholder:
             self._stack.setCurrentWidget(idle)
 
-    def _build_idle_state_from_save(self, save: object) -> IdleGameState:
+    def _build_idle_state_from_save(
+        self,
+        save: object,
+        *,
+        runtime_snapshot: dict[str, object] | None = None,
+    ) -> IdleGameState:
         plugins_by_id: dict[str, object] = {
             plugin.char_id: plugin for plugin in self._plugins
         }
+        snapshot = runtime_snapshot if isinstance(runtime_snapshot, dict) else {}
+
+        def _restore_elapsed_seconds(default: float) -> float:
+            raw_elapsed = snapshot.get("elapsed_seconds", default)
+            if isinstance(raw_elapsed, bool):
+                return default
+            if isinstance(raw_elapsed, int | float):
+                return float(max(0.0, raw_elapsed))
+            return default
+
+        def _restore_blessings_data(
+            fallback: dict[str, dict[str, object]],
+        ) -> dict[str, dict[str, object]]:
+            blessings = dict(fallback)
+            runtime = snapshot.get("blessing_runtime")
+            if not isinstance(runtime, dict):
+                return blessings
+
+            for blessing_id, raw_runtime in runtime.items():
+                if not isinstance(blessing_id, str) or not isinstance(
+                    raw_runtime, dict
+                ):
+                    continue
+                blessing = dict(blessings.get(blessing_id, {}))
+                raw_elapsed = raw_runtime.get("elapsed_seconds", 0.0)
+                if isinstance(raw_elapsed, bool):
+                    elapsed_seconds = 0.0
+                elif isinstance(raw_elapsed, int | float):
+                    elapsed_seconds = float(max(0.0, raw_elapsed))
+                else:
+                    elapsed_seconds = 0.0
+                if "tick_elapsed_seconds" in blessing or elapsed_seconds > 0.0:
+                    blessing["tick_elapsed_seconds"] = elapsed_seconds
+                blessings[blessing_id] = blessing
+            return blessings
+
         return IdleGameState(
             char_ids=[str(item) for item in getattr(save, "onsite", []) if item],
             offsite_ids=[str(item) for item in getattr(save, "offsite", []) if item],
@@ -453,8 +499,12 @@ class MainMenuWindow(QMainWindow):
             exp_penalty_seconds=float(getattr(save, "idle_exp_penalty_seconds", 0.0)),
             shared_exp_percentage=int(getattr(save, "idle_shared_exp_percentage", 1)),
             risk_reward_level=int(getattr(save, "idle_risk_reward_level", 0)),
-            battle_start_time=float(getattr(save, "battle_start_time", 0.0)),
-            blessings_data=dict(getattr(save, "blessings", {}) or {}),
+            battle_start_time=_restore_elapsed_seconds(
+                float(getattr(save, "battle_start_time", 0.0))
+            ),
+            blessings_data=_restore_blessings_data(
+                dict(getattr(save, "blessings", {}) or {})
+            ),
             passives_data=dict(getattr(save, "passives", {}) or {}),
             rng=self._idle_rng,
         )
@@ -464,8 +514,12 @@ class MainMenuWindow(QMainWindow):
         if current_signature == self._idle_state_lineup_signature:
             return
         save = self._save_store.current
+        runtime_snapshot = self._latest_idle_snapshot()
         with self._idle_runtime_lock:
-            self._idle_state = self._build_idle_state_from_save(save)
+            self._idle_state = self._build_idle_state_from_save(
+                save,
+                runtime_snapshot=runtime_snapshot,
+            )
             self._idle_state_lineup_signature = current_signature
         with self._tick_cooldown_lock:
             self._tick_cooldown_seconds = float(
