@@ -222,7 +222,7 @@ class RadioController(QObject):
             probe_player = QMediaPlayer()
             probe_player.setAudioOutput(probe_audio)
             return True
-        except (RuntimeError, TypeError) as exc:
+        except (RuntimeError, TypeError, ValueError, OSError) as exc:
             logger.warning("radio probe failed: %s", exc)
             return False
         finally:
