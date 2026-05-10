@@ -422,6 +422,42 @@ def test_apply_idle_snapshot_to_save_writes_canonical_passives_only() -> None:
     assert not hasattr(save, "passive_runtime")
 
 
+def test_apply_idle_snapshot_to_save_writes_inventory() -> None:
+    save = SimpleNamespace(
+        character_progress={},
+        character_stats={},
+        character_initial_stats={},
+        blessings={},
+        passives=RunSave().passives,
+        inventory={},
+        idle_exp_bonus_seconds=0.0,
+        idle_exp_penalty_seconds=0.0,
+        idle_shared_exp_percentage=1,
+        idle_risk_reward_level=0,
+        layout_tick_cooldown_seconds=0.0,
+    )
+    holder: Any = SimpleNamespace(
+        _save_store=SimpleNamespace(current=save),
+        _tick_cooldown_lock=nullcontext(),
+        _tick_cooldown_seconds=0.0,
+    )
+
+    MainMenuWindow._apply_idle_snapshot_to_save(
+        holder,
+        {
+            "inventory": {
+                "fire_shard": 2,
+                "dark_shard": -3,
+            },
+        },
+    )
+
+    assert save.inventory == {
+        "fire_shard": 2,
+        "dark_shard": 0,
+    }
+
+
 def test_topbar_navigation_compacts_and_restores_icon_only() -> None:
     holder: Any = cast(Any, SimpleNamespace())
     buttons = [_FakeButton(width) for width in (48, 52, 58)]
