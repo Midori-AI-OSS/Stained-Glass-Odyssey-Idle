@@ -8,7 +8,7 @@ The shard system awards elemental shards during idle gameplay. Progress is advan
 
 - Runtime tick rate: **30Hz** (`IDLE_TICK_INTERVAL_SECONDS = 1/30`)
 - Roll interval: every **30 ticks** (`SHARD_ROLL_INTERVAL_TICKS`) ≈ 1 second
-- Cycle length: **300 ticks** (`SHARD_BAR_CYCLE_TICKS`) ≈ 10 seconds
+- Cycle length: **300 shard progress steps** (`SHARD_BAR_CYCLE_TICKS`)
 
 ## Base Chance and Dampener
 
@@ -49,5 +49,5 @@ Item IDs map as `{type}_shard`.
 
 1. Every 30 ticks, eligible characters with positive EXP gain roll.
 2. Success when `random() < (effective_chance / 100.0)`.
-3. On success, increment `shard_bar_ticks`.
+3. On success, increment `shard_bar_ticks` by one shard progress step.
 4. When `shard_bar_ticks >= 300`, award one shard and wrap.

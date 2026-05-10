@@ -2,13 +2,13 @@
 
 ## Overview
 
-Shard save/load persists character shard progress bar state across sessions. The `shard_bar_ticks` field tracks progress toward a completed shard cycle (0-100 range).
+Shard save/load persists character shard progress bar state across sessions. The `shard_bar_ticks` field tracks progress toward a completed shard cycle (0-299 runtime range).
 
 ## Field Definition
 
 | Field | Type | Range | Description |
 |-------|------|-------|-------------|
-| `shard_bar_ticks` | int | 0-99 | Current progress toward next shard award. Wraps to 0 on cycle completion. |
+| `shard_bar_ticks` | int | 0-299 | Current progress toward next shard award. Wraps to 0 on cycle completion. |
 
 - Stored per-character in progress dictionaries
 - Wraps using modulo: `shard_bar_ticks % SHARD_BAR_CYCLE_TICKS`

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The shard UI widget system displays character shard progression toward 100-tick cycles. Each character tracks accumulation of elemental shards that award rewards upon reaching the 100-tick threshold.
+The shard UI widget system displays character shard progression toward 300-step cycles. Each character tracks accumulation of elemental shards that award rewards upon reaching the 300-step threshold.
 
 ## ShardProgressBar Widget
 
@@ -18,7 +18,7 @@ The widget uses composition rather than inheritance:
 ### Key Features
 
 **Text Display:**
-- Shows "SHARD X/100" format (line 97)
+- Shows "SHARD X/300" format (line 97)
 - Updates dynamically with tick count changes
 
 **Element-Themed Colors:**
