@@ -33,6 +33,7 @@ from endless_idler.ui.home import HomePage
 from endless_idler.ui.idle import IdleScreenWidget
 from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
 from endless_idler.ui.idle.idle_state import IdleGameState
+from endless_idler.ui.idle.runtime_snapshot import apply_idle_runtime_snapshot_to_save
 from endless_idler.ui.inventory import InventoryPage
 from endless_idler.ui.layout import LayoutScreenWidget
 from endless_idler.ui.lucide_icons import lucide_icon
@@ -584,81 +585,10 @@ class MainMenuWindow(QMainWindow):
             return self._idle_state.export_runtime_snapshot()
 
     def _apply_idle_snapshot_to_save(self, snapshot: dict[str, object]) -> None:
-        save = self._save_store.current
-        progress = snapshot.get("progress")
-        if isinstance(progress, dict):
-            save.character_progress = {
-                str(char_id): dict(data)
-                for char_id, data in progress.items()
-                if isinstance(char_id, str) and isinstance(data, dict)
-            }
-        stats = snapshot.get("character_stats")
-        if isinstance(stats, dict):
-            save.character_stats = {
-                str(char_id): dict(data)
-                for char_id, data in stats.items()
-                if isinstance(char_id, str) and isinstance(data, dict)
-            }
-        initial_stats = snapshot.get("initial_stats")
-        if isinstance(initial_stats, dict):
-            save.character_initial_stats = {
-                str(char_id): dict(data)
-                for char_id, data in initial_stats.items()
-                if isinstance(char_id, str) and isinstance(data, dict)
-            }
-        blessings = snapshot.get("blessings")
-        if isinstance(blessings, dict):
-            save.blessings = {
-                str(blessing_id): dict(data)
-                for blessing_id, data in blessings.items()
-                if isinstance(blessing_id, str) and isinstance(data, dict)
-            }
-        passives = snapshot.get("passives")
-        if isinstance(passives, dict):
-            save.passives = {
-                str(passive_id): dict(data)
-                for passive_id, data in passives.items()
-                if isinstance(passive_id, str) and isinstance(data, dict)
-            }
-        exp_bonus_seconds = snapshot.get("exp_bonus_seconds", 0.0)
-        if isinstance(exp_bonus_seconds, bool):
-            exp_bonus = 0.0
-        elif isinstance(exp_bonus_seconds, int | float):
-            exp_bonus = float(exp_bonus_seconds)
-        else:
-            exp_bonus = 0.0
-        save.idle_exp_bonus_seconds = max(0.0, exp_bonus)
-
-        exp_penalty_seconds = snapshot.get("exp_penalty_seconds", 0.0)
-        if isinstance(exp_penalty_seconds, bool):
-            exp_penalty = 0.0
-        elif isinstance(exp_penalty_seconds, int | float):
-            exp_penalty = float(exp_penalty_seconds)
-        else:
-            exp_penalty = 0.0
-        save.idle_exp_penalty_seconds = max(0.0, exp_penalty)
-
-        shared_exp_percentage = snapshot.get("shared_exp_percentage", 1)
-        if isinstance(shared_exp_percentage, bool):
-            shared_exp = 1
-        elif isinstance(shared_exp_percentage, int):
-            shared_exp = shared_exp_percentage
-        elif isinstance(shared_exp_percentage, float):
-            shared_exp = int(shared_exp_percentage)
-        else:
-            shared_exp = 1
-        save.idle_shared_exp_percentage = max(1, min(95, shared_exp))
-
-        risk_reward_level = snapshot.get("risk_reward_level", 0)
-        if isinstance(risk_reward_level, bool):
-            risk_level = 0
-        elif isinstance(risk_reward_level, int):
-            risk_level = risk_reward_level
-        elif isinstance(risk_reward_level, float):
-            risk_level = int(risk_reward_level)
-        else:
-            risk_level = 0
-        save.idle_risk_reward_level = max(0, min(150, risk_level))
+        apply_idle_runtime_snapshot_to_save(
+            save=self._save_store.current,
+            snapshot=snapshot,
+        )
 
     def _ensure_radio_controller(self) -> RadioController | None:
         if self._radio_controller is not None:

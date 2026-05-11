@@ -35,6 +35,7 @@ from endless_idler.ui.cards import compute_stat_maxima
 from endless_idler.ui.idle.widgets import IdleArena
 from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
 from endless_idler.ui.idle.idle_state import IdleGameState
+from endless_idler.ui.idle.runtime_snapshot import apply_idle_runtime_snapshot_to_save
 
 
 def build_prestige_confirmation_html(
@@ -613,62 +614,7 @@ class IdleScreenWidget(QWidget):
 
     def _apply_snapshot_to_save(self, snapshot: dict[str, object]) -> None:
         save = self._save
-        progress = snapshot.get("progress")
-        if isinstance(progress, dict):
-            save.character_progress = {
-                str(char_id): dict(data)
-                for char_id, data in progress.items()
-                if isinstance(char_id, str) and isinstance(data, dict)
-            }
-        stats = snapshot.get("character_stats")
-        if isinstance(stats, dict):
-            save.character_stats = {
-                str(char_id): dict(data)
-                for char_id, data in stats.items()
-                if isinstance(char_id, str) and isinstance(data, dict)
-            }
-        initial_stats = snapshot.get("initial_stats")
-        if isinstance(initial_stats, dict):
-            save.character_initial_stats = {
-                str(char_id): dict(data)
-                for char_id, data in initial_stats.items()
-                if isinstance(char_id, str) and isinstance(data, dict)
-            }
-        blessings = snapshot.get("blessings")
-        if isinstance(blessings, dict):
-            save.blessings = {
-                str(blessing_id): dict(data)
-                for blessing_id, data in blessings.items()
-                if isinstance(blessing_id, str) and isinstance(data, dict)
-            }
-        passives = snapshot.get("passives")
-        if isinstance(passives, dict):
-            save.passives = {
-                str(passive_id): dict(data)
-                for passive_id, data in passives.items()
-                if isinstance(passive_id, str) and isinstance(data, dict)
-            }
-        save.idle_exp_bonus_seconds = self._coerce_float(
-            snapshot.get("exp_bonus_seconds", 0.0), 0.0
-        )
-        save.idle_exp_penalty_seconds = self._coerce_float(
-            snapshot.get("exp_penalty_seconds", 0.0), 0.0
-        )
-        save.idle_shared_exp_percentage = max(
-            1,
-            min(95, self._coerce_int(snapshot.get("shared_exp_percentage", 1), 1)),
-        )
-        save.idle_risk_reward_level = max(
-            0,
-            min(150, self._coerce_int(snapshot.get("risk_reward_level", 0), 0)),
-        )
-        inventory = snapshot.get("inventory")
-        if isinstance(inventory, dict):
-            save.inventory = {
-                str(item_id): max(0, int(count))
-                for item_id, count in inventory.items()
-                if isinstance(item_id, str)
-            }
+        apply_idle_runtime_snapshot_to_save(save=save, snapshot=snapshot)
         with self._tick_cooldown_lock:
             save.layout_tick_cooldown_seconds = float(self._tick_cooldown_seconds)
 

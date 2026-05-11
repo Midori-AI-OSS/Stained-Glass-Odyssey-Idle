@@ -5,6 +5,7 @@ import random
 from endless_idler.characters.plugins import discover_character_plugins
 from endless_idler.save_codec import as_character_progress_dict
 from endless_idler.ui.idle.idle_state import IdleGameState
+from endless_idler.ui.idle.idle_state import SHARD_BAR_CYCLE_TICKS
 from endless_idler.ui.idle.idle_state import SHARD_ROLL_INTERVAL_TICKS
 
 
@@ -34,7 +35,7 @@ def test_shard_roll_completes_bar_and_awards_single_type_item(monkeypatch) -> No
     inventory: dict[str, int] = {}
     state = _build_state(
         char_id="ally",
-        progress={"ally": {"shard_bar_ticks": 99}},
+        progress={"ally": {"shard_bar_ticks": SHARD_BAR_CYCLE_TICKS - 1}},
         inventory=inventory,
     )
     monkeypatch.setattr(state._rng, "random", lambda: 0.0)
@@ -52,7 +53,7 @@ def test_dual_type_shard_award_uses_random_constituent(monkeypatch) -> None:
     inventory: dict[str, int] = {}
     state = _build_state(
         char_id="lady_storm",
-        progress={"lady_storm": {"shard_bar_ticks": 99}},
+        progress={"lady_storm": {"shard_bar_ticks": SHARD_BAR_CYCLE_TICKS - 1}},
         inventory=inventory,
     )
     monkeypatch.setattr(state._rng, "random", lambda: 0.0)
@@ -70,7 +71,7 @@ def test_generic_damage_type_character_receives_random_elemental_shards(
     inventory: dict[str, int] = {}
     state = _build_state(
         char_id="luna",
-        progress={"luna": {"shard_bar_ticks": 99}},
+        progress={"luna": {"shard_bar_ticks": SHARD_BAR_CYCLE_TICKS - 1}},
         inventory=inventory,
     )
     monkeypatch.setattr(state._rng, "random", lambda: 0.0)

@@ -6,6 +6,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QWidget
 
+from endless_idler.shard_progress import SHARD_BAR_CYCLE_TICKS
 from endless_idler.ui.components.progress_bar import AnimatedProgressBar
 from endless_idler.ui.theme.shard_progress_bar_widget import (
     FIRE_RGBA,
@@ -33,11 +34,11 @@ GENERIC_CYCLE_DURATION_MS = 3000
 
 
 class ShardProgressBar(QWidget):
-    """Progress bar widget showing shard progression toward 100-tick cycle.
+    """Progress bar widget showing shard progression toward a 300-step cycle.
 
     Displays:
     - Visual progress bar with element-themed colors
-    - Current tick count (e.g., "67/100")
+    - Current tick count (e.g., "67/300")
     - For generic damage types: cycles through all 6 element colors
     """
 
@@ -62,7 +63,7 @@ class ShardProgressBar(QWidget):
         self._progress_bar = AnimatedProgressBar()
         self._progress_bar.setFixedHeight(14)
         self._progress_bar._gradient_enabled = False
-        self._progress_bar.setText("SHARD 0/100")
+        self._progress_bar.setText(f"SHARD 0/{SHARD_BAR_CYCLE_TICKS}")
         layout.addWidget(self._progress_bar, 1)
 
         # Cycle timer for generic types
@@ -82,19 +83,24 @@ class ShardProgressBar(QWidget):
         """Update the shard progress bar with new data.
 
         Args:
-            shard_bar_ticks: Current tick count (0-100)
+            shard_bar_ticks: Current tick count (0-300)
             element_id: Character's element ID (fire, ice, wind, lightning, light, dark, generic)
             shard_types: Tuple of shard reward types this character can earn
         """
         old_element = self._element_id
-        self._shard_bar_ticks = max(0, min(100, int(shard_bar_ticks)))
+        self._shard_bar_ticks = max(
+            0,
+            min(SHARD_BAR_CYCLE_TICKS, int(shard_bar_ticks)),
+        )
         self._element_id = str(element_id or "generic").strip().lower()
         self._shard_types = tuple(str(t) for t in shard_types if t)
 
         # Update progress
-        progress = self._shard_bar_ticks / 100.0
+        progress = self._shard_bar_ticks / float(SHARD_BAR_CYCLE_TICKS)
         self._progress_bar.set_value(progress)
-        self._progress_bar.setText(f"SHARD {self._shard_bar_ticks}/100")
+        self._progress_bar.setText(
+            f"SHARD {self._shard_bar_ticks}/{SHARD_BAR_CYCLE_TICKS}"
+        )
 
         # Handle element/color changes
         if self._element_id != old_element:

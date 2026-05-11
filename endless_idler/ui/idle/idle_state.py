@@ -31,6 +31,7 @@ from endless_idler.progression import calculate_rebirth_exp_mult_gain
 from endless_idler.progression import calculate_rebirth_exp_tax
 from endless_idler.progression import calculate_rebirth_power
 from endless_idler.progression import REBIRTH_LEVEL_THRESHOLD
+from endless_idler.shard_progress import SHARD_BAR_CYCLE_TICKS
 from endless_idler.passives._trinity import LADY_LIGHT_STACK_BONUS_PER_STACK
 from endless_idler.passives._trinity import TRINITY_MITIGATION_PER_STACK
 from endless_idler.passives._trinity import TRINITY_SOFT_CAP_THRESHOLD
@@ -54,7 +55,6 @@ IDLE_TICK_INTERVAL_SECONDS = 1.0 / 30.0
 MIN_EXP_GAIN_PER_TICK = 0.0001
 IDLE_BLESSING_STEP_MULTIPLIER = 1.025 ** (1.0 / 6.0)
 SHARD_ROLL_INTERVAL_TICKS = 30
-SHARD_BAR_CYCLE_TICKS = 300
 ANIMATION_CYCLE_TICKS = 45 * 60 * 30
 SHARD_BASE_CHANCE_PERCENT = 0.0001
 SHARD_EXP_SMOOTHING_SECONDS = 60.0

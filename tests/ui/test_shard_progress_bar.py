@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 
+from endless_idler.shard_progress import SHARD_BAR_CYCLE_TICKS
 from endless_idler.ui.theme.shard_progress_bar_widget import (
     FIRE_RGBA,
     ICE_RGBA,
@@ -19,23 +20,23 @@ class TestShardProgressBarText:
         """Test that text format includes 'SHARD' prefix."""
         # Simulating the text format used in set_shard_data
         shard_bar_ticks = 67
-        expected_text = f"SHARD {shard_bar_ticks}/100"
-        assert expected_text == "SHARD 67/100"
+        expected_text = f"SHARD {shard_bar_ticks}/{SHARD_BAR_CYCLE_TICKS}"
+        assert expected_text == "SHARD 67/300"
         assert expected_text.startswith("SHARD ")
 
     def test_text_format_various_tick_counts(self):
         """Test text format for various tick counts."""
         test_cases = [
-            (0, "SHARD 0/100"),
-            (25, "SHARD 25/100"),
-            (50, "SHARD 50/100"),
-            (67, "SHARD 67/100"),
-            (99, "SHARD 99/100"),
-            (100, "SHARD 100/100"),
+            (0, "SHARD 0/300"),
+            (75, "SHARD 75/300"),
+            (150, "SHARD 150/300"),
+            (225, "SHARD 225/300"),
+            (299, "SHARD 299/300"),
+            (300, "SHARD 300/300"),
         ]
 
         for ticks, expected in test_cases:
-            result = f"SHARD {ticks}/100"
+            result = f"SHARD {ticks}/{SHARD_BAR_CYCLE_TICKS}"
             assert result == expected, f"Failed for ticks={ticks}"
 
 
@@ -115,14 +116,14 @@ class TestShardProgressBarLogic:
         # Test various tick counts
         test_cases = [
             (0, 0.0),
-            (25, 0.25),
-            (50, 0.5),
-            (75, 0.75),
-            (100, 1.0),
+            (75, 0.25),
+            (150, 0.5),
+            (225, 0.75),
+            (300, 1.0),
         ]
 
         for ticks, expected_progress in test_cases:
-            progress = ticks / 100.0
+            progress = ticks / float(SHARD_BAR_CYCLE_TICKS)
             assert progress == expected_progress, f"Failed for ticks={ticks}"
 
     def test_generic_type_detection_logic(self):
