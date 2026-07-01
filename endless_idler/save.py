@@ -408,6 +408,43 @@ def _normalized_save(save: RunSave) -> RunSave:
             continue
         deaths[char_id] = count
 
+    warp_pity: dict[str, int] = {}
+    for key, val in dict(getattr(save, "warp_pity", {})).items():
+        clean_key = key.strip()
+        if not clean_key:
+            continue
+        if isinstance(val, int) and not isinstance(val, bool) and val >= 0:
+            warp_pity[clean_key] = val
+
+    warp_pull_total: dict[str, int] = {}
+    for key, val in dict(getattr(save, "warp_pull_total", {})).items():
+        clean_key = key.strip()
+        if not clean_key:
+            continue
+        if isinstance(val, int) and not isinstance(val, bool) and val >= 0:
+            warp_pull_total[clean_key] = val
+
+    warp_last_rarity: dict[str, int | None] = {}
+    for key, val in dict(getattr(save, "warp_last_rarity", {})).items():
+        clean_key = key.strip()
+        if not clean_key:
+            continue
+        if val is None or (isinstance(val, int) and not isinstance(val, bool)):
+            warp_last_rarity[clean_key] = val
+
+    warp_character_obtained: dict[str, list[str]] = {}
+    for key, val in dict(getattr(save, "warp_character_obtained", {})).items():
+        clean_key = key.strip()
+        if not clean_key:
+            continue
+        if not isinstance(val, list):
+            continue
+        filtered = [
+            item for item in val if isinstance(item, str) and item.strip()
+        ]
+        if filtered:
+            warp_character_obtained[clean_key] = filtered
+
     return RunSave(
         version=SAVE_VERSION,
         tokens=tokens,
@@ -461,6 +498,10 @@ def _normalized_save(save: RunSave) -> RunSave:
         layout_owned_ordering=_normalize_layout_owned_ordering(
             getattr(save, "layout_owned_ordering", DEFAULT_LAYOUT_OWNED_ORDERING)
         ),
+        warp_pity=warp_pity,
+        warp_pull_total=warp_pull_total,
+        warp_last_rarity=warp_last_rarity,
+        warp_character_obtained=warp_character_obtained,
     )
 
 
