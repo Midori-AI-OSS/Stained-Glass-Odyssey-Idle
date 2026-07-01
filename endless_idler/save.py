@@ -28,9 +28,11 @@ from endless_idler.save_codec import normalized_passives
 from endless_idler.save_codec import normalized_blessings
 from endless_idler.save_codec import normalized_character_progress
 from endless_idler.save_codec import normalized_character_stats
+from endless_idler.save_codec import as_noneable_int_dict
+from endless_idler.save_codec import as_str_list_dict
 
 
-SAVE_VERSION = 12
+SAVE_VERSION = 13
 DEFAULT_RUN_TOKENS = 20
 DEFAULT_CHARACTER_COST = 1
 DEFAULT_SHOP_REROLL_COST = 2
@@ -132,6 +134,10 @@ class RunSave:
     battle_start_time: float = 0.0
     layout_tick_cooldown_seconds: float = DEFAULT_LAYOUT_TICK_COOLDOWN_SECONDS
     layout_owned_ordering: str = DEFAULT_LAYOUT_OWNED_ORDERING
+    warp_pity: dict[str, int] = field(default_factory=dict)
+    warp_pull_total: dict[str, int] = field(default_factory=dict)
+    warp_last_rarity: dict[str, int | None] = field(default_factory=dict)
+    warp_character_obtained: dict[str, list[str]] = field(default_factory=dict)
 
 
 class SaveManager:
@@ -223,6 +229,14 @@ class SaveManager:
             layout_owned_ordering=_normalize_layout_owned_ordering(
                 data.get("layout_owned_ordering", DEFAULT_LAYOUT_OWNED_ORDERING)
             ),
+            warp_pity=as_int_dict(data.get("warp_pity", {})),
+            warp_pull_total=as_int_dict(data.get("warp_pull_total", {})),
+            warp_last_rarity=as_noneable_int_dict(
+                data.get("warp_last_rarity", {})
+            ),
+            warp_character_obtained=as_str_list_dict(
+                data.get("warp_character_obtained", {})
+            ),
         )
         return _normalized_save(save)
 
@@ -253,6 +267,10 @@ class SaveManager:
             "idle_exp_mult": save.idle_exp_mult,
             "layout_tick_cooldown_seconds": save.layout_tick_cooldown_seconds,
             "layout_owned_ordering": save.layout_owned_ordering,
+            "warp_pity": save.warp_pity,
+            "warp_pull_total": save.warp_pull_total,
+            "warp_last_rarity": save.warp_last_rarity,
+            "warp_character_obtained": save.warp_character_obtained,
         }
 
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -390,6 +408,43 @@ def _normalized_save(save: RunSave) -> RunSave:
             continue
         deaths[char_id] = count
 
+    warp_pity: dict[str, int] = {}
+    for key, val in dict(getattr(save, "warp_pity", {})).items():
+        clean_key = key.strip()
+        if not clean_key:
+            continue
+        if isinstance(val, int) and not isinstance(val, bool) and val >= 0:
+            warp_pity[clean_key] = val
+
+    warp_pull_total: dict[str, int] = {}
+    for key, val in dict(getattr(save, "warp_pull_total", {})).items():
+        clean_key = key.strip()
+        if not clean_key:
+            continue
+        if isinstance(val, int) and not isinstance(val, bool) and val >= 0:
+            warp_pull_total[clean_key] = val
+
+    warp_last_rarity: dict[str, int | None] = {}
+    for key, val in dict(getattr(save, "warp_last_rarity", {})).items():
+        clean_key = key.strip()
+        if not clean_key:
+            continue
+        if val is None or (isinstance(val, int) and not isinstance(val, bool)):
+            warp_last_rarity[clean_key] = val
+
+    warp_character_obtained: dict[str, list[str]] = {}
+    for key, val in dict(getattr(save, "warp_character_obtained", {})).items():
+        clean_key = key.strip()
+        if not clean_key:
+            continue
+        if not isinstance(val, list):
+            continue
+        filtered = [
+            item for item in val if isinstance(item, str) and item.strip()
+        ]
+        if filtered:
+            warp_character_obtained[clean_key] = filtered
+
     return RunSave(
         version=SAVE_VERSION,
         tokens=tokens,
@@ -443,6 +498,10 @@ def _normalized_save(save: RunSave) -> RunSave:
         layout_owned_ordering=_normalize_layout_owned_ordering(
             getattr(save, "layout_owned_ordering", DEFAULT_LAYOUT_OWNED_ORDERING)
         ),
+        warp_pity=warp_pity,
+        warp_pull_total=warp_pull_total,
+        warp_last_rarity=warp_last_rarity,
+        warp_character_obtained=warp_character_obtained,
     )
 
 

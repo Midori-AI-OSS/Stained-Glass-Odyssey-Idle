@@ -106,6 +106,52 @@ def as_float(value: object, *, default: float) -> float:
     return float(default)
 
 
+def as_str_list_dict(value: object) -> dict[str, list[str]]:
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, list[str]] = {}
+    for key, raw in value.items():
+        if not isinstance(key, str):
+            continue
+        stripped_key = key.strip()
+        if not stripped_key:
+            continue
+        if not isinstance(raw, list):
+            continue
+        items: list[str] = []
+        for item in raw:
+            if isinstance(item, str):
+                stripped = item.strip()
+                if stripped:
+                    items.append(stripped)
+        if items:
+            result[stripped_key] = items
+    return result
+
+
+def as_noneable_int_dict(value: object) -> dict[str, int | None]:
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, int | None] = {}
+    for key, raw in value.items():
+        if not isinstance(key, str):
+            continue
+        stripped_key = key.strip()
+        if not stripped_key:
+            continue
+        if raw is None:
+            result[stripped_key] = None
+            continue
+        if isinstance(raw, bool):
+            continue
+        try:
+            number = int(raw)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+        result[stripped_key] = number
+    return result
+
+
 def as_str_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
