@@ -38,3 +38,8 @@ Verify that `new_run_save()` and the rest of the save bootstrap pipeline produce
 - FIXED: Added `sanitize_save_characters()` to verification scope. It touches many fields but not warp fields — must confirm this holds.
 - PASS: `bootstrap_party()` confirmed to only touch `onsite`, `offsite`, `standby`, `stacks` (lines 34–89).
 - INFO: This task is verification-only; zero code changes expected. Task 03 handles serialization, Task 04 handles normalization.
+- VERIFIED: No code changes needed — all paths produce correct defaults.
+  - `new_run_save()`: `RunSave(tokens=DEFAULT_RUN_TOKENS)` — dataclass `field(default_factory=dict)` produces `{}` for all four warp fields.
+  - `_normalized_save(new_run_save())`: Normalization loops over empty dicts → empty result dicts, no mutation.
+  - `bootstrap_party()`: Only touches `onsite`, `offsite`, `standby`, `stacks` — warp fields unaffected.
+  - `sanitize_save_characters()`: Only touches character-related fields (`bar`, `onsite`, `offsite`, `standby`, `stacks`, `inventory`, `character_progress`, `character_stats`, `character_initial_stats`, `character_deaths`) — warp fields survive unscathed.
