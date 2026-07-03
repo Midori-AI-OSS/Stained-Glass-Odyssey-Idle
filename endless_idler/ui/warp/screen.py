@@ -22,6 +22,15 @@ from endless_idler.warp.engine import WarpEngine
 from endless_idler.warp.engine import WarpOutcome
 
 
+def _repolish(widget: QWidget) -> None:
+    style = widget.style()
+    if style is None:
+        return
+    style.unpolish(widget)
+    style.polish(widget)
+    widget.update()
+
+
 class WarpScreen(QWidget):
     """Warp (gacha pull) screen with banner tabs, detail panel, and pull button."""
 
@@ -88,10 +97,7 @@ class WarpScreen(QWidget):
 
         root.addWidget(self._build_banner_panel(), 0)
 
-        self._pull_button = QPushButton("Pull (160 Shards)", self)
-        self._pull_button.setObjectName("WarpPullButton")
-        _ = self._pull_button.clicked.connect(self._on_pull)
-        root.addWidget(self._pull_button, 0)
+        root.addWidget(self._build_pull_section(), 0)
 
         root.addWidget(self._build_result_panel(), 1)
 
@@ -121,14 +127,6 @@ class WarpScreen(QWidget):
         self._pool_label.setWordWrap(True)
         layout.addWidget(self._pool_label, 0)
 
-        self._cost_label = QLabel("Cost: 160 Shards", panel)
-        self._cost_label.setObjectName("WarpCostLabel")
-        layout.addWidget(self._cost_label, 0)
-
-        self._balance_label = QLabel("Balance: 0", panel)
-        self._balance_label.setObjectName("WarpBalanceLabel")
-        layout.addWidget(self._balance_label, 0)
-
         self._pity_label = QLabel("Pity: 0", panel)
         layout.addWidget(self._pity_label, 0)
 
@@ -139,6 +137,31 @@ class WarpScreen(QWidget):
         layout.addWidget(self._last_rarity_label, 0)
 
         return panel
+
+    def _build_pull_section(self) -> QFrame:
+        section = QFrame(self)
+        section.setObjectName("WarpPullSection")
+
+        layout = QVBoxLayout(section)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(8)
+
+        self._cost_label = QLabel("Cost: 160 Shards", section)
+        self._cost_label.setObjectName("WarpCostLabel")
+        self._cost_label.setWordWrap(True)
+        layout.addWidget(self._cost_label, 0)
+
+        self._balance_label = QLabel("Your balance: 0", section)
+        self._balance_label.setObjectName("WarpBalanceLabel")
+        self._balance_label.setWordWrap(True)
+        layout.addWidget(self._balance_label, 0)
+
+        self._pull_button = QPushButton("Pull — 160 Shards", section)
+        self._pull_button.setObjectName("WarpPullButton")
+        _ = self._pull_button.clicked.connect(self._on_pull)
+        layout.addWidget(self._pull_button, 0)
+
+        return section
 
     def _build_result_panel(self) -> QFrame:
         panel = QFrame(self)
@@ -291,14 +314,26 @@ class WarpScreen(QWidget):
         has_pool = self._banner_has_pool(banner)
         shard_label = self._shard_label_for_banner(banner_id)
         cost = WarpEngine.get_cost()
+        engine = self._build_engine()
+        affordable = engine.can_afford()
+        balance = self._shard_balance_for_banner(banner_id)
 
         banner_label = self._BANNER_LABELS.get(banner_id, banner_id.title())
         self._banner_name_label.setText(f"{banner_label} Banner")
         self._pool_label.setText(self._pool_summary_for_banner(banner))
-        self._cost_label.setText(f"Cost: {cost} {shard_label}")
-        self._balance_label.setText(
-            f"Balance: {self._shard_balance_for_banner(banner_id)} {shard_label}"
-        )
+
+        # Cost label — prominent, with YOLO suffix
+        if banner_id == "yolo":
+            self._cost_label.setText(f"Cost: {cost} Shards (your choice)")
+        else:
+            self._cost_label.setText(f"Cost: {cost} {shard_label}")
+
+        # Balance label — YOLO shows count only
+        if banner_id == "yolo":
+            self._balance_label.setText(f"Your balance: {balance}")
+        else:
+            self._balance_label.setText(f"Your balance: {balance} {shard_label}")
+
         self._pity_label.setText(f"Pity: {save.warp_pity.get(banner_id, 0)}")
         self._pull_total_label.setText(
             f"Total Pulls: {save.warp_pull_total.get(banner_id, 0)}"
@@ -306,9 +341,22 @@ class WarpScreen(QWidget):
         last_rarity = self._format_rarity(save.warp_last_rarity.get(banner_id))
         self._last_rarity_label.setText(f"Last: {last_rarity}")
 
-        engine = self._build_engine()
-        self._pull_button.setText(f"Pull ({cost} {shard_label})")
-        self._pull_button.setEnabled(has_pool and engine.can_afford())
+        # Pull button
+        if affordable and has_pool:
+            pull_label = self._shard_label_for_banner(banner_id)
+            self._pull_button.setText(f"Pull — {cost} {pull_label}")
+            self._pull_button.setEnabled(True)
+        else:
+            self._pull_button.setText("Not enough shards")
+            self._pull_button.setEnabled(False)
+
+        # Dynamic affordability styling
+        affordability = "affordable" if affordable else "insufficient"
+        self._cost_label.setProperty("affordability", affordability)
+        self._balance_label.setProperty("affordability", affordability)
+        _repolish(self._cost_label)
+        _repolish(self._balance_label)
+
         self._refresh_result_panel(banner_id)
 
     def _refresh_result_panel(self, banner_id: str) -> None:

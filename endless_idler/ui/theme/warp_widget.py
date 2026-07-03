@@ -91,16 +91,42 @@ QTabBar::tab:selected {
     color: rgba(237, 239, 245, 235);
 }
 
+QFrame#WarpPullSection {
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 rgba(18, 20, 28, 40),
+        stop: 0.08 rgba(18, 20, 28, 106),
+        stop: 0.92 rgba(18, 20, 28, 106),
+        stop: 1 rgba(18, 20, 28, 40)
+    );
+    border: 1px solid rgba(255, 255, 255, 16);
+    border-radius: 0px;
+}
+
 QLabel#WarpCostLabel {
-    color: rgba(237, 239, 245, 210);
+    font-size: 16px;
+    font-weight: 700;
+}
+
+QLabel#WarpCostLabel[affordability="affordable"] {
+    color: rgba(16, 185, 129, 240);
+}
+
+QLabel#WarpCostLabel[affordability="insufficient"] {
+    color: rgba(255, 110, 80, 230);
+}
+
+QLabel#WarpBalanceLabel {
     font-size: 13px;
     font-weight: 650;
 }
 
-QLabel#WarpBalanceLabel {
+QLabel#WarpBalanceLabel[affordability="affordable"] {
     color: rgba(237, 239, 245, 210);
-    font-size: 13px;
-    font-weight: 650;
+}
+
+QLabel#WarpBalanceLabel[affordability="insufficient"] {
+    color: rgba(237, 239, 245, 100);
 }
 
 QFrame#WarpYoloPrefsPanel {
