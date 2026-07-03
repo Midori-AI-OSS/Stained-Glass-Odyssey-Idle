@@ -598,11 +598,13 @@ def sanitize_save_characters(*, save: RunSave, allowed_char_ids: set[str]) -> Ru
     save.stacks = {
         key: value for key, value in save.stacks.items() if key in allowed_or_reserved
     }
-    save.inventory = {
+    sanitized_inventory = {
         key: value
         for key, value in save.inventory.items()
         if key in get_item_ids() and value > 0
     }
+    save.inventory.clear()
+    save.inventory.update(sanitized_inventory)
     save.character_progress = {
         key: value
         for key, value in save.character_progress.items()
