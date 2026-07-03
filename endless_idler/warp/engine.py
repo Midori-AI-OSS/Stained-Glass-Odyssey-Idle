@@ -1,4 +1,4 @@
-"""Warp engine core — roll resolution, pity tracking, and YOLO logic."""
+"""Warp engine core — cost deduction, roll resolution, pity tracking, and YOLO logic."""
 
 from __future__ import annotations
 
@@ -9,11 +9,13 @@ from dataclasses import dataclass
 from endless_idler.save import RunSave
 from endless_idler.warp.banners import BannerCharacter
 from endless_idler.warp.banners import BannerDefinition
+from endless_idler.warp.constants import BANNER_SHARD_MAP
 from endless_idler.warp.constants import PITY_BASE_RATE
 from endless_idler.warp.constants import PITY_HARD_GUARANTEE
 from endless_idler.warp.constants import PITY_SLOPE
 from endless_idler.warp.constants import PRISMATIC_FALLBACK_ID
 from endless_idler.warp.constants import SEVEN_STAR_PROMO_RATE
+from endless_idler.warp.constants import SHARD_COST_PER_PULL
 from endless_idler.warp.constants import SIX_STAR_PROMO_RATE
 from endless_idler.warp.constants import YOLO_RATE_MULTIPLIER
 
@@ -63,17 +65,50 @@ class WarpEngine:
     # Public API
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def get_cost() -> int:
+        """Return the shard cost for a single pull."""
+        return SHARD_COST_PER_PULL
+
+    def can_afford(self) -> bool:
+        """Return True if the player has enough shards for this banner."""
+        cost = self.get_cost()
+        inventory = self._save.inventory
+
+        if self._banner_id == "yolo":
+            available = self._yolo_available_shards()
+            total = sum(available.values())
+            return total >= cost
+
+        shard_id = BANNER_SHARD_MAP.get(self._banner_id)
+        if shard_id is None:
+            return False
+        return inventory.get(shard_id, 0) >= cost
+
     def pull(self) -> WarpOutcome:
         """Execute a single warp pull and return the outcome.
 
+        Deducts shard cost before rolling. Raises ``ValueError`` if the player
+        cannot afford the pull.
+
         The pull follows the roll-resolution pipeline:
 
-        1. Read current pity and increment the total-pull counter.
-        2. Compute the base 5★ rate (``PITY_BASE_RATE + pity * PITY_SLOPE``).
-        3. Apply YOLO rate multiplier if this is the *yolo* banner.
-        4. Enforce the hard pity guarantee.
-        5. Roll for 5★ → 6★ → 7★ in sequence.
+        1. Verify and deduct the shard cost.
+        2. Read current pity and increment the total-pull counter.
+        3. Compute the base 5★ rate (``PITY_BASE_RATE + pity * PITY_SLOPE``).
+        4. Apply YOLO rate multiplier if this is the *yolo* banner.
+        5. Enforce the hard pity guarantee.
+        6. Roll for 5★ → 6★ → 7★ in sequence.
         """
+        if not self.can_afford():
+            message = (
+                f"Cannot afford pull on banner '{self._banner_id}': "
+                + f"need {self.get_cost()} shards"
+            )
+            raise ValueError(message)
+
+        self._deduct_cost()
+
         save = self._save
         banner_id = self._banner_id
         banner = self._banner
@@ -152,6 +187,78 @@ class WarpEngine:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _yolo_available_shards(self) -> dict[str, int]:
+        """Return positive YOLO-eligible shard counts from inventory."""
+        inventory = self._save.inventory
+        result: dict[str, int] = {}
+        for shard_id in BANNER_SHARD_MAP.values():
+            count = inventory.get(shard_id, 0)
+            if count > 0:
+                result[shard_id] = count
+        return result
+
+    def _deduct_yolo(self, cost: int) -> None:
+        """Deduct *cost* shards from YOLO-eligible shard types.
+
+        Preferred damage types from ``save.warp_yolo_preferences`` are spent
+        first, in order. Remaining available shard types are used afterward.
+
+        Raises ``ValueError`` if total available shards are below *cost*.
+        """
+        inventory = self._save.inventory
+        available = self._yolo_available_shards()
+        total = sum(available.values())
+        if total < cost:
+            raise ValueError(
+                f"Insufficient shards for YOLO pull: need {cost}, have {total}"
+            )
+
+        preferred_ids: list[str] = []
+        seen_preferred: set[str] = set()
+        for preference in self._save.warp_yolo_preferences:
+            shard_id = f"{preference}_shard"
+            if shard_id not in available or shard_id in seen_preferred:
+                continue
+            preferred_ids.append(shard_id)
+            seen_preferred.add(shard_id)
+
+        fallback_ids = [
+            shard_id for shard_id in available if shard_id not in seen_preferred
+        ]
+
+        remaining = cost
+        for shard_id in preferred_ids + fallback_ids:
+            if remaining <= 0:
+                break
+            take = min(inventory.get(shard_id, 0), remaining)
+            inventory[shard_id] -= take
+            remaining -= take
+
+    def _deduct_elemental(self, cost: int) -> None:
+        """Deduct *cost* shards from the banner's matching shard type.
+
+        Raises ``ValueError`` if the banner has no shard mapping or the player
+        has insufficient shards.
+        """
+        shard_id = BANNER_SHARD_MAP.get(self._banner_id)
+        if shard_id is None:
+            raise ValueError(f"No shard type mapped for banner '{self._banner_id}'")
+
+        inventory = self._save.inventory
+        balance = inventory.get(shard_id, 0)
+        if balance < cost:
+            raise ValueError(f"Insufficient {shard_id}: need {cost}, have {balance}")
+
+        inventory[shard_id] = balance - cost
+
+    def _deduct_cost(self) -> None:
+        """Deduct the pull cost from inventory for the current banner type."""
+        cost = self.get_cost()
+        if self._banner_id == "yolo":
+            self._deduct_yolo(cost)
+        else:
+            self._deduct_elemental(cost)
 
     def _record_obtained(self, character_id: str, rarity: int | None) -> None:
         """Record an obtained character and update last-pulled rarity."""
