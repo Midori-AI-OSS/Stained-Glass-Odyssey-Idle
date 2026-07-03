@@ -296,7 +296,7 @@ class WarpScreen(QWidget):
 
         self._last_outcome = outcome
         self._last_outcome_banner_id = banner_id
-        self._save_store.persist()
+        self._save_store.persist(force=True)
         self._refresh_display()
 
     def _build_engine(self) -> WarpEngine:

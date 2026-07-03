@@ -193,4 +193,8 @@ class RunSaveStore:
     @staticmethod
     def _copy_save(*, source: RunSave, target: RunSave) -> None:
         for field in fields(RunSave):
-            setattr(target, field.name, deepcopy(getattr(source, field.name)))
+            if field.name == "inventory":
+                target.inventory.clear()
+                target.inventory.update(source.inventory)
+            else:
+                setattr(target, field.name, deepcopy(getattr(source, field.name)))

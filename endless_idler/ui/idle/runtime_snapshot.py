@@ -44,7 +44,8 @@ def apply_idle_runtime_snapshot_to_save(
     )
     inventory = _copy_inventory(snapshot.get("inventory"))
     if inventory is not None:
-        save.inventory = inventory
+        save.inventory.clear()
+        save.inventory.update(inventory)
 
 
 def _copy_nested_dict(raw: object) -> dict[str, dict[str, Any]] | None:
