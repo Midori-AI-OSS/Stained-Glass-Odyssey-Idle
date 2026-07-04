@@ -46,6 +46,9 @@ from endless_idler.ui.theme.shard_progress_bar_widget import (
 from endless_idler.ui.theme.tooltip_widget import (
     STYLESHEET as TOOLTIP_WIDGET_STYLESHEET,
 )
+from endless_idler.ui.theme.warp_widget import (
+    STYLESHEET as WARP_WIDGET_STYLESHEET,
+)
 
 
 def build_stained_glass_stylesheet() -> str:
@@ -66,6 +69,7 @@ def build_stained_glass_stylesheet() -> str:
         SETTINGS_WIDGET_STYLESHEET,
         SHARD_PROGRESS_BAR_WIDGET_STYLESHEET,
         TOOLTIP_WIDGET_STYLESHEET,
+        WARP_WIDGET_STYLESHEET,
     )
     return "\n\n".join(section for section in sections if section)
 

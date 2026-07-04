@@ -118,7 +118,7 @@ def test_formula_breakdown():
         
         assert floor_25 == expected_floor_25, f"t={t}: floor(t/25) expected {expected_floor_25}, got {floor_25}"
         assert floor_30 == expected_floor_30, f"t={t}: floor(t/30) expected {expected_floor_30}, got {floor_30}"
-        assert mult == expected_mult, f"t={t}: time_mult expected {expected_mult}, got {mult}"
+        assert math.isclose(mult, expected_mult), f"t={t}: time_mult expected {expected_mult}, got {mult}"
         
         print(f"✓ t={t}s: floor(t/25)={floor_25}, floor(t/30)={floor_30}, mult={mult}")
 

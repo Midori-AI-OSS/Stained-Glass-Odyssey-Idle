@@ -24,6 +24,7 @@ from endless_idler.save_codec import as_float
 from endless_idler.save_codec import as_int
 from endless_idler.save_codec import as_int_dict
 from endless_idler.save_codec import as_optional_str_list
+from endless_idler.save_codec import as_str_list
 from endless_idler.save_codec import normalized_passives
 from endless_idler.save_codec import normalized_blessings
 from endless_idler.save_codec import normalized_character_progress
@@ -32,7 +33,7 @@ from endless_idler.save_codec import as_noneable_int_dict
 from endless_idler.save_codec import as_str_list_dict
 
 
-SAVE_VERSION = 13
+SAVE_VERSION = 14
 DEFAULT_RUN_TOKENS = 20
 DEFAULT_CHARACTER_COST = 1
 DEFAULT_SHOP_REROLL_COST = 2
@@ -138,6 +139,7 @@ class RunSave:
     warp_pull_total: dict[str, int] = field(default_factory=dict)
     warp_last_rarity: dict[str, int | None] = field(default_factory=dict)
     warp_character_obtained: dict[str, list[str]] = field(default_factory=dict)
+    warp_yolo_preferences: list[str] = field(default_factory=list)
 
 
 class SaveManager:
@@ -237,6 +239,9 @@ class SaveManager:
             warp_character_obtained=as_str_list_dict(
                 data.get("warp_character_obtained", {})
             ),
+            warp_yolo_preferences=as_str_list(
+                data.get("warp_yolo_preferences", [])
+            ),
         )
         return _normalized_save(save)
 
@@ -271,6 +276,7 @@ class SaveManager:
             "warp_pull_total": save.warp_pull_total,
             "warp_last_rarity": save.warp_last_rarity,
             "warp_character_obtained": save.warp_character_obtained,
+            "warp_yolo_preferences": save.warp_yolo_preferences,
         }
 
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -445,6 +451,21 @@ def _normalized_save(save: RunSave) -> RunSave:
         if filtered:
             warp_character_obtained[clean_key] = filtered
 
+    valid_damage_types = {"fire", "ice", "wind", "lightning", "light", "dark"}
+    raw_yolo_preferences = cast(list[object], save.warp_yolo_preferences)
+    warp_yolo_preferences: list[str] = []
+    _pref_seen: set[str] = set()
+    for pref in raw_yolo_preferences:
+        if not isinstance(pref, str):
+            continue
+        cleaned = pref.strip().lower()
+        if not cleaned or cleaned not in valid_damage_types:
+            continue
+        if cleaned in _pref_seen:
+            continue
+        _pref_seen.add(cleaned)
+        warp_yolo_preferences.append(cleaned)
+
     return RunSave(
         version=SAVE_VERSION,
         tokens=tokens,
@@ -502,6 +523,7 @@ def _normalized_save(save: RunSave) -> RunSave:
         warp_pull_total=warp_pull_total,
         warp_last_rarity=warp_last_rarity,
         warp_character_obtained=warp_character_obtained,
+        warp_yolo_preferences=warp_yolo_preferences,
     )
 
 
@@ -576,11 +598,13 @@ def sanitize_save_characters(*, save: RunSave, allowed_char_ids: set[str]) -> Ru
     save.stacks = {
         key: value for key, value in save.stacks.items() if key in allowed_or_reserved
     }
-    save.inventory = {
+    sanitized_inventory = {
         key: value
         for key, value in save.inventory.items()
         if key in get_item_ids() and value > 0
     }
+    save.inventory.clear()
+    save.inventory.update(sanitized_inventory)
     save.character_progress = {
         key: value
         for key, value in save.character_progress.items()

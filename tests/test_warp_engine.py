@@ -6,6 +6,7 @@ import json
 import random
 
 from pathlib import Path
+from typing import override
 
 import pytest
 
@@ -13,10 +14,12 @@ from endless_idler.save import RunSave
 from endless_idler.save import SaveManager
 from endless_idler.warp.banners import BannerCharacter
 from endless_idler.warp.banners import BannerDefinition
+from endless_idler.warp.constants import BANNER_SHARD_MAP
 from endless_idler.warp.constants import PITY_BASE_RATE
 from endless_idler.warp.constants import PITY_HARD_GUARANTEE
 from endless_idler.warp.constants import PITY_SLOPE
 from endless_idler.warp.constants import PRISMATIC_FALLBACK_ID
+from endless_idler.warp.constants import SHARD_COST_PER_PULL
 from endless_idler.warp.engine import WarpEngine
 from endless_idler.warp.engine import WarpOutcome
 
@@ -49,6 +52,17 @@ def _make_banner(
     )
 
 
+def _seed_pull_shards(save: RunSave, banner_id: str, pull_count: int = 1) -> None:
+    """Give *save* enough shards for *pull_count* pulls on *banner_id*."""
+    amount = SHARD_COST_PER_PULL * pull_count
+    if banner_id == "yolo":
+        shard_id = BANNER_SHARD_MAP["fire"]
+    else:
+        shard_id = BANNER_SHARD_MAP[banner_id]
+
+    save.inventory[shard_id] = save.inventory.get(shard_id, 0) + amount
+
+
 def _make_engine(
     save: RunSave | None = None,
     banner_id: str = "fire",
@@ -57,12 +71,113 @@ def _make_engine(
 ) -> WarpEngine:
     if save is None:
         save = RunSave()
+    _seed_pull_shards(save, banner_id)
     if banner is None:
         banner = _make_banner(
             banner_id=banner_id,
             five_star=[_char("hero_a")],
         )
     return WarpEngine(save, banner_id, banner, rng=random.Random(seed))
+
+
+# ------------------------------------------------------------------
+# Payment
+# ------------------------------------------------------------------
+
+
+def test_get_cost_returns_shard_cost_per_pull() -> None:
+    """The public cost helper exposes the configured shard cost."""
+    assert WarpEngine.get_cost() == SHARD_COST_PER_PULL
+
+
+def test_can_afford_elemental_requires_matching_shards() -> None:
+    """Elemental banners require 160 matching elemental shards."""
+    banner = _make_banner(banner_id="fire")
+    save = RunSave()
+    save.inventory["fire_shard"] = SHARD_COST_PER_PULL - 1
+    save.inventory["ice_shard"] = SHARD_COST_PER_PULL
+    engine = WarpEngine(save, "fire", banner, rng=random.Random(0))
+
+    assert engine.can_afford() is False
+
+    save.inventory["fire_shard"] = SHARD_COST_PER_PULL
+    assert engine.can_afford() is True
+
+
+def test_can_afford_yolo_uses_total_eligible_shards() -> None:
+    """YOLO affordability uses total shards across all eligible shard types."""
+    banner = _make_banner(banner_id="yolo")
+    save = RunSave()
+    save.inventory["fire_shard"] = 100
+    save.inventory["ice_shard"] = 59
+    engine = WarpEngine(save, "yolo", banner, rng=random.Random(0))
+
+    assert engine.can_afford() is False
+
+    save.inventory["dark_shard"] = 1
+    assert engine.can_afford() is True
+
+
+def test_pull_raises_value_error_when_unaffordable() -> None:
+    """Unaffordable pulls raise before mutating pull counters."""
+    banner = _make_banner(banner_id="fire")
+    save = RunSave()
+    engine = WarpEngine(save, "fire", banner, rng=random.Random(0))
+
+    with pytest.raises(ValueError, match="Cannot afford pull"):
+        _ = engine.pull()
+
+    assert save.inventory == {}
+    assert "fire" not in save.warp_pull_total
+
+
+def test_elemental_pull_deducts_matching_shards() -> None:
+    """Successful elemental pulls deduct only the banner's matching shards."""
+    banner = _make_banner(banner_id="fire", five_star=[_char("hero_a")])
+    save = RunSave()
+    save.inventory["fire_shard"] = SHARD_COST_PER_PULL + 1
+    save.inventory["ice_shard"] = SHARD_COST_PER_PULL
+    save.warp_pity["fire"] = PITY_HARD_GUARANTEE
+    engine = WarpEngine(save, "fire", banner, rng=random.Random(0))
+
+    _ = engine.pull()
+
+    assert save.inventory["fire_shard"] == 1
+    assert save.inventory["ice_shard"] == SHARD_COST_PER_PULL
+
+
+def test_yolo_pull_deducts_preferences_then_fallback() -> None:
+    """YOLO pulls spend preferred shard types first, then available fallback types."""
+    banner = _make_banner(banner_id="yolo", five_star=[_char("hero_a")])
+    save = RunSave()
+    save.warp_yolo_preferences = ["ice", "fire"]
+    save.inventory["ice_shard"] = 70
+    save.inventory["fire_shard"] = 50
+    save.inventory["dark_shard"] = 100
+    save.warp_pity["yolo"] = PITY_HARD_GUARANTEE
+    engine = WarpEngine(save, "yolo", banner, rng=random.Random(0))
+
+    _ = engine.pull()
+
+    assert save.inventory["ice_shard"] == 0
+    assert save.inventory["fire_shard"] == 0
+    assert save.inventory["dark_shard"] == 60
+
+
+def test_deduct_yolo_raises_when_total_shards_are_insufficient() -> None:
+    """YOLO deduction rejects totals below the per-pull cost."""
+    class AlwaysAffordableWarpEngine(WarpEngine):
+        @override
+        def can_afford(self) -> bool:
+            return True
+
+    banner = _make_banner(banner_id="yolo")
+    save = RunSave()
+    save.inventory["fire_shard"] = SHARD_COST_PER_PULL - 1
+    engine = AlwaysAffordableWarpEngine(save, "yolo", banner, rng=random.Random(0))
+
+    with pytest.raises(ValueError, match="Insufficient shards for YOLO pull"):
+        _ = engine.pull()
 
 
 # ------------------------------------------------------------------
@@ -119,6 +234,7 @@ def test_seven_star_odds_astronomically_low() -> None:
     )
     rng = random.Random(0)
     save = RunSave()
+    _seed_pull_shards(save, "fire", 100_000)
     engine = WarpEngine(save, "fire", banner, rng=rng)
 
     seven_star_count = 0
@@ -144,6 +260,7 @@ def test_pity_resets_after_five_star() -> None:
         five_star=[_char("hero_a")],
     )
     save = RunSave()
+    _seed_pull_shards(save, "fire")
     save.warp_pity["fire"] = PITY_HARD_GUARANTEE  # Guarantee the 5★
     engine = WarpEngine(save, "fire", banner, rng=random.Random(0))
     outcome = engine.pull()
@@ -162,6 +279,7 @@ def test_pity_resets_after_six_star() -> None:
         six_star=[_char("six_star_hero", stars=6)],
     )
     save = RunSave()
+    _seed_pull_shards(save, "yolo", 500)
     # Force high pity for guaranteed 5★, then use high YOLO 6★ rate
     save.warp_pity["yolo"] = PITY_HARD_GUARANTEE
     engine = WarpEngine(save, "yolo", banner, rng=random.Random(0))
@@ -187,6 +305,7 @@ def test_pity_resets_after_seven_star() -> None:
         six_star=[_char("six_star_hero", stars=6)],
     )
     save = RunSave()
+    _seed_pull_shards(save, "yolo", 2000)
 
     # Override the RNG so we get deterministic 7★:
     # We'll use a tiny RNG and force hard pity repeatedly
@@ -226,6 +345,7 @@ def test_pity_increments_on_non_five_star() -> None:
         five_star=[_char("hero_a")],
     )
     save = RunSave()
+    _seed_pull_shards(save, "fire", 3)
     rng = random.Random(0)
     engine = WarpEngine(save, "fire", banner, rng=rng)
 
@@ -245,6 +365,7 @@ def test_pity_increments_until_five_star() -> None:
         five_star=[_char("hero_a")],
     )
     save = RunSave()
+    _seed_pull_shards(save, "fire", 500)
     engine = WarpEngine(save, "fire", banner, rng=random.Random(42))
 
     prev_pity = 0
@@ -270,6 +391,7 @@ def test_pull_total_increments() -> None:
         five_star=[_char("hero_a")],
     )
     save = RunSave()
+    _seed_pull_shards(save, "fire", 10)
     engine = WarpEngine(save, "fire", banner, rng=random.Random(0))
 
     for i in range(1, 11):
@@ -282,6 +404,8 @@ def test_pull_total_per_banner() -> None:
     fire_banner = _make_banner(banner_id="fire", five_star=[_char("hero_a")])
     ice_banner = _make_banner(banner_id="ice", five_star=[_char("hero_b")])
     save = RunSave()
+    _seed_pull_shards(save, "fire", 2)
+    _seed_pull_shards(save, "ice")
 
     fire_engine = WarpEngine(save, "fire", fire_banner, rng=random.Random(0))
     ice_engine = WarpEngine(save, "ice", ice_banner, rng=random.Random(1))
@@ -306,6 +430,7 @@ def test_last_rarity_tracks_rarity() -> None:
         five_star=[_char("hero_a")],
     )
     save = RunSave()
+    _seed_pull_shards(save, "fire", 500)
     engine = WarpEngine(save, "fire", banner, rng=random.Random(0))
 
     # Pull until 5★, verify rarity recorded
@@ -322,6 +447,7 @@ def test_last_rarity_is_none_on_no_hit() -> None:
         five_star=[_char("hero_a")],
     )
     save = RunSave()
+    _seed_pull_shards(save, "fire", 21)
     rng = random.Random(0)
     engine = WarpEngine(save, "fire", banner, rng=rng)
 
@@ -349,6 +475,7 @@ def test_obtained_accumulates_character_ids() -> None:
         five_star=[_char("hero_a")],
     )
     save = RunSave()
+    _seed_pull_shards(save, "fire", 2)
     engine = WarpEngine(save, "fire", banner, rng=random.Random(0))
 
     save.warp_pity["fire"] = PITY_HARD_GUARANTEE
@@ -380,13 +507,15 @@ def test_yolo_rate_boost() -> None:
     save = RunSave()
     rng_normal = random.Random(12345)
     rng_yolo = random.Random(12345)
+    trials = 2000
+    _seed_pull_shards(save, "fire", trials)
+    _seed_pull_shards(save, "yolo", trials)
 
     normal_engine = WarpEngine(save, "fire", normal_banner, rng=rng_normal)
     yolo_engine = WarpEngine(save, "yolo", yolo_banner, rng=rng_yolo)
 
     normal_hits = 0
     yolo_hits = 0
-    trials = 2000
 
     for _ in range(trials):
         if normal_engine.pull().rarity is not None:
@@ -406,6 +535,7 @@ def test_yolo_at_max_pity_guarantees_five_star() -> None:
         five_star=[_char("hero_a")],
     )
     save = RunSave()
+    _seed_pull_shards(save, "yolo", 5)
     engine = WarpEngine(save, "yolo", yolo_banner, rng=random.Random(0))
 
     # Force hard pity
@@ -429,6 +559,7 @@ def test_prismatic_fallback_empty_pools() -> None:
     """Banner with empty 5★ and 6★ pools: rarity is None, char is prismatic_shard."""
     b = _make_banner(banner_id="fire")
     save = RunSave()
+    _seed_pull_shards(save, "fire")
     save.warp_pity["fire"] = PITY_HARD_GUARANTEE
     engine = WarpEngine(save, "fire", b, rng=random.Random(0))
     outcome = engine.pull()
@@ -446,6 +577,7 @@ def test_prismatic_5star_fallback_when_6star_pool_empty() -> None:
         # six_star_pool intentionally empty
     )
     save = RunSave()
+    _seed_pull_shards(save, "yolo", 500)
     save.warp_pity["yolo"] = PITY_HARD_GUARANTEE
 
     # On YOLO, SIX_STAR_PROMO_RATE is multiplied by 50, so it's very likely
@@ -531,6 +663,8 @@ def test_save_round_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
 
     # Perform pulls
     save = RunSave()
+    _seed_pull_shards(save, "fire", 10)
+    save.warp_yolo_preferences = ["fire", "ice"]
     engine = WarpEngine(save, "fire", banner, rng=random.Random(0))
     for _ in range(10):
         engine.pull()
@@ -545,6 +679,7 @@ def test_save_round_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     assert loaded.warp_pull_total == save.warp_pull_total
     assert loaded.warp_last_rarity == save.warp_last_rarity
     assert loaded.warp_character_obtained == save.warp_character_obtained
+    assert loaded.warp_yolo_preferences == save.warp_yolo_preferences
 
 
 def test_save_round_trip_persists_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -558,6 +693,8 @@ def test_save_round_trip_persists_json(monkeypatch: pytest.MonkeyPatch, tmp_path
     )
 
     save = RunSave()
+    _seed_pull_shards(save, "ice", 5)
+    save.warp_yolo_preferences = ["ice", "dark"]
     engine = WarpEngine(save, "ice", banner, rng=random.Random(99))
     save.warp_pity["ice"] = 42
     save.warp_pull_total["ice"] = 100
@@ -571,6 +708,52 @@ def test_save_round_trip_persists_json(monkeypatch: pytest.MonkeyPatch, tmp_path
     assert "warp_pull_total" in raw
     assert "warp_last_rarity" in raw
     assert "warp_character_obtained" in raw
+    assert raw["warp_yolo_preferences"] == ["ice", "dark"]
+
+
+def test_save_load_v13_defaults_yolo_preferences(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """v13 saves without YOLO preferences load with an empty preference list."""
+    save_path = tmp_path / "save.json"
+    monkeypatch.setenv("ENDLESS_IDLER_SAVE_PATH", str(save_path))
+    save_path.write_text(json.dumps({"version": 13}), encoding="utf-8")
+
+    loaded = SaveManager().load()
+
+    assert loaded is not None
+    assert loaded.version == 14
+    assert loaded.warp_yolo_preferences == []
+
+
+def test_save_normalizes_yolo_preferences(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """YOLO preferences normalize to valid, unique damage type IDs."""
+    save_path = tmp_path / "save.json"
+    monkeypatch.setenv("ENDLESS_IDLER_SAVE_PATH", str(save_path))
+
+    save = RunSave()
+    save.warp_yolo_preferences = [
+        " Fire ",
+        "water",
+        "ICE",
+        "fire",
+        "arcane",
+        " dark ",
+        "",
+    ]
+
+    SaveManager().save(save)
+
+    raw = json.loads(save_path.read_text(encoding="utf-8"))
+    assert raw["warp_yolo_preferences"] == ["fire", "ice", "dark"]
+
+    loaded = SaveManager().load()
+    assert loaded is not None
+    assert loaded.warp_yolo_preferences == ["fire", "ice", "dark"]
 
 
 # ------------------------------------------------------------------
@@ -583,6 +766,8 @@ def test_banner_state_isolation() -> None:
     fire_banner = _make_banner(banner_id="fire", five_star=[_char("hero_a")])
     ice_banner = _make_banner(banner_id="ice", five_star=[_char("hero_b")])
     save = RunSave()
+    _seed_pull_shards(save, "fire", 25)
+    _seed_pull_shards(save, "ice", 5)
 
     fire_engine = WarpEngine(save, "fire", fire_banner, rng=random.Random(100))
     ice_engine = WarpEngine(save, "ice", ice_banner, rng=random.Random(200))
@@ -614,6 +799,7 @@ def test_hard_guarantee_at_pity_179() -> None:
         five_star=[_char("hero_a")],
     )
     save = RunSave()
+    _seed_pull_shards(save, "fire")
     rng = random.Random(0)
     engine = WarpEngine(save, "fire", banner, rng=rng)
 
@@ -636,6 +822,7 @@ def test_hard_guarantee_after_179_consecutive_fails() -> None:
         five_star=[_char("hero_a")],
     )
     save = RunSave()
+    _seed_pull_shards(save, "fire", PITY_HARD_GUARANTEE + 1)
     # Use a seed that yields many consecutive non-5★ results
     rng = random.Random(1)
     engine = WarpEngine(save, "fire", banner, rng=rng)
@@ -689,6 +876,7 @@ def test_warp_outcome_fields() -> None:
     """Verify WarpOutcome fields are correctly populated on a non-hit."""
     banner = _make_banner(banner_id="fire", five_star=[_char("hero_a")])
     save = RunSave()
+    _seed_pull_shards(save, "fire")
     engine = WarpEngine(save, "fire", banner, rng=random.Random(0))
 
     outcome = engine.pull()

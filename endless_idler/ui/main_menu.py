@@ -40,6 +40,7 @@ from endless_idler.ui.lucide_icons import lucide_icon
 from endless_idler.ui.radio import RadioController
 from endless_idler.ui.radio_control import RadioControlWidget
 from endless_idler.ui.settings import SettingsPage
+from endless_idler.ui.warp.screen import WarpScreen
 
 
 class MainMenuWindow(QMainWindow):
@@ -50,6 +51,7 @@ class MainMenuWindow(QMainWindow):
     _PAGE_INVENTORY = "inventory"
     _PAGE_LAYOUT = "layout"
     _PAGE_SETTINGS = "settings"
+    _PAGE_WARP = "warp"
 
     def __init__(self) -> None:
         super().__init__()
@@ -134,10 +136,11 @@ class MainMenuWindow(QMainWindow):
             )
         )
         topbar_layout.addWidget(
-            self._make_stub_button(
+            self._make_nav_button(
                 label="Warp",
                 icon_name="compass",
-                on_click=self._stub_warp,
+                page_key=self._PAGE_WARP,
+                on_click=self._show_warp,
             )
         )
         topbar_layout.addWidget(
@@ -202,6 +205,10 @@ class MainMenuWindow(QMainWindow):
         self._settings_screen.save_reset_requested.connect(
             self._on_save_reset_requested
         )
+        self._warp_screen = WarpScreen(
+            save_store=self._save_store,
+            parent=self,
+        )
         self._idle_placeholder = self._build_idle_placeholder(self)
 
         self._stack.addWidget(self._home_screen)
@@ -209,6 +216,7 @@ class MainMenuWindow(QMainWindow):
         self._stack.addWidget(self._inventory_screen)
         self._stack.addWidget(self._idle_placeholder)
         self._stack.addWidget(self._settings_screen)
+        self._stack.addWidget(self._warp_screen)
 
         self._radio_control.play_requested.connect(
             self._on_radio_control_play_requested
@@ -366,6 +374,13 @@ class MainMenuWindow(QMainWindow):
             self._idle_screen.force_persist()
         self._stack.setCurrentWidget(self._layout_screen)
         self._set_active_nav(self._PAGE_LAYOUT)
+
+    def _show_warp(self) -> None:
+        if self._idle_screen is not None:
+            self._idle_screen.force_persist()
+        self._warp_screen.refresh_display()
+        self._stack.setCurrentWidget(self._warp_screen)
+        self._set_active_nav(self._PAGE_WARP)
 
     def _show_inventory(self) -> None:
         self._inventory_screen.refresh_from_save()
@@ -883,9 +898,6 @@ class MainMenuWindow(QMainWindow):
             )
 
         controller.fetch_channels(_handle_channels)
-
-    def _stub_warp(self) -> None:
-        self._show_not_implemented("Warp")
 
     def _stub_guidebook(self) -> None:
         self._show_not_implemented("Guidebook")

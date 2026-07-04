@@ -1,4 +1,18 @@
-"""Warp engine constants — banner IDs, pity formula, promotion rates, and rarity labels."""
+"""Warp engine constants.
+
+Includes shard costs, banner IDs, pity formula, promotion rates, and rarity labels.
+"""
+
+SHARD_COST_PER_PULL: int = 160
+
+BANNER_SHARD_MAP: dict[str, str] = {
+    "fire": "fire_shard",
+    "ice": "ice_shard",
+    "wind": "wind_shard",
+    "lightning": "lightning_shard",
+    "light": "light_shard",
+    "dark": "dark_shard",
+}
 
 BANNER_IDS: tuple[str, ...] = (
     "fire",

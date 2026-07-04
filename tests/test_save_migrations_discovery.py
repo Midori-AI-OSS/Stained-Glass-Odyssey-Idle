@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import field
 from types import ModuleType
 from typing import Any
 
@@ -12,17 +13,14 @@ from endless_idler.save_migrations.base import SaveMigration
 @dataclass
 class _FakeSave:
     version: int = 12
-    blessings: dict[str, dict[str, Any]] | None = None
-
-    def __post_init__(self) -> None:
-        if self.blessings is None:
-            self.blessings = {}
+    blessings: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 def test_discovery_finds_existing_migration_module() -> None:
     discovered = save_migrations._discover_migrations()
     migration_ids = {migration.migration_id for migration in discovered}
     assert "v12_lunar_legacy_reset" in migration_ids
+    assert "v14_yolo_prefs" in migration_ids
 
 
 def test_discovery_orders_by_order_then_migration_id(monkeypatch) -> None:
@@ -30,20 +28,32 @@ def test_discovery_orders_by_order_then_migration_id(monkeypatch) -> None:
     module_b = ModuleType("migration_b")
     module_z = ModuleType("migration_z")
 
-    module_a.migration = SaveMigration(
-        migration_id="b_same_order",
-        order=100,
-        migrate=lambda _save: None,
+    setattr(
+        module_a,
+        "migration",
+        SaveMigration(
+            migration_id="b_same_order",
+            order=100,
+            migrate=lambda _save: None,
+        ),
     )
-    module_b.migration = SaveMigration(
-        migration_id="a_same_order",
-        order=100,
-        migrate=lambda _save: None,
+    setattr(
+        module_b,
+        "migration",
+        SaveMigration(
+            migration_id="a_same_order",
+            order=100,
+            migrate=lambda _save: None,
+        ),
     )
-    module_z.migration = SaveMigration(
-        migration_id="z_lower_order",
-        order=50,
-        migrate=lambda _save: None,
+    setattr(
+        module_z,
+        "migration",
+        SaveMigration(
+            migration_id="z_lower_order",
+            order=50,
+            migrate=lambda _save: None,
+        ),
     )
 
     modules = {
@@ -118,3 +128,12 @@ def test_lunar_migration_still_applies_for_pre_v12_saves() -> None:
     assert lunar["last_tick_time"] == 0.0
     assert lunar["step_start_time"] == 0.0
     assert lunar["unlocked"] is False
+
+
+def test_yolo_preferences_migration_adds_empty_list_for_v13_saves() -> None:
+    save = _FakeSave(version=13)
+
+    save_migrations.apply_migrations(save)
+
+    assert save.version == 14
+    assert getattr(save, "warp_yolo_preferences") == []

@@ -42,9 +42,6 @@ def apply_idle_runtime_snapshot_to_save(
         0,
         min(150, _coerce_int(snapshot.get("risk_reward_level", 0), 0)),
     )
-    inventory = _copy_inventory(snapshot.get("inventory"))
-    if inventory is not None:
-        save.inventory = inventory
 
 
 def _copy_nested_dict(raw: object) -> dict[str, dict[str, Any]] | None:
