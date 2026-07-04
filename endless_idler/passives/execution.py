@@ -1,14 +1,18 @@
-"""Passive ability execution utilities.
+"""Legacy combat passive execution utilities.
 
-This module provides helper functions for triggering and executing
-passive abilities during combat.
+This module remains in-tree for old combat-shaped helpers, but the rebuilt
+passive framework no longer uses it as the main package API.
 """
+
+import logging
 
 from typing import Any
 
 from endless_idler.combat.stats import Stats
 from endless_idler.passives.triggers import PassiveTrigger
 from endless_idler.passives.triggers import TriggerContext
+
+logger = logging.getLogger(__name__)
 
 
 def trigger_passives_for_characters(
@@ -66,9 +70,12 @@ def trigger_passives_for_characters(
                         )
                         result["owner_id"] = character.character_id
                         results.append(result)
-            except Exception:
-                # Silently skip failed passives to avoid crashing combat
-                pass
+            except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+                logger.debug(
+                    "Skipping passive execution for %s due to recoverable error: %s",
+                    getattr(passive, "id", "unknown"),
+                    exc,
+                )
 
     return results
 

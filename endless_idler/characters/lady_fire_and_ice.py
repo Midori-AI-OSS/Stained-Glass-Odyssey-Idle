@@ -10,6 +10,7 @@ from plugins.damage_types._base import DamageTypeBase
 
 placement = "onsite"
 
+
 @dataclass
 class LadyFireAndIce(PlayerBase):
     id = "lady_fire_and_ice"
@@ -29,4 +30,8 @@ class LadyFireAndIce(PlayerBase):
     damage_type: DamageTypeBase = field(
         default_factory=lambda: load_damage_type(choice(["Fire", "Ice"]))
     )
-    passives: list[str] = field(default_factory=lambda: ["lady_fire_and_ice_duality_engine"])
+    passives: list[str] = field(
+        default_factory=lambda: ["lady_fire_and_ice_duality_engine"]
+    )
+    is_dual_type: bool = True
+    dual_damage_types: tuple[str, str] = ("Fire", "Ice")

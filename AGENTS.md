@@ -1,122 +1,138 @@
 # Repository Contributor Guide
 
-This document summarizes common development practices for the Stained Glass Odyssey Idle game repository.
+This document summarizes contributor practices for the Stained Glass Odyssey Idle repository.
 
 ---
 
+## Quick Start
+
+- Run locally: `uv run main.py`
+- UI code lives in `endless_idler/ui/`
+- Preflight is required: read `.github/copilot-instructions.md` before any work
+- Do not update `README.md`
+- Keep changes focused and minimal
+
+## Required Preflight and Run Log
+
+All contributors must do the following for every run:
+
+1. Read `.github/copilot-instructions.md` before starting.
+2. Read `/tmp/agents-artifacts/agent-output.md` before work (and again before appending).
+3. Append a short run entry to `/tmp/agents-artifacts/agent-output.md` after work.
+4. Create `/tmp/agents-artifacts/agent-output.md` if it does not exist.
+5. Use append-only writes (`>>`), never overwrite prior entries.
+
+Required run-log fields:
+- role
+- files touched
+- intent
+- actions taken
+- results
+- blockers or follow-ups
 
 ## Where to Look for Guidance
 
-- **`.feedback/`**: Task lists and priorities. *Read only*—never edit directly unless you are the Task Master.
-- **`.codex/`**:
-  - `modes/`: Contributor mode documentation defining roles and responsibilities.
-  - `tasks/`: Organized task folders (wip, review, taskmaster) for work items.
-  - Other subfolders: For planning, notes, and prototyping.
-- **Never edit files in `.codex/audit/` unless you are in Auditor mode.**
-- **Docs:** Do not update `README.md`
-- **Test:** Do not build tests unless asked to; place tests under `tests/` (create it if missing)
-- **`.github/`**: Workflow guidelines, agent configurations, and automation scripts.
-- When entering any folder, check for a `AGENTS.md` file in that folder and read it before starting any work there.
-
----
+- `.agents/`: contributor guidance and supporting docs
+  - `modes/`: contributor mode documentation
+  - `implementation/`: technical implementation notes
+  - `instructions/`: process guidance
+  - `lore/`, `notes/`, `planning/`, `review/`, `testing/`, `temp/`
+- `.feedback/`: planning notes and priorities (read-only unless explicitly instructed)
+- `.github/`: automation and agent configuration
+- When entering any folder, check for a local `AGENTS.md` and follow the most specific one.
 
 ## Development Basics
 
-- Use [`uv`](https://github.com/astral-sh/uv) for Python environments and running code. Avoid `python` or `pip` directly.
-- Use [`bun`](https://bun.sh/) for Node/React tooling instead of `npm` or `yarn`.
-- Verification-first: confirm current behavior in the codebase before changing code; reproduce/confirm the issue (or missing behavior); verify the fix with clear checks.
-- No broad fallbacks: do not add “fallback behavior everywhere”; only add a narrow fallback when the task explicitly requires it, and justify it.
-- No backward compatibility shims by default: do not preserve old code paths “just in case”; only add compatibility layers when the task explicitly requires it.
-- Minimal documentation, minimal logging: prefer reading code and docstrings; do not add docs/logs unless required to diagnose a specific issue or prevent a crash.
+- Use `uv` for Python commands. Avoid `python` or `pip` directly.
+- Use `bun` for Node/React tooling.
+- Run `uv sync --group ci` once at the start of a work session before lint/type/test commands.
+- Standard validation flow:
+  - `uv run ruff check .`
+  - `uv run basedpyright`
+  - `uv run pytest -q` (or targeted tests when appropriate)
+- Verification-first: confirm current behavior before changing code; verify fix behavior after changes.
+- No broad fallback behavior unless explicitly required.
+- No backward-compatibility shims unless explicitly required.
+- Prefer code and docstrings over long-lived documentation artifacts.
 - Do not update `README.md`.
-- Split large modules into smaller ones when practical.
-- Ensure code is asynchronous-friendly: avoid blocking the event loop, use async/await for I/O and long-running tasks, and keep work off the main loop.
-- Any test running longer than 15 seconds is automatically aborted in local development. GitHub Actions CI has no timeout limits.
-- For Python style:
-   - Place each import on its own line.
-   - Sort imports within each group (standard library, third-party, project modules) from shortest to longest.
-   - Insert a blank line between each import grouping (standard library, third-party, project modules).
-   - Avoid inline imports.
-   - For `from ... import ...` statements, group them after all `import ...` statements, and format each on its own line, sorted shortest to longest, with a blank line before the group. Example:
+- Keep I/O and long-running work async-friendly where applicable.
+- Never run non-UI logic on the UI thread; move saving, tick processing, and heavy game logic to background/async workers, and marshal UI updates back to the UI thread.
 
-     ```python
-     import os
-     import time
-     import logging
-     import threading
+### Python Style
 
-     from datetime import datetime
-     from rich.console import Console
-     ```
+- Place each import on its own line.
+- Sort imports within each group from shortest to longest.
+- Insert a blank line between standard library, third-party, and project imports.
+- Avoid inline imports.
+- Put `from ... import ...` after `import ...` statements.
 
-## File Size and Readability (Repository-wide Rule)
+## UI Theme Architecture (Mandatory)
 
-- Aim for ~300 lines or fewer per file.
-- Split monolithic modules into smaller units when they grow beyond this threshold.
-- Keep code well commented and organized for readability.
+- All persistent Qt styling must live in `endless_idler/ui/theme/`.
+- Theme ownership rule: one reusable widget class per theme module in `endless_idler/ui/theme/`.
+- Theme assembly must be explicit through `endless_idler/ui/theme/registry.py` imports.
+- Every new themable `objectName` or style-driving property must ship with a selector in the owning theme module.
+- When changing a style-driving property at runtime, repolish (`unpolish/polish/update`).
 
----
+## UI Development Requirements (Mandatory)
 
-## Commit and Pull Request Workflow
+When working on UI components, you MUST:
+1. Read `.agents/instructions/reusable_ui_components.md`
+2. Use existing reusable components whenever possible
+3. Contribute improvements to reusable components rather than creating duplicates
 
-Follow this checklist whenever you are ready to publish work:
+This is a hard requirement for all UI work.
 
-1. Stage and review your changes locally (`git status`, `git diff`) before committing.
-2. Create a descriptive commit that begins with the appropriate `[TYPE]` prefix (e.g., `[FEAT]`, `[FIX]`, `[DOCS]`, `[REFACTOR]`).
-3. Verify the working tree is clean after committing—`git status` must show **no pending changes**.
-4. If you did not modify the repository, do **not** commit or create a pull request.
+### Prohibited UI Patterns
 
-These steps apply to **all** contributor modes.
+- Do not add persistent inline `setStyleSheet(...)` styling.
+- Do not add `!important` style overrides for normal UI components.
+- Do not add monolithic theme files or persistent styles outside `endless_idler/ui/theme/`.
+- Do not use soft-compliance placeholders such as:
+  - `TODO: update standards later`
+  - `follow-up agent will fix theme`
+  - `temporary standards exception`
 
----
+### Review Gates (Fail Conditions)
 
-## Task Organization System
+- Missing theme module for a new reusable widget class.
+- Missing registry wiring for a new theme module.
+- Missing selector coverage for a new themable `objectName` or dynamic property.
+- Any new persistent inline widget stylesheet.
 
-Tasks are organized by status into three main folders in `.codex/tasks/`:
+## File Size and Readability
 
-### Status Folders
+- Soft max: ~500 lines per file.
+- Hard max: 1000 lines per file.
+- Split monolithic modules as they approach the soft limit.
+- Keep code readable and organized.
 
-- **`wip/`** - Work In Progress: Tasks actively being developed by coders. When complete and ready for review, move to the corresponding subfolder in `review/`.
-- **`review/`** - Ready for Review: Tasks awaiting auditor review. After review, move to `taskmaster/` if approved, or back to `wip/` with feedback if changes are needed.
-- **`taskmaster/`** - Task Master Review: Tasks fully audited and awaiting final Task Master sign-off. The Task Master can either close the task (delete the file) or request additional changes (move back to `wip/`).
+## Commit Workflow
 
-### Workflow
-
-1. **Task Creation**: Task Master creates new tasks in the appropriate category subfolder within `wip/`
-2. **Development**: Coders work on tasks in `wip/` and move them to `review/` when complete
-3. **Auditing**: Auditors review tasks in `review/` and move them to `taskmaster/` if approved, or back to `wip/` if changes are needed
-4. **Completion**: Task Master reviews tasks in `taskmaster/` and closes them when satisfied
-
----
+1. Review local changes (`git status`, `git diff`).
+2. Create a descriptive commit with `[TYPE]` prefix (for example `[FEAT]`, `[FIX]`, `[DOCS]`, `[REFACTOR]`).
+3. Confirm a clean working tree after committing.
+4. Do not push unless explicitly requested.
 
 ## Contributor Modes
 
-The repository supports several contributor modes to clarify expectations and best practices for different types of contributions:
+Read the relevant mode guide in `.agents/modes/` before starting work:
 
-> **MANDATORY: All contributors must read their mode's documentation in `.codex/modes/` before starting any work. Failure to do so may result in removal from the repository.**
+- `MANAGER.md`
+- `CODER.md`
+- `REVIEWER.md`
+- `AUDITOR.md`
+- `STORYTELLER.md`
 
-**Mode selection rule:** When a request begins with the name of a mode (e.g., "Manager", "Coder", "Reviewer"), treat that as the required mode for the task unless explicitly told otherwise. Switch to that mode's instructions before continuing.
-
-**All contributors should regularly review and keep their mode cheat sheet in `.codex/notes/` up to date.**
-Refer to your mode's cheat sheet for quick reminders and update it as needed.
-
-- **Task Master Mode** (`.codex/modes/TASKMASTER.md`)
-- **Manager Mode** (`.codex/modes/MANAGER.md`)
-- **Coder Mode** (`.codex/modes/CODER.md`)
-- **Reviewer Mode** (`.codex/modes/REVIEWER.md`)
-- **Auditor Mode** (`.codex/modes/AUDITOR.md`)
-- **Storyteller Mode** (`.codex/modes/STORYTELLER.md`)
-
-You must refer to the relevant mode guide in `.codex/modes/` before starting work, and follow the documentation structure and conventions described there.
-
----
+Mode selection rule: if a request starts with a mode name, use that mode unless explicitly told otherwise.
 
 ## Game-Specific Guidelines
 
-Stained Glass Odyssey Idle is an idle/incremental game featuring characters from the shared Stained Glass universe. When contributing:
+Stained Glass Odyssey Idle is an idle/incremental game in the shared Stained Glass universe.
 
-- Maintain the idle game mechanics and incremental progression systems
-- Keep the visual style consistent with the stained glass aesthetic
-- Documentation: prefer code and docstrings; keep notes minimal and task-scoped.
-- Test game balance and progression carefully
-- Ensure all character artwork and assets follow the project's art guidelines
+  - Maintain idle progression systems.
+  - Keep visual style consistent with stained glass aesthetics.
+  - Prefer code and docstrings for documentation; keep notes minimal and scoped.
+  - Verify game balance and progression impacts.
+  - Ensure character assets follow project art guidelines.
+  - Gameplay progression must not use hard caps; only soft caps are allowed and only when explicitly requested.

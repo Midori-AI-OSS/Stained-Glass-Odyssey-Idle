@@ -1,1 +1,0 @@
-"""Normal rank passive plugins."""
