@@ -23,6 +23,11 @@ STAR_COLORS: dict[int, str] = {
     7: "#00FFD1",
 }
 
+TOOLTIP_LABEL_COLOR = "rgba(255, 255, 255, 170)"
+TOOLTIP_VALUE_COLOR = "rgba(255, 255, 255, 235)"
+MISMATCH_TOOLTIP_VALUE_COLOR = "rgba(255, 148, 176, 245)"
+TINY_EXP_PER_SECOND_THRESHOLD = 0.005
+
 
 def set_pixmap(
     label: QLabel,
@@ -50,6 +55,15 @@ def set_pixmap(
 
 def derive_display_name(char_id: str) -> str:
     return " ".join(part.capitalize() for part in char_id.split("_"))
+
+
+def format_idle_exp_rate_suffix(gain_per_second: float) -> str:
+    gain = float(gain_per_second)
+    if gain <= 0.0:
+        return ""
+    if gain < TINY_EXP_PER_SECOND_THRESHOLD:
+        return " ~0.00/s"
+    return f" +{gain:.2f}/s"
 
 
 def sanitize_stars(stars: int) -> int:
@@ -113,9 +127,19 @@ def build_character_stats_tooltip(
     stacks: int | None = None,
     stackable: bool | None = None,
     stats: Stats | None = None,
+    mismatch: bool = False,
+    exp_multiplier_override: float | None = None,
 ) -> str:
     generated_stats = stats is None
     stats = stats or Stats()
+    if exp_multiplier_override is None:
+        exp_multiplier = float(stats.exp_multiplier)
+    else:
+        try:
+            exp_multiplier = max(0.0, float(exp_multiplier_override))
+        except (TypeError, ValueError):
+            exp_multiplier = float(stats.exp_multiplier)
+    stat_value_color = MISMATCH_TOOLTIP_VALUE_COLOR if mismatch else TOOLTIP_VALUE_COLOR
 
     safe_name = html.escape(name)
     safe_stars = sanitize_stars(int(stars)) if stars is not None else None
@@ -128,28 +152,32 @@ def build_character_stats_tooltip(
             "<tr style='background-color:"
             + bg
             + ";'>"
-            + "<td style='padding:4px 10px; color: rgba(255, 255, 255, 170); white-space: nowrap;'>"
+            + "<td style='padding:4px 10px; color: "
+            + TOOLTIP_LABEL_COLOR
+            + "; white-space: nowrap;'>"
             + html.escape(label)
             + "</td>"
-            + "<td style='padding:4px 10px; color: rgba(255, 255, 255, 235); text-align: right; white-space: nowrap;'>"
+            + "<td style='padding:4px 10px; color: "
+            + stat_value_color
+            + "; text-align: right; white-space: nowrap;'>"
             + html.escape(str(value))
             + "</td>"
             + "</tr>"
         )
 
     meta_bits: list[str] = [
-        f"<span style='color: rgba(255, 255, 255, 170);'>Level</span> "
-        f"<span style='color: rgba(255, 255, 255, 235);'><b>{stats.level}</b></span>",
-        f"<span style='color: rgba(255, 255, 255, 170);'>Exp</span> "
-        f"<span style='color: rgba(255, 255, 255, 235);'><b>{stats.exp}</b></span>",
-        f"<span style='color: rgba(255, 255, 255, 170);'>Exp Mult</span> "
-        f"<span style='color: rgba(255, 255, 255, 235);'><b>{stats.exp_multiplier:.2f}x</b></span>",
+        f"<span style='color: {TOOLTIP_LABEL_COLOR};'>Level</span> "
+        f"<span style='color: {TOOLTIP_VALUE_COLOR};'><b>{stats.level}</b></span>",
+        f"<span style='color: {TOOLTIP_LABEL_COLOR};'>Exp</span> "
+        f"<span style='color: {TOOLTIP_VALUE_COLOR};'><b>{stats.exp}</b></span>",
+        f"<span style='color: {TOOLTIP_LABEL_COLOR};'>Exp Mult</span> "
+        f"<span style='color: {stat_value_color};'><b>{exp_multiplier:.2f}x</b></span>",
     ]
 
     if stacks is not None and int(stacks) > 1:
         meta_bits.append(
-            "<span style='color: rgba(255, 255, 255, 170);'>Stacks</span> "
-            f"<span style='color: rgba(255, 255, 255, 235);'><b>x{int(stacks)}</b></span>"
+            f"<span style='color: {TOOLTIP_LABEL_COLOR};'>Stacks</span> "
+            f"<span style='color: {TOOLTIP_VALUE_COLOR};'><b>x{int(stacks)}</b></span>"
         )
     if generated_stats and stacks is not None:
         stats.passive_modifier = 1.5 ** max(0, int(stacks) - 1)

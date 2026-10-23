@@ -4,8 +4,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QLabel
-from PySide6.QtWidgets import QProgressBar
 from PySide6.QtWidgets import QSizePolicy
+
+from endless_idler.ui.components.progress_bar import AnimatedProgressBar
 
 
 class PartyHpHeader(QFrame):
@@ -24,11 +25,20 @@ class PartyHpHeader(QFrame):
         label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(label, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        bar = QProgressBar()
+        bar = AnimatedProgressBar()
         bar.setObjectName("partyHpHeaderBar")
-        bar.setTextVisible(True)
-        bar.setFormat("%v / %m")
-        bar.setFixedWidth(220)
+        bar.setFixedHeight(12)
+        bar.set_value(0.0)
+        bar.setText("0 / 0")
+        bar._gradient_enabled = False
+        bar.set_color_thresholds(
+            [
+                (0.0, (231, 76, 60, 170)),
+                (0.25, (243, 156, 18, 170)),
+                (0.45, (241, 196, 15, 185)),
+                (0.65, (46, 204, 113, 165)),
+            ]
+        )
         layout.addWidget(bar, 0, Qt.AlignmentFlag.AlignVCenter)
 
         self._bar = bar
@@ -38,6 +48,9 @@ class PartyHpHeader(QFrame):
         current = max(0, int(current))
         current = min(current, max_hp) if max_hp else 0
 
-        self._bar.setRange(0, max_hp if max_hp > 0 else 1)
-        self._bar.setValue(current)
-        self._bar.setTextVisible(max_hp > 0)
+        if max_hp > 0:
+            self._bar.set_value(current / max_hp)
+            self._bar.setText(f"{current} / {max_hp}")
+        else:
+            self._bar.set_value(0.0)
+            self._bar.setText("0 / 0")

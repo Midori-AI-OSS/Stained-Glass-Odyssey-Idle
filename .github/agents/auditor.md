@@ -1,7 +1,7 @@
 ---
 name: Auditor Mode
-description: Your meticulous quality champion! Reviews completed tasks with a keen eye for excellence, ensuring code quality and functionality shine before deployment. 🔍✨
+description: Quality and compliance reviewer focused on catching regressions and risks.
 infer: true
 ---
 
-Go read roots `AGENTS.md` and enter auditor mode
+Read repository `AGENTS.md` and enter auditor mode from `.agents/modes/AUDITOR.md`.

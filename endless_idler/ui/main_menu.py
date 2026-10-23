@@ -1,203 +1,903 @@
+from __future__ import annotations
+
+import re
+import random
+import threading
+
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPixmap
-from PySide6.QtWidgets import (
-    QFrame,
-    QGraphicsDropShadowEffect,
-    QHBoxLayout,
-    QMainWindow,
-    QMessageBox,
-    QPushButton,
-    QStackedWidget,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QResizeEvent
+from PySide6.QtGui import QShowEvent
+from PySide6.QtWidgets import QFrame
+from PySide6.QtWidgets import QHBoxLayout
+from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QMainWindow
+from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QStackedWidget
+from PySide6.QtWidgets import QToolButton
+from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtWidgets import QWidget
 
-from endless_idler.ui.assets import asset_path
-from endless_idler.ui.battle import BattleScreenWidget
+from endless_idler.characters.plugins import discover_character_plugins
+from endless_idler.run_save_store import RunSaveStore
+from endless_idler.settings import AppSettings
+from endless_idler.settings import AppSettingsManager
+from endless_idler.settings import clamp_volume
+from endless_idler.settings import normalize_channel
+from endless_idler.tick_runtime import SharedTickRuntime
+from endless_idler.tick_runtime import TickSnapshot
+from endless_idler.ui.home import HomePage
 from endless_idler.ui.idle import IdleScreenWidget
-from endless_idler.ui.party_builder import PartyBuilderWidget
-
-
-class MainMenuWidget(QWidget):
-    play_requested = Signal()
-    settings_requested = Signal()
-    warp_requested = Signal()
-    inventory_requested = Signal()
-    guidebook_requested = Signal()
-    feedback_requested = Signal()
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-
-        root = QHBoxLayout()
-        root.setContentsMargins(24, 24, 24, 24)
-        root.setSpacing(24)
-        self.setLayout(root)
-
-        root.addStretch(1)
-
-        menu_panel = QFrame()
-        menu_panel.setObjectName("mainMenuPanel")
-        menu_panel.setFrameShape(QFrame.Shape.NoFrame)
-        menu_panel.setFixedWidth(220)
-        root.addWidget(menu_panel, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
-
-        glow = QGraphicsDropShadowEffect(menu_panel)
-        glow.setBlurRadius(44)
-        glow.setOffset(0, 0)
-        glow.setColor(QColor(255, 120, 80, 95))
-        menu_panel.setGraphicsEffect(glow)
-
-        menu_layout = QVBoxLayout()
-        menu_layout.setContentsMargins(10, 10, 10, 10)
-        menu_layout.setSpacing(10)
-        menu_panel.setLayout(menu_layout)
-
-        menu_layout.addWidget(self._make_button("Run", self.play_requested.emit))
-        menu_layout.addWidget(self._make_button("Warp", self.warp_requested.emit))
-        menu_layout.addWidget(self._make_button("Inventory", self.inventory_requested.emit))
-        menu_layout.addWidget(self._make_button("Guidebook", self.guidebook_requested.emit))
-        menu_layout.addWidget(self._make_button("Settings", self.settings_requested.emit))
-        menu_layout.addWidget(self._make_button("Feedback", self.feedback_requested.emit))
-        menu_layout.addStretch(1)
-
-    def _make_button(self, label: str, on_click: Callable[[], None]) -> QPushButton:
-        button = QPushButton(label)
-        button.setObjectName(f"mainMenuButton_{label.lower().replace(' ', '_')}")
-        button.setProperty("stainedMenu", "true")
-        button.setCursor(Qt.CursorShape.PointingHandCursor)
-        button.setMinimumHeight(52)
-        button.clicked.connect(on_click)
-        return button
-
-
-class MainMenuBackground(QWidget):
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._background = QPixmap(asset_path("backgrounds", "main_menu_cityscape.png"))
-
-    def paintEvent(self, event: object) -> None:
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-
-        if not self._background.isNull():
-            scaled = self._background.scaled(
-                self.size(),
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            x = (scaled.width() - self.width()) // 2
-            y = (scaled.height() - self.height()) // 2
-            painter.drawPixmap(0, 0, scaled, x, y, self.width(), self.height())
-
-        painter.fillRect(self.rect(), QColor(0, 0, 0, 110))
-        painter.end()
+from endless_idler.ui.idle.idle_state import IDLE_TICK_INTERVAL_SECONDS
+from endless_idler.ui.idle.idle_state import IdleGameState
+from endless_idler.ui.idle.runtime_snapshot import apply_idle_runtime_snapshot_to_save
+from endless_idler.ui.inventory import InventoryPage
+from endless_idler.ui.layout import LayoutScreenWidget
+from endless_idler.ui.lucide_icons import lucide_icon
+from endless_idler.ui.radio import RadioController
+from endless_idler.ui.radio_control import RadioControlWidget
+from endless_idler.ui.settings import SettingsPage
+from endless_idler.ui.warp.screen import WarpScreen
 
 
 class MainMenuWindow(QMainWindow):
+    APP_TITLE = "Stained Glass Odyssey Idle"
+    TOPBAR_NAV_COMFORT_GAP = 24
+    _PAGE_HOME = "home"
+    _PAGE_IDLE = "idle"
+    _PAGE_INVENTORY = "inventory"
+    _PAGE_LAYOUT = "layout"
+    _PAGE_SETTINGS = "settings"
+    _PAGE_WARP = "warp"
+
     def __init__(self) -> None:
         super().__init__()
-        self._party_builder: PartyBuilderWidget | None = None
-        self._battle_screen: BattleScreenWidget | None = None
-        self._idle_screen: IdleScreenWidget | None = None
-        self._menu_screen: QWidget | None = None
+        self._settings_manager = AppSettingsManager()
+        self._app_settings = self._settings_manager.load()
+        self._radio_controller: RadioController | None = RadioController(self)
+        self._radio_channel_options: list[str] = []
+        self._plugins = discover_character_plugins()
+        self._save_store = RunSaveStore(plugins=self._plugins)
+        self._save_store.load_or_create()
 
-        self.setWindowTitle("Stained Glass Odyssey Idle")
+        self._idle_screen: IdleScreenWidget | None = None
+        self._tick_runtime = SharedTickRuntime(parent=self)
+        self._tick_runtime_source_key = "main-menu-idle-source"
+        self._tick_runtime_subscriber_key = "main-menu-idle-save-sync"
+        self._idle_runtime_lock = threading.Lock()
+        self._idle_rng = random.Random()
+        self._idle_state = self._build_idle_state_from_save(
+            self._save_store.current,
+            runtime_snapshot=None,
+        )
+        self._idle_state_lineup_signature = self._idle_lineup_signature()
+        self._reset_exit_requested = False
+        self._tick_cooldown_lock = threading.Lock()
+        self._tick_cooldown_seconds = float(
+            max(
+                0.0,
+                float(
+                    getattr(
+                        self._save_store.current, "layout_tick_cooldown_seconds", 0.0
+                    )
+                ),
+            )
+        )
+        self._latest_idle_tick_payload: dict[str, object] = {}
+        self._nav_buttons: dict[str, QToolButton] = {}
+        self._topbar_buttons: list[QToolButton] = []
+        self._topbar_nav_full_buttons_width = 0
+        self._topbar_nav_compact = False
+
+        self.setWindowTitle(self.APP_TITLE)
         self.resize(1280, 820)
 
-        menu = MainMenuWidget()
-        menu.play_requested.connect(self._open_party_builder)
-        menu.settings_requested.connect(self._stub_settings)
-        menu.warp_requested.connect(self._stub_warp)
-        menu.inventory_requested.connect(self._stub_inventory)
-        menu.guidebook_requested.connect(self._stub_guidebook)
-        menu.feedback_requested.connect(self._stub_feedback)
+        shell = QWidget(self)
+        shell.setObjectName("AppShellRoot")
+        shell_layout = QVBoxLayout(shell)
+        shell_layout.setContentsMargins(16, 16, 16, 16)
+        shell_layout.setSpacing(12)
+        self.setCentralWidget(shell)
 
-        background = MainMenuBackground()
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        background.setLayout(layout)
-        layout.addWidget(menu)
+        topbar = QFrame(shell)
+        topbar.setObjectName("AppTopBar")
+        self._topbar = topbar
+        topbar_layout = QHBoxLayout(topbar)
+        topbar_layout.setContentsMargins(12, 10, 12, 10)
+        topbar_layout.setSpacing(8)
+        self._topbar_layout = topbar_layout
+        shell_layout.addWidget(topbar)
 
-        self._stack = QStackedWidget()
-        self._menu_screen = background
-        self._stack.addWidget(self._menu_screen)
-        self.setCentralWidget(self._stack)
+        topbar_layout.addWidget(
+            self._make_nav_button(
+                label="Home",
+                icon_name="house",
+                page_key=self._PAGE_HOME,
+                on_click=self._show_home,
+            )
+        )
+        topbar_layout.addWidget(
+            self._make_nav_button(
+                label="Idle",
+                icon_name="group",
+                page_key=self._PAGE_IDLE,
+                on_click=self._show_idle,
+            )
+        )
+        topbar_layout.addWidget(
+            self._make_nav_button(
+                label="Layout",
+                icon_name="layout-list",
+                page_key=self._PAGE_LAYOUT,
+                on_click=self._show_layout,
+            )
+        )
+        topbar_layout.addWidget(
+            self._make_nav_button(
+                label="Warp",
+                icon_name="compass",
+                page_key=self._PAGE_WARP,
+                on_click=self._show_warp,
+            )
+        )
+        topbar_layout.addWidget(
+            self._make_nav_button(
+                label="Inventory",
+                icon_name="backpack",
+                page_key=self._PAGE_INVENTORY,
+                on_click=self._show_inventory,
+            )
+        )
+        topbar_layout.addWidget(
+            self._make_stub_button(
+                label="Guidebook",
+                icon_name="book-open",
+                on_click=self._stub_guidebook,
+            )
+        )
+        topbar_layout.addWidget(
+            self._make_nav_button(
+                label="Settings",
+                icon_name="settings",
+                page_key=self._PAGE_SETTINGS,
+                on_click=self._show_settings,
+            )
+        )
+        topbar_layout.addWidget(
+            self._make_stub_button(
+                label="Feedback",
+                icon_name="bug",
+                on_click=self._stub_feedback,
+            )
+        )
+        topbar_layout.addStretch(1)
 
-    def _open_party_builder(self) -> None:
-        if self._party_builder is None:
-            self._party_builder = PartyBuilderWidget()
-            self._party_builder.back_requested.connect(self._open_main_menu)
-            self._party_builder.fight_requested.connect(self._open_battle_screen)
-            self._party_builder.idle_requested.connect(self._open_idle_screen)
-            self._stack.addWidget(self._party_builder)
-        self._stack.setCurrentWidget(self._party_builder)
+        self._radio_control = RadioControlWidget(topbar)
+        topbar_layout.addWidget(
+            self._radio_control,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
 
-    def _open_main_menu(self) -> None:
-        if self._menu_screen is not None:
-            self._stack.setCurrentWidget(self._menu_screen)
+        self._stack = QStackedWidget(shell)
+        shell_layout.addWidget(self._stack, 1)
 
-    def _open_battle_screen(self, payload: object) -> None:
-        if self._battle_screen is not None:
-            self._cleanup_widget(self._battle_screen)
-            self._battle_screen = None
+        self._home_screen = HomePage(
+            save_store=self._save_store,
+            idle_runtime_snapshot_provider=self._latest_idle_snapshot,
+            idle_state_provider=lambda: self._idle_state,
+            idle_state_commit=self._apply_idle_snapshot_to_save,
+            parent=self,
+        )
+        self._layout_screen = LayoutScreenWidget(
+            save_store=self._save_store, parent=self
+        )
+        self._inventory_screen = InventoryPage(save_store=self._save_store)
+        self._settings_screen = SettingsPage(self)
+        self._settings_screen.settings_changed.connect(self._on_settings_changed)
+        self._settings_screen.save_now_requested.connect(self._on_save_now_requested)
+        self._settings_screen.save_backup_requested.connect(
+            self._on_save_backup_requested
+        )
+        self._settings_screen.save_reset_requested.connect(
+            self._on_save_reset_requested
+        )
+        self._warp_screen = WarpScreen(
+            save_store=self._save_store,
+            parent=self,
+        )
+        self._idle_placeholder = self._build_idle_placeholder(self)
 
-        battle = BattleScreenWidget(payload=payload)
-        battle.finished.connect(self._close_battle_screen)
-        self._battle_screen = battle
-        self._stack.addWidget(battle)
-        self._stack.setCurrentWidget(battle)
+        self._stack.addWidget(self._home_screen)
+        self._stack.addWidget(self._layout_screen)
+        self._stack.addWidget(self._inventory_screen)
+        self._stack.addWidget(self._idle_placeholder)
+        self._stack.addWidget(self._settings_screen)
+        self._stack.addWidget(self._warp_screen)
 
-    def _close_battle_screen(self) -> None:
-        if self._party_builder is not None:
-            self._stack.setCurrentWidget(self._party_builder)
-            self._party_builder.reload_save()
-        if self._battle_screen is None:
-            return
-        self._cleanup_widget(self._battle_screen)
-        self._battle_screen = None
+        self._radio_control.play_requested.connect(
+            self._on_radio_control_play_requested
+        )
+        self._radio_control.volume_changed.connect(
+            self._on_radio_control_volume_changed
+        )
+        if self._radio_controller is not None:
+            self._radio_controller.state_changed.connect(self._on_radio_state_changed)
 
-    def _open_idle_screen(self, payload: object) -> None:
+        self._set_active_nav(self._PAGE_HOME)
+        self._stack.setCurrentWidget(self._home_screen)
+        self._configure_shared_idle_runtime()
+        self._sync_radio_controller_from_settings(user_initiated=False)
+        self._on_radio_state_changed(self._radio_state_snapshot())
+        self._settings_screen.set_save_path(str(self._save_store.path))
+
+    def closeEvent(self, event: QCloseEvent) -> None:
         if self._idle_screen is not None:
-            self._cleanup_widget(self._idle_screen)
-            self._idle_screen = None
+            self._idle_screen.shutdown()
+        self._tick_runtime.unsubscribe(self._tick_runtime_subscriber_key)
+        self._tick_runtime.clear_source(self._tick_runtime_source_key)
+        self._tick_runtime.stop()
+        self._save_store.shutdown(persist=not self._reset_exit_requested)
+        if self._radio_controller is not None:
+            self._radio_controller.shutdown()
+        super().closeEvent(event)
 
-        idle = IdleScreenWidget(payload=payload)
-        idle.finished.connect(self._close_idle_screen)
-        self._idle_screen = idle
-        self._stack.addWidget(idle)
-        self._stack.setCurrentWidget(idle)
+    def _make_nav_button(
+        self,
+        *,
+        label: str,
+        icon_name: str,
+        page_key: str,
+        on_click: Callable[[], None],
+    ) -> QToolButton:
+        button = QToolButton(self)
+        button.setText(label)
+        button.setToolTip(label)
+        button.setIcon(lucide_icon(icon_name))
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        button.setCheckable(True)
+        button.setAutoExclusive(True)
+        button.setProperty("appNav", True)
+        button.clicked.connect(on_click)
+        self._nav_buttons[page_key] = button
+        self._topbar_buttons.append(button)
+        return button
 
-    def _close_idle_screen(self) -> None:
-        if self._party_builder is not None:
-            self._stack.setCurrentWidget(self._party_builder)
-            self._party_builder.reload_save()
+    def _make_stub_button(
+        self,
+        *,
+        label: str,
+        icon_name: str,
+        on_click: Callable[[], None],
+    ) -> QToolButton:
+        button = QToolButton(self)
+        button.setText(label)
+        button.setToolTip(label)
+        button.setIcon(lucide_icon(icon_name))
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        button.setProperty("appStub", True)
+        button.clicked.connect(on_click)
+        self._topbar_buttons.append(button)
+        return button
+
+    @staticmethod
+    def _build_idle_placeholder(parent: QWidget | None = None) -> QWidget:
+        holder = QWidget(parent)
+        layout = QVBoxLayout(holder)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addStretch(1)
+        label = QLabel("Preparing idle runtime...")
+        label.setObjectName("AppIdleStartupLabel")
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(label, 0, Qt.AlignmentFlag.AlignCenter)
+        layout.addStretch(1)
+        return holder
+
+    def _set_active_nav(self, key: str) -> None:
+        for page_key, button in self._nav_buttons.items():
+            button.setChecked(page_key == key)
+
+    def _measure_topbar_nav_buttons_width(self) -> int:
+        return sum(button.sizeHint().width() for button in self._topbar_buttons)
+
+    def _topbar_navigation_available_width(self) -> int:
+        contents_width = self._topbar.contentsRect().width()
+        margins = self._topbar_layout.contentsMargins()
+        return max(0, contents_width - margins.left() - margins.right())
+
+    def _topbar_navigation_required_width(self) -> int:
+        spacing = max(0, self._topbar_layout.spacing())
+        radio_width = (
+            self._radio_control.sizeHint().width()
+            if self._radio_control.isVisible()
+            else 0
+        )
+        button_count = len(self._topbar_buttons)
+        if button_count <= 0:
+            return 0
+        return (
+            self._topbar_nav_full_buttons_width
+            + radio_width
+            + (spacing * (button_count + 1))
+            + self.TOPBAR_NAV_COMFORT_GAP
+        )
+
+    def _update_topbar_navigation_mode(self) -> None:
+        if not self._topbar_buttons:
+            return
+
+        if self._topbar_nav_full_buttons_width <= 0:
+            self._topbar_nav_full_buttons_width = (
+                self._measure_topbar_nav_buttons_width()
+            )
+
+        compact = (
+            self._topbar_navigation_available_width()
+            < self._topbar_navigation_required_width()
+        )
+        if compact == self._topbar_nav_compact:
+            return
+
+        self._topbar_nav_compact = compact
+        style = (
+            Qt.ToolButtonStyle.ToolButtonIconOnly
+            if compact
+            else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        for button in self._topbar_buttons:
+            button.setToolButtonStyle(style)
+            button.updateGeometry()
+
+        self._topbar_layout.invalidate()
+        self._topbar_layout.activate()
+        self._topbar.updateGeometry()
+
+    def _show_home(self) -> None:
+        self._stack.setCurrentWidget(self._home_screen)
+        self._set_active_nav(self._PAGE_HOME)
+
+    def _show_idle(self) -> None:
+        self._layout_screen.persist_now()
+        self._ensure_idle_runtime()
+        if self._idle_screen is None:
+            self._stack.setCurrentWidget(self._idle_placeholder)
+        else:
+            self._stack.setCurrentWidget(self._idle_screen)
+        self._set_active_nav(self._PAGE_IDLE)
+
+    def _show_layout(self) -> None:
+        if self._idle_screen is not None:
+            self._idle_screen.force_persist()
+        self._stack.setCurrentWidget(self._layout_screen)
+        self._set_active_nav(self._PAGE_LAYOUT)
+
+    def _show_warp(self) -> None:
+        if self._idle_screen is not None:
+            self._idle_screen.force_persist()
+        self._warp_screen.refresh_display()
+        self._stack.setCurrentWidget(self._warp_screen)
+        self._set_active_nav(self._PAGE_WARP)
+
+    def _show_inventory(self) -> None:
+        self._inventory_screen.refresh_from_save()
+        self._stack.setCurrentWidget(self._inventory_screen)
+        self._set_active_nav(self._PAGE_INVENTORY)
+
+    def _show_settings(self) -> None:
+        _ = self._ensure_radio_controller()
+        self._sync_radio_controller_from_settings(user_initiated=False)
+        self._refresh_radio_channel_options(disable_on_failure=True)
+        self._settings_screen.set_settings(self._app_settings)
+        self._settings_screen.apply_radio_state(self._radio_state_snapshot())
+        self._settings_screen.set_save_path(str(self._save_store.path))
+        self._stack.setCurrentWidget(self._settings_screen)
+        self._set_active_nav(self._PAGE_SETTINGS)
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        self._update_topbar_navigation_mode()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._update_topbar_navigation_mode()
+
+    def _idle_lineup_signature(
+        self,
+    ) -> tuple[
+        tuple[str, ...],
+        tuple[str, ...],
+        tuple[str, ...],
+        tuple[tuple[str, int], ...],
+        int,
+    ]:
+        return IdleScreenWidget.build_lineup_signature(self._save_store.current)
+
+    def _dispose_idle_runtime(self, *, persist: bool) -> None:
         if self._idle_screen is None:
             return
-        self._cleanup_widget(self._idle_screen)
+        idle = self._idle_screen
         self._idle_screen = None
+        idle.shutdown(persist=persist)
+        self._stack.removeWidget(idle)
+        idle.deleteLater()
 
-    def _cleanup_widget(self, widget: QWidget) -> None:
-        """Safely remove and delete a widget from the stack."""
+    def _ensure_idle_runtime(self) -> None:
+        self._refresh_shared_idle_runtime()
+        current_signature = self._idle_lineup_signature()
+        if (
+            self._idle_screen is not None
+            and self._idle_screen.lineup_signature == current_signature
+        ):
+            return
+        if self._idle_screen is not None:
+            self._dispose_idle_runtime(persist=True)
+
+        with self._idle_runtime_lock:
+            idle_state = self._idle_state
+        idle = IdleScreenWidget(
+            save_store=self._save_store,
+            tick_runtime=self._tick_runtime,
+            idle_state=idle_state,
+            owns_tick_source=False,
+            plugins=self._plugins,
+            parent=self,
+        )
+        idle.finished.connect(self._show_home)
+        self._idle_screen = idle
+        self._stack.addWidget(idle)
+
+        if self._stack.currentWidget() is self._idle_placeholder:
+            self._stack.setCurrentWidget(idle)
+
+    def _build_idle_state_from_save(
+        self,
+        save: object,
+        *,
+        runtime_snapshot: dict[str, object] | None = None,
+    ) -> IdleGameState:
+        plugins_by_id: dict[str, object] = {
+            plugin.char_id: plugin for plugin in self._plugins
+        }
+        snapshot = runtime_snapshot if isinstance(runtime_snapshot, dict) else {}
+
+        def _restore_elapsed_seconds(default: float) -> float:
+            raw_elapsed = snapshot.get("elapsed_seconds", default)
+            if isinstance(raw_elapsed, bool):
+                return default
+            if isinstance(raw_elapsed, int | float):
+                return float(max(0.0, raw_elapsed))
+            return default
+
+        def _restore_blessings_data(
+            fallback: dict[str, dict[str, object]],
+        ) -> dict[str, dict[str, object]]:
+            blessings = dict(fallback)
+            runtime = snapshot.get("blessing_runtime")
+            if not isinstance(runtime, dict):
+                return blessings
+
+            for blessing_id, raw_runtime in runtime.items():
+                if not isinstance(blessing_id, str) or not isinstance(
+                    raw_runtime, dict
+                ):
+                    continue
+                blessing = dict(blessings.get(blessing_id, {}))
+                raw_elapsed = raw_runtime.get("elapsed_seconds", 0.0)
+                if isinstance(raw_elapsed, bool):
+                    elapsed_seconds = 0.0
+                elif isinstance(raw_elapsed, int | float):
+                    elapsed_seconds = float(max(0.0, raw_elapsed))
+                else:
+                    elapsed_seconds = 0.0
+                if "tick_elapsed_seconds" in blessing or elapsed_seconds > 0.0:
+                    blessing["tick_elapsed_seconds"] = elapsed_seconds
+                blessings[blessing_id] = blessing
+            return blessings
+
+        return IdleGameState(
+            char_ids=[str(item) for item in getattr(save, "onsite", []) if item],
+            offsite_ids=[str(item) for item in getattr(save, "offsite", []) if item],
+            standby_ids=[str(item) for item in getattr(save, "standby", []) if item],
+            party_level=max(1, int(getattr(save, "party_level", 1))),
+            stacks=dict(getattr(save, "stacks", {})),
+            plugins_by_id=plugins_by_id,
+            progress_by_id=dict(getattr(save, "character_progress", {})),
+            stats_by_id=dict(getattr(save, "character_stats", {})),
+            initial_stats_by_id=dict(
+                getattr(save, "character_initial_stats", {}) or {}
+            ),
+            inventory=dict(getattr(save, "inventory", {})),
+            exp_bonus_seconds=float(getattr(save, "idle_exp_bonus_seconds", 0.0)),
+            exp_penalty_seconds=float(getattr(save, "idle_exp_penalty_seconds", 0.0)),
+            shared_exp_percentage=int(getattr(save, "idle_shared_exp_percentage", 1)),
+            risk_reward_level=int(getattr(save, "idle_risk_reward_level", 0)),
+            battle_start_time=_restore_elapsed_seconds(
+                float(getattr(save, "battle_start_time", 0.0))
+            ),
+            blessings_data=_restore_blessings_data(
+                dict(getattr(save, "blessings", {}) or {})
+            ),
+            passives_data=dict(getattr(save, "passives", {}) or {}),
+            rng=self._idle_rng,
+        )
+
+    def _refresh_shared_idle_runtime(self) -> None:
+        current_signature = self._idle_lineup_signature()
+        if current_signature == self._idle_state_lineup_signature:
+            return
+        save = self._save_store.current
+        runtime_snapshot = self._latest_idle_snapshot()
+        with self._idle_runtime_lock:
+            self._idle_state = self._build_idle_state_from_save(
+                save,
+                runtime_snapshot=runtime_snapshot,
+            )
+            self._idle_state_lineup_signature = current_signature
+        with self._tick_cooldown_lock:
+            self._tick_cooldown_seconds = float(
+                max(0.0, float(getattr(save, "layout_tick_cooldown_seconds", 0.0)))
+            )
+
+    def _configure_shared_idle_runtime(self) -> None:
+        self._tick_runtime.configure_source(
+            key=self._tick_runtime_source_key,
+            source=self._produce_idle_tick_payload,
+        )
+        self._tick_runtime.subscribe(
+            key=self._tick_runtime_subscriber_key,
+            callback=self._on_idle_tick_snapshot,
+        )
+
+    def _produce_idle_tick_payload(
+        self, tick_count: int, monotonic_seconds: float
+    ) -> dict[str, object]:
+        del tick_count
+        del monotonic_seconds
+        with self._idle_runtime_lock:
+            idle_state = self._idle_state
+            with self._tick_cooldown_lock:
+                cooldown_seconds = self._tick_cooldown_seconds
+                if cooldown_seconds > 0.0:
+                    cooldown_seconds = max(
+                        0.0,
+                        cooldown_seconds - IDLE_TICK_INTERVAL_SECONDS,
+                    )
+                    self._tick_cooldown_seconds = cooldown_seconds
+            if cooldown_seconds > 0.0:
+                return {
+                    "cooldown_seconds": cooldown_seconds,
+                    "idle_state": idle_state.export_runtime_snapshot(),
+                }
+            return {
+                "cooldown_seconds": cooldown_seconds,
+                "idle_state": idle_state.process_tick(),
+            }
+
+    def _on_idle_tick_snapshot(self, snapshot: TickSnapshot) -> None:
+        payload = snapshot.payload
+        if not isinstance(payload, dict):
+            return
+        clean_payload = dict(payload)
+        self._latest_idle_tick_payload = clean_payload
+        idle_snapshot = clean_payload.get("idle_state")
+        if isinstance(idle_snapshot, dict):
+            self._apply_idle_snapshot_to_save(idle_snapshot)
+        with self._tick_cooldown_lock:
+            self._save_store.current.layout_tick_cooldown_seconds = float(
+                self._tick_cooldown_seconds
+            )
+
+    def _latest_idle_snapshot(self) -> dict[str, object]:
+        payload = self._latest_idle_tick_payload
+        idle_snapshot = payload.get("idle_state")
+        if isinstance(idle_snapshot, dict):
+            return dict(idle_snapshot)
+        with self._idle_runtime_lock:
+            return self._idle_state.export_runtime_snapshot()
+
+    def _apply_idle_snapshot_to_save(self, snapshot: dict[str, object]) -> None:
+        apply_idle_runtime_snapshot_to_save(
+            save=self._save_store.current,
+            snapshot=snapshot,
+        )
+
+    def _ensure_radio_controller(self) -> RadioController | None:
+        if self._radio_controller is not None:
+            return self._radio_controller
+        controller = RadioController(self)
+        controller.state_changed.connect(self._on_radio_state_changed)
+        self._radio_controller = controller
+        return controller
+
+    def _sync_radio_controller_from_settings(
+        self,
+        *,
+        user_initiated: bool,
+        previous_enabled: bool | None = None,
+    ) -> None:
+        controller = self._ensure_radio_controller()
+        if controller is None:
+            return
+
+        if not controller.qt_available:
+            self._on_radio_state_changed(self._radio_state_snapshot())
+            return
+
+        controller.set_channel(self._app_settings.radio_channel)
+        controller.set_quality(self._app_settings.radio_quality)
+        controller.set_loudness_boost(
+            self._app_settings.radio_loudness_boost_enabled,
+            self._app_settings.radio_loudness_boost_factor,
+        )
+        controller.set_volume(self._app_settings.radio_volume)
+
+        start_when_enabled = bool(
+            user_initiated
+            and self._app_settings.radio_enabled
+            and previous_enabled is False
+        )
+        controller.set_enabled(
+            self._app_settings.radio_enabled,
+            start_when_enabled=start_when_enabled,
+        )
+
+        if user_initiated:
+            controller.cancel_start_when_service_ready()
+        elif self._app_settings.radio_enabled and self._app_settings.radio_autostart:
+            controller.request_start_when_service_ready()
+        else:
+            controller.cancel_start_when_service_ready()
+
+    def _on_settings_changed(self, payload: dict[str, object]) -> None:
+        previous_enabled = self._app_settings.radio_enabled
+        self._app_settings = AppSettings.from_mapping(payload)
+        self._settings_manager.save(self._app_settings)
+        self._sync_radio_controller_from_settings(
+            user_initiated=True,
+            previous_enabled=previous_enabled,
+        )
+        self._on_radio_state_changed(self._radio_state_snapshot())
+
+    def _on_save_now_requested(self) -> None:
+        self._persist_shared_save()
+
+    def _on_save_backup_requested(self) -> None:
         try:
-            self._stack.removeWidget(widget)
-        except Exception:
-            pass
+            _ = self._save_store.backup_current()
+        except OSError as exc:
+            self._show_save_action_error("Backup failed", exc)
+            return
+
+    def _on_save_reset_requested(self) -> None:
+        result = QMessageBox.question(
+            self,
+            "Reset Save",
+            (
+                "Create a backup of the current save, remove the active save, and close the game?\n\n"
+                "Next launch will start a fresh run."
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if result != QMessageBox.StandardButton.Yes:
+            return
+
+        self._layout_screen.cancel_pending_persist()
+        if self._idle_screen is not None:
+            self._idle_screen.shutdown(persist=False)
         try:
-            widget.deleteLater()
-        except Exception:
-            pass
+            self._save_store.backup_current()
+            self._save_store.delete_active_save()
+        except OSError as exc:
+            self._show_save_action_error("Reset failed", exc)
+            return
+        self._reset_exit_requested = True
+        QCoreApplication.quit()
 
-    def _stub_settings(self) -> None:
-        self._show_not_implemented("Settings")
+    def _persist_shared_save(self) -> None:
+        try:
+            self._layout_screen.cancel_pending_persist()
+            if self._idle_screen is not None:
+                self._idle_screen.force_persist()
+            else:
+                self._save_store.persist(force=True)
+        except OSError as exc:
+            self._show_save_action_error("Save failed", exc)
+            return
 
-    def _stub_warp(self) -> None:
-        self._show_not_implemented("Warp")
+    def _show_save_action_error(self, title: str, exc: OSError) -> None:
+        QMessageBox.warning(
+            self,
+            title,
+            str(exc),
+        )
 
-    def _stub_inventory(self) -> None:
-        self._show_not_implemented("Inventory")
+    def _on_radio_control_play_requested(self) -> None:
+        controller = self._ensure_radio_controller()
+        if controller is None or not controller.qt_available:
+            return
+
+        snapshot = controller.state_snapshot()
+        connection_state = str(snapshot.get("connection_state") or "").strip().lower()
+        is_active = bool(snapshot.get("is_playing")) or bool(
+            snapshot.get("desired_playing")
+        )
+        if connection_state == "reconnecting":
+            is_active = True
+
+        if is_active:
+            self._app_settings.radio_enabled = False
+            controller.set_enabled(False, start_when_enabled=False)
+            self._settings_manager.save(self._app_settings)
+            self._settings_screen.set_settings(self._app_settings)
+            return
+
+        if not self._app_settings.radio_enabled:
+            self._app_settings.radio_enabled = True
+            controller.set_enabled(True, start_when_enabled=False)
+            self._settings_manager.save(self._app_settings)
+            self._settings_screen.set_settings(self._app_settings)
+
+        controller.start_playback()
+
+    def _on_radio_control_volume_changed(self, value: int) -> None:
+        clamped = clamp_volume(value)
+        self._app_settings.radio_volume = clamped
+        self._settings_manager.save(self._app_settings)
+
+        controller = self._ensure_radio_controller()
+        if controller is not None and controller.qt_available:
+            controller.set_volume(clamped)
+        self._settings_screen.set_settings(self._app_settings)
+        self._on_radio_state_changed(self._radio_state_snapshot())
+
+    def _on_radio_state_changed(self, state: object) -> None:
+        if isinstance(state, dict):
+            snapshot = state
+        else:
+            snapshot = self._radio_state_snapshot()
+
+        self._settings_screen.apply_radio_state(snapshot)
+
+        qt_available = bool(snapshot.get("qt_available") or False)
+        service_available = bool(snapshot.get("service_available") or False)
+        self._radio_control.setVisible(qt_available)
+        self._radio_control.set_service_available(service_available)
+        self._radio_control.set_playing(bool(snapshot.get("is_playing") or False))
+        self._radio_control.set_radio_enabled(bool(snapshot.get("enabled") or False))
+        self._radio_control.set_connection_state(
+            str(snapshot.get("connection_state") or "idle")
+        )
+        self._radio_control.set_volume(clamp_volume(snapshot.get("volume")))
+        self._radio_control.set_status_tooltip(str(snapshot.get("status_text") or ""))
+        self._update_topbar_navigation_mode()
+        self._update_window_title_from_radio_state(snapshot)
+
+    def _update_window_title_from_radio_state(self, state: dict[str, object]) -> None:
+        if not bool(state.get("qt_available")):
+            self.setWindowTitle(self.APP_TITLE)
+            return
+
+        if (not bool(state.get("enabled"))) and (not bool(state.get("is_playing"))):
+            self.setWindowTitle(self.APP_TITLE)
+            return
+
+        channel_label = str(state.get("channel_label") or "all").strip() or "all"
+        current_track = self._normalize_radio_window_track_title(
+            state.get("current_track")
+        )
+        last_track = self._normalize_radio_window_track_title(state.get("last_track"))
+        service_available = bool(state.get("service_available"))
+        degraded_from_playback = bool(state.get("degraded_from_playback"))
+
+        if degraded_from_playback and (not service_available) and last_track:
+            self.setWindowTitle(f"{last_track} [{channel_label}] [Radio unavailable]")
+            return
+
+        if current_track:
+            self.setWindowTitle(f"{current_track} [{channel_label}]")
+            return
+
+        self.setWindowTitle(f"{self.APP_TITLE} [{channel_label}]")
+
+    @classmethod
+    def _normalize_radio_window_track_title(cls, value: object) -> str:
+        track = " ".join(str(value or "").split())
+        if not track:
+            return ""
+
+        parts = [
+            part.strip() for part in re.split(r"\s+[—–-]\s+", track) if part.strip()
+        ]
+        if not parts:
+            return ""
+
+        app_title = cls.APP_TITLE.casefold()
+        while parts and parts[0].casefold() == app_title:
+            parts.pop(0)
+        while len(parts) >= 2 and parts[-1].casefold() == parts[-2].casefold():
+            parts.pop()
+        while len(parts) >= 2 and parts[0].casefold() == parts[-1].casefold():
+            parts.pop()
+        while parts and parts[-1].casefold() == app_title:
+            parts.pop()
+
+        if not parts:
+            return ""
+        return " - ".join(parts)
+
+    def _radio_state_snapshot(self) -> dict[str, object]:
+        if self._radio_controller is None:
+            return {
+                "qt_available": False,
+                "service_available": False,
+                "service_known": False,
+                "enabled": self._app_settings.radio_enabled,
+                "quality": self._app_settings.radio_quality,
+                "active_quality": self._app_settings.radio_quality,
+                "pending_quality": None,
+                "channel": self._app_settings.radio_channel,
+                "active_channel": self._app_settings.radio_channel,
+                "pending_channel": None,
+                "resolved_channel": self._app_settings.radio_channel,
+                "channel_label": self._app_settings.radio_channel or "all",
+                "volume": self._app_settings.radio_volume,
+                "loudness_boost_enabled": self._app_settings.radio_loudness_boost_enabled,
+                "loudness_boost_factor": self._app_settings.radio_loudness_boost_factor,
+                "effective_volume_percent": self._app_settings.radio_volume,
+                "is_playing": False,
+                "status_text": "Radio unavailable.",
+                "current_track": "",
+                "last_track": "",
+                "degraded_from_playback": False,
+                "desired_playing": False,
+                "reconnect_attempts": 0,
+                "last_reconnect_reason": "",
+                "connection_state": "unavailable",
+            }
+        return self._radio_controller.state_snapshot()
+
+    def _refresh_radio_channel_options(self, *, disable_on_failure: bool) -> None:
+        selected_channel = normalize_channel(self._app_settings.radio_channel)
+        controller = self._radio_controller
+        if controller is None or not controller.qt_available:
+            self._settings_screen.set_radio_channel_options(
+                self._radio_channel_options,
+                selected=selected_channel,
+                enabled=False,
+            )
+            return
+
+        def _handle_channels(channels: object, error_text: str) -> None:
+            current_selected = normalize_channel(self._app_settings.radio_channel)
+            if error_text or not isinstance(channels, list):
+                if disable_on_failure:
+                    self._settings_screen.set_radio_channel_options(
+                        self._radio_channel_options,
+                        selected=current_selected,
+                        enabled=False,
+                    )
+                return
+
+            normalized: list[str] = []
+            for raw in channels:
+                channel = normalize_channel(raw)
+                if not channel or channel in normalized:
+                    continue
+                normalized.append(channel)
+            normalized.sort()
+            self._radio_channel_options = normalized
+            self._settings_screen.set_radio_channel_options(
+                normalized,
+                selected=current_selected,
+                enabled=True,
+            )
+
+        controller.fetch_channels(_handle_channels)
 
     def _stub_guidebook(self) -> None:
         self._show_not_implemented("Guidebook")

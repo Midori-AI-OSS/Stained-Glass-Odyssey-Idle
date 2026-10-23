@@ -24,6 +24,8 @@ from PySide6.QtWidgets import QSizePolicy
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
+from endless_idler.ui.theme.colors import color_for_damage_type_id
+
 _TOOLTIP: "StainedGlassTooltip | None" = None
 
 
@@ -83,6 +85,7 @@ class StainedGlassTooltip(QFrame):
         # Panel with drop shadow for depth
         self._panel = QFrame()
         self._panel.setObjectName("stainedTooltipPanel")
+        self._panel.setProperty("elementId", "generic")
         shadow = QGraphicsDropShadowEffect(self._panel)
         shadow.setBlurRadius(28)
         shadow.setOffset(0, 6)
@@ -113,7 +116,6 @@ class StainedGlassTooltip(QFrame):
 
         self._element_id: str | None = None
         self._tint_color = QColor(90, 110, 140)
-        self._border_color_css = "rgba(255, 255, 255, 90)"
         self.hide()
 
     def set_html(self, html: str, *, element_id: str | None = None) -> None:
@@ -157,30 +159,22 @@ class StainedGlassTooltip(QFrame):
 
     def _apply_glass_style(self) -> None:
         """Apply true glass morphism style with element-based tinting and enhanced readability."""
-        if not self._element_id:
+        element_id = str(self._element_id or "generic").strip().lower().replace(" ", "_").replace("-", "_")
+        if element_id == "generic":
             self._tint_color = QColor(90, 110, 140)
-            self._border_color_css = "rgba(255, 255, 255, 90)"
         else:
             # Element-tinted glass effect
-            from endless_idler.ui.battle.colors import color_for_damage_type_id
-
-            color = color_for_damage_type_id(self._element_id)
+            color = color_for_damage_type_id(element_id)
 
             self._tint_color = QColor(color.red(), color.green(), color.blue())
 
-            # Brighter border with slight element tint for enhanced glass appearance
-            border_r = min(255, color.red() + 70)
-            border_g = min(255, color.green() + 70)
-            border_b = min(255, color.blue() + 70)
-            self._border_color_css = f"rgba({border_r}, {border_g}, {border_b}, 110)"
-
-        self._panel.setStyleSheet(
-            f"QFrame#stainedTooltipPanel {{ "
-            f"background-color: rgba(0, 0, 0, 0); "
-            f"border: 1px solid {self._border_color_css}; "
-            f"border-radius: 0px; "
-            f"}}"
-        )
+        if self._panel.property("elementId") != element_id:
+            self._panel.setProperty("elementId", element_id)
+            style = self._panel.style()
+            if style is not None:
+                style.unpolish(self._panel)
+                style.polish(self._panel)
+            self._panel.update()
 
     def _blur_pixmap(self, pixmap: QPixmap, *, radius: float) -> QPixmap:
         if pixmap.isNull():

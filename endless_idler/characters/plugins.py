@@ -18,6 +18,7 @@ from pathlib import Path
 
 from endless_idler.characters.metadata import DEFAULT_BASE_STATS
 from endless_idler.characters.metadata import extract_character_metadata
+from endless_idler.progression import validate_progression_stars
 
 
 _IMAGE_EXTENSIONS = (
@@ -39,7 +40,11 @@ class CharacterPlugin:
     placement: str = "both"
     damage_type_id: str = "generic"
     damage_type_random: bool = False
-    base_stats: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_BASE_STATS))
+    is_dual_type: bool = False
+    dual_damage_types: tuple[str, str] = ("", "")
+    base_stats: dict[str, float] = field(
+        default_factory=lambda: dict(DEFAULT_BASE_STATS)
+    )
     base_aggro: float | None = None
     damage_reduction_passes: int | None = None
     passives: list[str] = field(default_factory=list)
@@ -74,8 +79,15 @@ def discover_character_plugins() -> list[CharacterPlugin]:
     """Discover character plugins from `endless_idler/characters/*.py` files."""
 
     plugins: list[CharacterPlugin] = []
+    invalid_progression_stars: list[tuple[str, int, str]] = []
     for path in sorted(_CHARACTERS_DIR.glob("*.py")):
-        if path.name in {"__init__.py", "plugins.py", "foe_base.py", "player.py", "slime.py"}:
+        if path.name in {
+            "__init__.py",
+            "plugins.py",
+            "foe_base.py",
+            "player.py",
+            "slime.py",
+        }:
             continue
 
         (
@@ -85,12 +97,19 @@ def discover_character_plugins() -> list[CharacterPlugin]:
             placement,
             damage_type_id,
             damage_type_random,
+            is_dual_type,
+            dual_damage_types,
             base_stats,
             base_aggro,
             damage_reduction_passes,
             passives,
         ) = extract_character_metadata(path)
         if not char_id:
+            continue
+        try:
+            _ = validate_progression_stars(stars)
+        except ValueError:
+            invalid_progression_stars.append((char_id, int(stars), path.name))
             continue
         plugins.append(
             CharacterPlugin(
@@ -100,11 +119,23 @@ def discover_character_plugins() -> list[CharacterPlugin]:
                 placement=placement,
                 damage_type_id=damage_type_id,
                 damage_type_random=damage_type_random,
+                is_dual_type=is_dual_type,
+                dual_damage_types=dual_damage_types,
                 base_stats=base_stats,
                 base_aggro=base_aggro,
                 damage_reduction_passes=damage_reduction_passes,
                 passives=passives,
             )
+        )
+
+    if invalid_progression_stars:
+        details = ", ".join(
+            f"{char_id}={stars} ({filename})"
+            for char_id, stars, filename in invalid_progression_stars
+        )
+        raise ValueError(
+            "Invalid progression stars for runtime character plugins. "
+            + f"Expected stars 5-7 for discovered runtime characters; found: {details}"
         )
 
     return plugins

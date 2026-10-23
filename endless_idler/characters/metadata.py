@@ -35,13 +35,28 @@ _PLACEMENTS = ("onsite", "offsite", "both")
 
 def extract_character_metadata(
     path: Path,
-) -> tuple[str, str, int, str, str, bool, dict[str, float], float | None, int | None, list[str]]:
+) -> tuple[
+    str,
+    str,
+    int,
+    str,
+    str,
+    bool,
+    bool,
+    tuple[str, str],
+    dict[str, float],
+    float | None,
+    int | None,
+    list[str],
+]:
     char_id = path.stem
     display_name = _derive_display_name(char_id)
     stars = 1
     placement = "both"
     damage_type_id = "generic"
     damage_type_random = False
+    is_dual_type = False
+    dual_damage_types = ("", "")
     base_stats: dict[str, float] = dict(DEFAULT_BASE_STATS)
     base_aggro: float | None = None
     damage_reduction_passes: int | None = None
@@ -57,6 +72,8 @@ def extract_character_metadata(
             placement,
             damage_type_id,
             damage_type_random,
+            is_dual_type,
+            dual_damage_types,
             base_stats,
             base_aggro,
             damage_reduction_passes,
@@ -73,6 +90,8 @@ def extract_character_metadata(
             placement,
             damage_type_id,
             damage_type_random,
+            is_dual_type,
+            dual_damage_types,
             base_stats,
             base_aggro,
             damage_reduction_passes,
@@ -87,9 +106,18 @@ def extract_character_metadata(
     for node in tree.body:
         if not isinstance(node, ast.ClassDef):
             continue
-        found_id, found_name, found_stars, found_placement = _extract_from_classdef(node)
-        found_damage_type, found_damage_random = _extract_damage_type_from_classdef(node)
-        stat_overrides, found_base_aggro, found_damage_reduction_passes = _extract_stat_overrides_from_classdef(node)
+        found_id, found_name, found_stars, found_placement = _extract_from_classdef(
+            node
+        )
+        found_damage_type, found_damage_random = _extract_damage_type_from_classdef(
+            node
+        )
+        found_is_dual_type, found_dual_damage_types = _extract_dual_type_from_classdef(
+            node
+        )
+        stat_overrides, found_base_aggro, found_damage_reduction_passes = (
+            _extract_stat_overrides_from_classdef(node)
+        )
         found_passives = _extract_passives_from_classdef(node)
         if found_id or found_name:
             found_character = True
@@ -105,6 +133,10 @@ def extract_character_metadata(
             if found_damage_type:
                 damage_type_id = found_damage_type
             damage_type_random = found_damage_random
+        if found_is_dual_type is not None:
+            is_dual_type = found_is_dual_type
+        if found_dual_damage_types is not None:
+            dual_damage_types = found_dual_damage_types
         if stat_overrides:
             for key, value in stat_overrides.items():
                 base_stats[key] = value
@@ -125,6 +157,8 @@ def extract_character_metadata(
             placement,
             damage_type_id,
             damage_type_random,
+            is_dual_type,
+            dual_damage_types,
             base_stats,
             base_aggro,
             damage_reduction_passes,
@@ -138,10 +172,12 @@ def extract_character_metadata(
     return (
         char_id,
         display_name,
-        _sanitize_stars(stars),
+        stars,
         _sanitize_placement(placement),
         _sanitize_damage_type(damage_type_id),
         bool(damage_type_random),
+        _sanitize_is_dual_type(is_dual_type, dual_damage_types),
+        _sanitize_dual_damage_types(dual_damage_types),
         sanitized_base_stats,
         base_aggro,
         damage_reduction_passes,
@@ -161,7 +197,9 @@ def _extract_from_module(tree: ast.Module) -> str | None:
     return None
 
 
-def _extract_from_classdef(node: ast.ClassDef) -> tuple[str | None, str | None, int | None, str | None]:
+def _extract_from_classdef(
+    node: ast.ClassDef,
+) -> tuple[str | None, str | None, int | None, str | None]:
     char_id: str | None = None
     display_name: str | None = None
     stars: int | None = None
@@ -205,6 +243,32 @@ def _extract_damage_type_from_classdef(node: ast.ClassDef) -> tuple[str | None, 
     return None, False
 
 
+def _extract_dual_type_from_classdef(
+    node: ast.ClassDef,
+) -> tuple[bool | None, tuple[str, str] | None]:
+    is_dual_type: bool | None = None
+    dual_damage_types: tuple[str, str] | None = None
+
+    for stmt in node.body:
+        if isinstance(stmt, ast.Assign):
+            for target in stmt.targets:
+                if not isinstance(target, ast.Name):
+                    continue
+                if target.id == "is_dual_type":
+                    is_dual_type = _const_bool(stmt.value)
+                elif target.id == "dual_damage_types":
+                    dual_damage_types = _const_str_pair(stmt.value)
+        elif isinstance(stmt, ast.AnnAssign):
+            if not isinstance(stmt.target, ast.Name):
+                continue
+            if stmt.target.id == "is_dual_type":
+                is_dual_type = _const_bool(stmt.value)
+            elif stmt.target.id == "dual_damage_types":
+                dual_damage_types = _const_str_pair(stmt.value)
+
+    return is_dual_type, dual_damage_types
+
+
 def _extract_stat_overrides_from_classdef(
     node: ast.ClassDef,
 ) -> tuple[dict[str, float], float | None, int | None]:
@@ -227,7 +291,11 @@ def _extract_stat_overrides_from_classdef(
                 ):
                     stat_name = _const_str(call.args[0])
                     stat_value = _const_float(call.args[1])
-                    if stat_name and stat_name in _BASE_STAT_KEYS and stat_value is not None:
+                    if (
+                        stat_name
+                        and stat_name in _BASE_STAT_KEYS
+                        and stat_value is not None
+                    ):
                         base_stats[stat_name] = stat_value
                         continue
 
@@ -264,15 +332,31 @@ def _const_int(node: ast.AST | None) -> int | None:
     return None
 
 
+def _const_bool(node: ast.AST | None) -> bool | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, bool):
+        return node.value
+    return None
+
+
 def _const_float(node: ast.AST | None) -> float | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
         return float(node.value)
     return None
 
 
+def _const_str_pair(node: ast.AST | None) -> tuple[str, str] | None:
+    if not isinstance(node, ast.Tuple) or len(node.elts) != 2:
+        return None
+    first = _const_str(node.elts[0])
+    second = _const_str(node.elts[1])
+    if first is None or second is None:
+        return None
+    return first, second
+
+
 def _extract_passives_from_classdef(node: ast.ClassDef) -> list[str]:
     """Extract passive IDs from a character class definition.
-    
+
     Looks for:
     - passives: list[str] = field(default_factory=lambda: ["passive_id_1", "passive_id_2"])
     - passives: list[str] = ["passive_id"]
@@ -282,26 +366,26 @@ def _extract_passives_from_classdef(node: ast.ClassDef) -> list[str]:
         if isinstance(stmt, ast.AnnAssign):
             if isinstance(stmt.target, ast.Name) and stmt.target.id == "passives":
                 return _extract_passive_list(stmt.value)
-        
+
         # Check regular assignments: passives = ...
         elif isinstance(stmt, ast.Assign):
             for target in stmt.targets:
                 if isinstance(target, ast.Name) and target.id == "passives":
                     return _extract_passive_list(stmt.value)
-    
+
     return []
 
 
 def _extract_passive_list(node: ast.AST | None) -> list[str]:
     """Extract list of strings from various AST patterns.
-    
+
     Handles:
     - Direct list: ["id1", "id2"]
     - field(default_factory=lambda: ["id1", "id2"])
     """
     if node is None:
         return []
-    
+
     # Direct list literal
     if isinstance(node, ast.List):
         passives = []
@@ -309,7 +393,7 @@ def _extract_passive_list(node: ast.AST | None) -> list[str]:
             if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
                 passives.append(elt.value)
         return passives
-    
+
     # field(default_factory=lambda: [...])
     if isinstance(node, ast.Call):
         # Check if it's a field() call
@@ -321,20 +405,12 @@ def _extract_passive_list(node: ast.AST | None) -> list[str]:
                     if isinstance(keyword.value, ast.Lambda):
                         # Extract the lambda body
                         return _extract_passive_list(keyword.value.body)
-    
+
     return []
 
 
 def _derive_display_name(char_id: str) -> str:
     return " ".join(part.capitalize() for part in char_id.split("_"))
-
-
-def _sanitize_stars(stars: int) -> int:
-    if stars <= 0:
-        return 1
-    if stars > 7:
-        return 7
-    return stars
 
 
 def _sanitize_placement(placement: str) -> str:
@@ -344,6 +420,20 @@ def _sanitize_placement(placement: str) -> str:
 
 def _sanitize_damage_type(value: str) -> str:
     return normalize_damage_type_id(value)
+
+
+def _sanitize_dual_damage_types(value: tuple[str, str]) -> tuple[str, str]:
+    return (
+        normalize_damage_type_id(value[0]),
+        normalize_damage_type_id(value[1]),
+    )
+
+
+def _sanitize_is_dual_type(
+    is_dual_type: bool, dual_damage_types: tuple[str, str]
+) -> bool:
+    first, second = _sanitize_dual_damage_types(dual_damage_types)
+    return bool(is_dual_type and first and second)
 
 
 def _sanitize_base_stats(base_stats: dict[str, float]) -> dict[str, float]:

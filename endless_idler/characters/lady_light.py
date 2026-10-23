@@ -9,6 +9,7 @@ from plugins.damage_types.light import Light
 
 placement = "offsite"
 
+
 @dataclass
 class LadyLight(PlayerBase):
     id = "lady_light"
@@ -27,4 +28,4 @@ class LadyLight(PlayerBase):
     char_type: CharacterType = CharacterType.B
     gacha_rarity = 5
     damage_type: DamageTypeBase = field(default_factory=Light)
-    passives: list[str] = field(default_factory=lambda: ["lady_light_radiant_aegis", "trinity_synergy"])
+    passives: list[str] = field(default_factory=lambda: ["lady_light_radiant_aegis"])

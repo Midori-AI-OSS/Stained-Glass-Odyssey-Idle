@@ -18,6 +18,8 @@ STAT_SHARE_KEYS: tuple[str, ...] = (
     "vitality",
     "atk_speed",
 )
+_INT_BASE_STATS = frozenset({"max_hp", "atk", "defense", "regain", "atk_speed"})
+_POSITIVE_INT_BASE_STATS = frozenset({"max_hp", "atk", "defense", "atk_speed"})
 
 
 def party_scaling(*, party_level: int, stars: int, stacks: int) -> float:
@@ -306,3 +308,22 @@ def apply_offsite_stat_share(
             else:
                 stats.modify_base_stat(stat_name, float(amount))
         stats.hp = stats.max_hp
+
+
+def apply_base_stat_multiplier(*, stats: Stats, multiplier: float) -> None:
+    scale = max(0.0, float(multiplier))
+    if abs(scale - 1.0) <= 1e-9:
+        return
+
+    for stat_name in STAT_SHARE_KEYS:
+        base = stats.get_base_stat(stat_name)
+        if not isinstance(base, (int, float)):
+            continue
+        scaled = float(base) * scale
+        if stat_name in _INT_BASE_STATS:
+            floor = 1 if stat_name in _POSITIVE_INT_BASE_STATS else 0
+            stats.set_base_stat(stat_name, max(floor, int(round(scaled))))
+            continue
+        stats.set_base_stat(stat_name, max(0.0, scaled))
+
+    stats.hp = max(0, min(stats.hp, stats.max_hp))
